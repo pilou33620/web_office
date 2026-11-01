@@ -22,7 +22,11 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Conditions de travail** : sièges ergonomiques, éclairage, pauses café, climatisation l'été, isolation phonique quand l'équipe grandit… La vue *Productivité* affiche le multiplicateur obtenu.
 - **Matériel** : multimètre, oscilloscope, four de refusion, analyseur de spectre, imprimantes 3D, CNC, sondes J-Link, banc de test, chambre CEM… Chaque appareil apparaît sur le plan.
 - **Locaux** : garage (2 postes) → bureau agrandi (6) → open space (10), atelier méca / 3D, labo CEM. Loyer mensuel en conséquence.
-- **Évènements** : pénuries de composants, salons pros, clients pressés, pannes, subventions, menaces de démission.
+- **Projets en parallèle** : 1 projet au garage, 2 avec le bureau agrandi, 3 avec l'open space. Chaque employé peut être affecté à un projet ou laissé en automatique (il va là où il est le plus utile).
+- **Combos d'équipe** : équipe complète (un spécialiste par domaine), duo qualité (perfectionniste + chasseur de bugs), mentorat (expert + junior), équipe soudée.
+- **Horaires** : de 6 h à 12 h par jour. Plus d'heures = plus de production, mais moral en baisse, fatigue, défauts et heures sup à payer.
+- **Évènements** : pénuries de composants, salons pros, clients pressés, pannes, subventions, menaces de démission, ras-le-bol face aux horaires.
+- **Bilans annuels** avec impôt de 25 % sur le bénéfice, **16 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
 
 Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, se retrouvent sur la terrasse pour les réunions de phase et les pauses.
 

@@ -10,7 +10,7 @@ const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', equipe: 'Équip
 
 let ETAT = null, CAT = null;
 let onglet = 'accueil', vue = 'bureau', catMat = 'e';
-let joue = false, vitesse = 1, minuteur = null, envoi = false;
+let joue = false, vitesse = 1, minuteur = null, envoi = false, nbTrophees = null;
 const cache = {};
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -117,7 +117,7 @@ const sprite = (x) => `<div class="perso">${corps(x)}</div>`;
 // Personnages : éléments conservés d'un jour à l'autre pour animer leurs déplacements
 const PERSOS = {};
 function rendrePersos() {
-  const e = ETAT, p = e.projet, cont = $('#persos'), vus = new Set(), groupes = {};
+  const e = ETAT, p = e.projets.length > 0, cont = $('#persos'), vus = new Set(), groupes = {};
   const duree = Math.min(0.9, 0.7 / vitesse);
   for (const emp of e.employes) {
     if (emp.absent) continue;
@@ -163,7 +163,7 @@ function rendrePersos() {
 
 function rendreMonde() {
   const e = ETAT, h = [];
-  const p = e.projet;
+  const p = e.projets.length > 0;
   for (const id of e.materiel) if (POS[id]) h.push(objet(POS[id], id in e.pannes ? 'panne' : ''));
   for (const id of e.deco) for (const part of DECO_POS[id] || []) h.push(objet(part));
   for (const [lid, [x, y, w, hh]] of Object.entries(PIECES_VERROU)) {
@@ -222,33 +222,47 @@ function etapeProjet(p) {
   return p.phases[p.phase].nom;
 }
 
+function avancement(p) {
+  let fait = 0, besoin = 0;
+  for (const ph of p.phases) for (const d in ph.besoin) { fait += Math.min(ph.fait[d], ph.besoin[d]); besoin += ph.besoin[d]; }
+  return besoin ? fait / besoin : 1;
+}
+
+function encartProjet(p) {
+  const e = ETAT;
+  const etapes = p.phases.map((_, i) => `<span class="${i < p.phase || p.etape !== 'travail' ? 'ok' : i === p.phase ? 'cours' : ''}"></span>`).join('') +
+    `<span class="${p.etape === 'cem' ? 'cours' : ''}" title="Tests CEM"></span>`;
+  const ph = p.phases[p.phase];
+  const equipe = e.employes.filter((x) => p.equipe.includes(x.id)).map((x) => esc(x.nom)).join(', ') || 'personne pour le moment';
+  const combos = p.combos_jour.map((c) => `<span class="chip" style="background:#b08af0;color:#2b1d14" title="${esc(CAT.combos[c].desc)}">${esc(CAT.combos[c].nom)}</span>`).join('');
+  return `<div class="encart"><div class="t2" style="font-size:11px;font-weight:800;letter-spacing:1px;color:#a9b39a">${p.type === 'contrat' ? esc(p.client).toUpperCase() : 'PRODUIT MAISON'}</div>
+    <h3>${esc(p.nom)}</h3><div class="etapes">${etapes}</div>
+    <div class="chips"><span class="chip">${esc(etapeProjet(p))}</span>${p.type === 'contrat' ? `<span class="chip" style="${p.jours > p.delai ? 'background:#ff8a7a;color:#2b1d14' : ''}">Jour ${p.jours} / ${p.delai}</span>` : `<span class="chip">Jour ${p.jours}</span>`}
+    <span class="chip" style="background:${couleurNote(p.note_estimee)};color:#2b1d14">Note estimée ${dec(p.note_estimee)}</span><span class="chip">${dec(p.defauts)} défauts</span></div>
+    ${combos ? `<div class="chips">${combos}</div>` : ''}
+    ${p.etape === 'travail' ? `<div class="barres">${Object.keys(ph.besoin).map((d) => barre(DN[d], ph.fait[d], ph.besoin[d], DC[d])).join('')}</div>` : ''}
+    <div class="t2" style="font-size:13px;color:#b3bca5">Équipe du jour : ${equipe}</div>
+    <div class="t2" style="font-size:13px;color:#b3bca5">Tests CEM : ${Math.round(p.proba_cem * 100)} % de réussite${p.frais_cem ? ` · labo externe ${eur(p.frais_cem)}` : ' · labo interne gratuit'}</div>
+    <div class="btns">${p.etape === 'debug' ? bouton('tests_cem', p.id, 'Passer aux tests CEM') : ''}${bouton('abandonner', p.id, 'Abandonner', true, 'secondaire petit')}</div></div>`;
+}
+
 function panneauProjets() {
-  const e = ETAT, p = e.projet;
-  let h = '';
-  if (p) {
-    const etapes = p.phases.map((_, i) => `<span class="${i < p.phase || p.etape !== 'travail' ? 'ok' : i === p.phase ? 'cours' : ''}"></span>`).join('') +
-      `<span class="${p.etape === 'cem' ? 'cours' : ''}" title="Tests CEM"></span>`;
-    const ph = p.phases[p.phase];
-    h += `<div class="encart"><div class="t2" style="font-size:11px;font-weight:800;letter-spacing:1px;color:#a9b39a">EN COURS · ${p.type === 'contrat' ? esc(p.client).toUpperCase() : 'PRODUIT MAISON'}</div>
-      <h3>${esc(p.nom)}</h3><div class="etapes">${etapes}</div>
-      <div class="chips"><span class="chip">${esc(etapeProjet(p))}</span>${p.type === 'contrat' ? `<span class="chip" style="${p.jours > p.delai ? 'background:#ff8a7a;color:#2b1d14' : ''}">Jour ${p.jours} / ${p.delai}</span>` : `<span class="chip">Jour ${p.jours}</span>`}
-      <span class="chip" style="background:${couleurNote(p.note_estimee)};color:#2b1d14">Note estimée ${dec(p.note_estimee)}</span><span class="chip">${dec(p.defauts)} défauts</span></div>
-      ${p.etape === 'travail' ? `<div class="barres">${Object.keys(ph.besoin).map((d) => barre(DN[d], ph.fait[d], ph.besoin[d], DC[d])).join('')}</div>` : ''}
-      <div class="t2" style="font-size:13px;color:#b3bca5">Tests CEM : ${Math.round(p.proba_cem * 100)} % de réussite${p.frais_cem ? ` · labo externe ${eur(p.frais_cem)}` : ' · labo interne gratuit'}</div>
-      <div class="btns">${p.etape === 'debug' ? bouton('tests_cem', '', 'Passer aux tests CEM') : ''}${bouton('abandonner', '', 'Abandonner', true, 'secondaire petit')}</div></div>`;
-  }
-  h += `<div class="section">Appels d'offres</div>`;
+  const e = ETAT, plein = e.projets.length >= e.capacite;
+  let h = `<div class="section">En cours · ${e.projets.length} / ${e.capacite} projet${e.capacite > 1 ? 's' : ''}${e.capacite < 3 ? ' · agrandissez pour en mener plus' : ''}</div>`;
+  h += e.projets.map(encartProjet).join('') || '<div class="vide">Aucun projet : signez un contrat ci-dessous.</div>';
+  h += `<div class="section">Appels d'offres · les clients attendent ${dec(e.attente_client)}/10</div>`;
   h += e.offres.length ? e.offres.map((o) => ligne({
     couleur: '#7be08a', t1: esc(o.nom), t2: `${esc(o.client)} · ${eur(o.paie)} · ${o.delai} j`,
-    t3: `${repartition(o.total)} · expire dans ${o.expire} j`, btn: bouton('signer', o.id, p ? 'Occupé' : 'Signer', !p),
+    t3: `${repartition(o.total)} · expire dans ${o.expire} j`, btn: bouton('signer', o.id, plein ? 'Complet' : 'Signer', !plein),
   })).join('') : '<div class="vide">Aucune offre pour le moment, patientez quelques jours.</div>';
   h += `<div class="section">Produits maison</div>`;
   h += CAT.produits.map((x) => {
     const bloque = e.renommee < x.rep_min;
+    const occupe = e.projets.length >= e.capacite || [...e.produits, ...e.projets].some((y) => y.id_produit === x.id);
     const total = { e: Math.round(x.taille * x.rep[0]), m: Math.round(x.taille * x.rep[1]), f: Math.round(x.taille * x.rep[2]) };
     return ligne({
       couleur: '#b08af0', t1: esc(x.nom), t2: `Prototype ${eur(x.cout)} · jusqu'à ~${eur(x.potentiel * 2)}/mois`, t3: repartition(total),
-      btn: bouton('produit', x.id, bloque ? `★ ${x.rep_min} requis` : p ? 'Occupé' : 'Lancer', !bloque && !p && e.argent >= x.cout),
+      btn: bouton('produit', x.id, bloque ? `★ ${x.rep_min} requis` : occupe ? 'Indisponible' : 'Lancer', !bloque && !occupe && e.argent >= x.cout),
     });
   }).join('');
   if (e.produits.length) {
@@ -267,13 +281,19 @@ function panneauProjets() {
 function panneauEquipe() {
   const e = ETAT;
   const libres = e.postes_ouverts.length - e.employes.length;
-  let h = `<div class="section">Équipe · ${e.employes.length} / ${e.postes_ouverts.length} postes · moral ${e.moral} %</div>`;
+  const H = CAT.horaires[e.heures];
+  let h = `<div class="section">Horaires de travail</div><div class="onglets">${Object.keys(CAT.horaires).map((k) =>
+    `<button type="button" data-act="horaires" data-heures="${k}" class="${String(e.heures) === k ? 'actif' : ''}" style="${String(e.heures) === k ? 'background:#ffc94d' : ''}">${k} h</button>`).join('')}</div>
+    <div class="t2" style="font-size:13px;color:#b3bca5">${esc(H.nom)} · production ${H.prod >= 1 ? '+' : ''}${Math.round((H.prod - 1) * 100)} % · moral ${H.moral >= 0 ? '+' : ''}${H.moral} · fatigue ×${dec(H.fatigue)} · défauts ×${dec(H.defauts)}${H.salaire ? ` · heures sup +${Math.round(H.salaire * 100)} % de salaires` : ''}</div>`;
+  h += `<div class="section">Équipe · ${e.employes.length} / ${e.postes_ouverts.length} postes · moral ${e.moral} %</div>`;
   h += e.employes.map((x) => {
     const t = CAT.traits[x.trait];
     const etat = x.absent ? `${x.formation ? 'Formation ' + DN[x.formation] : 'Congés'} : retour dans ${x.absent} j` : x.salaire ? eur(x.salaire) + ' / mois' : 'Gérant';
     const btns = `<div class="btns">${['e', 'm', 'f'].map((d) => `<button type="button" class="btn petit secondaire" data-act="former" data-id="${x.id}" data-dom="${d}" ${x.absent || e.argent < x.cout_formation ? 'disabled' : ''}>Former ${DN[d]}</button>`).join('')}
       ${bouton('conges', x.id, 'Congés', !x.absent, 'petit secondaire')}${x.fondateur ? '' : bouton('licencier', x.id, 'Licencier', true, 'petit secondaire')}</div>
-      <div class="t2" style="font-size:12px">Formation : ${eur(x.cout_formation)}, ${10} jours, +2 dans le domaine</div>`;
+      <div class="t2" style="font-size:12px">Formation : ${eur(x.cout_formation)}, ${10} jours, +2 dans le domaine</div>
+      ${e.projets.length > 1 ? `<label class="t2" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:13px">Projet
+        <select class="choix" data-affecter="${x.id}"><option value="">Automatique</option>${e.projets.map((p) => `<option value="${p.id}" ${x.projet === p.id ? 'selected' : ''}>${esc(p.nom)} · ${esc(p.client || 'maison')}</option>`).join('')}</select></label>` : ''}`;
     return ligne({
       avatar: sprite(x), t1: `${esc(x.nom)} — ${esc(x.poste)}`, t2: repartition(x),
       t3: etat,
@@ -289,6 +309,9 @@ function panneauEquipe() {
       btn: bouton('embaucher', c.id, libres ? 'Embaucher' : 'Pas de poste', libres > 0),
     });
   }).join('') || '<div class="vide">Nouveaux candidats le mois prochain.</div>';
+  h += `<div class="section">Combos d'équipe</div>` + Object.entries(CAT.combos).map(([id, c]) => ligne({
+    couleur: e.combos_vus.includes(id) ? '#b08af0' : '#3a4535', t1: esc(c.nom), t2: esc(c.desc),
+  })).join('');
   return h;
 }
 
@@ -330,7 +353,7 @@ function panneauLocaux() {
   h += `<div class="section">Conditions de travail · productivité ×${dec(e.facteur_conditions)}</div>` + (e.conditions.length
     ? e.conditions.map((c) => ligne({ couleur: c.pct > 0 ? '#7be08a' : c.pct < 0 ? '#ff8a7a' : '#a9b39a', t1: esc(c.nom), t2: `${c.pct > 0 ? '+' : ''}${c.pct} % de productivité` })).join('')
     : '<div class="vide">Aucun bonus ni malus pour le moment.</div>');
-  h += `<div class="section">Charges mensuelles</div><div class="stat" style="margin-top:8px"><span>Loyer</span><b>${eur(e.loyer)}</b><span>Salaires</span><b>${eur(e.salaires)}</b></div>`;
+  h += `<div class="section">Charges mensuelles</div><div class="stat" style="margin-top:8px"><span>Loyer</span><b>${eur(e.loyer)}</b><span>Salaires</span><b>${eur(e.salaires)}</b><span>Frais de structure</span><b>${eur(e.frais_structure)}</b></div>`;
   return h;
 }
 
@@ -343,12 +366,22 @@ function panneauAccueil() {
   const e = ETAT;
   return `<div class="encart"><div class="stat">
     <span>Trésorerie</span><b>${eur(e.argent)}</b>
-    <span>Charges / mois</span><b>${eur(e.loyer + e.salaires)}</b>
+    <span>Année</span><b>${e.annee_jeu} / 20</b>
+    <span>Charges / mois</span><b>${eur(e.loyer + e.salaires + e.frais_structure)}</b>
     <span>Chiffre d'affaires total</span><b>${eur(e.stats.ca)}</b>
     <span>Contrats livrés</span><b>${e.stats.livres}</b>
     <span>Produits lancés</span><b>${e.stats.produits_lances}</b>
     <span>Équipe</span><b>${e.employes.length} personne${e.employes.length > 1 ? 's' : ''}</b>
     <span>Moral</span><b>${e.moral} %</b></div></div>
+    <div class="section">Trophées · ${e.trophees.length} / ${Object.keys(CAT.trophees).length}</div>
+    <div class="chips" style="margin-top:8px">${Object.entries(CAT.trophees).map(([id, t]) => {
+      const ok = e.trophees.includes(id);
+      return `<span class="chip" style="${ok ? 'background:#ffc94d;color:#2b1d14' : 'opacity:.6'}" title="${esc(t.desc)}">${ok ? '★ ' : ''}${esc(t.nom)}</span>`;
+    }).join('')}</div>
+    ${e.bilans.length ? `<div class="section">Bilans annuels</div>` + e.bilans.slice(-5).reverse().map((b) => ligne({
+      couleur: b.benefice >= 0 ? '#7be08a' : '#ff8a7a', t1: `Année ${b.annee}`, t2: `CA ${eur(b.ca)} · bénéfice ${eur(b.benefice)} · impôt ${eur(b.impot)}`,
+      t3: `${b.livres} livraison${b.livres > 1 ? 's' : ''}${b.note_moy ? ' · note moyenne ' + dec(b.note_moy) : ''}`,
+    })).join('') : ''}
     <div class="section">Journal</div>${panneauJournal(12)}`;
 }
 
@@ -372,12 +405,14 @@ function rendre() {
     : '<div class="l"><span>Rien de particulier</span></div>'));
   majHtml('#vues', [['bureau', 'Bureau'], ['prod', 'Productivité'], ['moral', 'Moral']].map(([k, l]) =>
     `<button type="button" data-act="vue" data-id="${k}" class="${vue === k ? 'actif' : ''}">${l}</button>`).join(''));
-  const p = e.projet;
-  majHtml('#carte-projet', p
-    ? `<div class="haut"><span class="nomp">${esc(p.nom)}</span><small style="${p.type === 'contrat' && p.jours > p.delai ? 'color:#ff8a7a' : ''}">${p.type === 'contrat' ? `j ${p.jours}/${p.delai}` : 'produit'}</small></div>
-       <small style="text-align:left">${esc(etapeProjet(p))} · note ~${dec(p.note_estimee)}</small>
-       ${p.etape === 'travail' ? `<div class="barres">${Object.keys(p.phases[p.phase].besoin).map((d) => barre(DN[d], p.phases[p.phase].fait[d], p.phases[p.phase].besoin[d], DC[d])).join('')}</div>` : ''}`
+  majHtml('#carte-projet', e.projets.length
+    ? e.projets.map((p) => `<div class="haut"><span class="nomp">${esc(p.nom)}</span><small style="${p.type === 'contrat' && p.jours > p.delai ? 'color:#ff8a7a' : ''}">${p.type === 'contrat' ? `j ${p.jours}/${p.delai}` : 'produit'}</small></div>
+       <small style="text-align:left">${esc(etapeProjet(p))} · note ~${dec(p.note_estimee)}${p.combos_jour.length ? ' · combo !' : ''}</small>
+       ${e.projets.length === 1 && p.etape === 'travail' ? `<div class="barres">${Object.keys(p.phases[p.phase].besoin).map((d) => barre(DN[d], p.phases[p.phase].fait[d], p.phases[p.phase].besoin[d], DC[d])).join('')}</div>`
+         : `<div class="jauge"><i style="width:${Math.round(100 * avancement(p))}%;background:#7be08a"></i></div>`}`).join('')
     : `<span class="nomp">Aucun projet en cours</span><small style="text-align:left">Le temps passe, les charges aussi.</small><span style="color:#ffc94d;font-weight:800;font-size:13px">Voir les contrats →</span>`);
+  if (nbTrophees !== null && e.trophees.length > nbTrophees) toast('Trophée : ' + CAT.trophees[e.trophees[e.trophees.length - 1]].nom + ' !', true);
+  nbTrophees = e.trophees.length;
   const j = e.journal[0] || { date: '', texte: '' };
   majHtml('#bandeau', `<span class="d">${esc(j.date)}</span><span class="t">${esc(j.texte)}</span>`);
   $('#vitesse').textContent = vitesse + '×';
@@ -403,6 +438,21 @@ function rendreModale() {
     const ev = e.evenement;
     h = `<h2 id="modale-titre">${esc(ev.titre)}</h2><p>${esc(ev.texte)}</p>` +
       ev.options.map((o, i) => `<button type="button" class="btn ${i ? 'secondaire' : ''}" data-act="evenement" data-choix="${i}">${esc(o)}</button>`).join('');
+  } else if (e.fin && !e.fin.vue) {
+    const f = e.fin;
+    h = `<h2 id="modale-titre">20 ans d'activité !</h2><p>Votre bureau d'études entre dans l'histoire.</p>
+      <div class="note-geante" style="background:#ffc94d;width:auto;height:auto;border-radius:22px;padding:14px 22px;font-size:26px">${esc(f.titre)}<small>score ${f.score.toLocaleString('fr-FR')}</small></div>
+      <div class="stat"><span>Chiffre d'affaires cumulé</span><b>${eur(f.ca)}</b><span>Contrats livrés</span><b>${f.livres}</b>
+      <span>Note moyenne</span><b>${dec(f.note_moy)}</b><span>Renommée</span><b>${f.renommee}</b><span>Trophées</span><b>${f.trophees}</b></div>
+      ${bouton('fermer_fin', '', 'Continuer à jouer')}${bouton('nouvelle-directe', '', 'Nouvelle partie', true, 'secondaire')}`;
+  } else if (e.bilan) {
+    const b = e.bilan;
+    h = `<h2 id="modale-titre">Bilan de l'année ${b.annee}</h2>
+      <div class="stat"><span>Chiffre d'affaires</span><b>${eur(b.ca)}</b><span>Charges et investissements</span><b>${eur(b.charges)}</b>
+      <span>Bénéfice</span><b style="color:${b.benefice >= 0 ? '#7be08a' : '#ff8a7a'}">${eur(b.benefice)}</b><span>Impôt (25 %)</span><b>${eur(b.impot)}</b>
+      <span>Livraisons</span><b>${b.livres}</b><span>Note moyenne</span><b>${b.note_moy ? dec(b.note_moy) : '—'}</b>
+      <span>Renommée gagnée</span><b>${b.renommee >= 0 ? '+' : ''}${b.renommee}</b><span>Équipe</span><b>${b.employes}</b><span>Trésorerie</span><b>${eur(b.tresorerie)}</b></div>
+      ${bouton('fermer_bilan', '', 'Continuer')}`;
   } else if (e.dernier_livre) {
     const d = e.dernier_livre;
     h = `<h2 id="modale-titre">${esc(d.nom)}</h2><p>${d.type === 'contrat' ? 'Note du client' : 'Note de la presse spécialisée'} · ${esc(d.client)}</p>
@@ -425,9 +475,10 @@ async function api(chemin, corps) {
   return r.json();
 }
 
-function toast(texte) {
+function toast(texte, ok = false) {
   const t = $('#toast');
   t.textContent = texte;
+  t.classList.toggle('ok', ok);
   t.hidden = false;
   clearTimeout(toast.m);
   toast.m = setTimeout(() => { t.hidden = true; }, 2600);
@@ -459,7 +510,7 @@ function boucle() {
         toast(err.message);
       }
       envoi = false;
-      if (ETAT.evenement || ETAT.faillite || ETAT.dernier_livre) joue = false;
+      if (ETAT.evenement || ETAT.faillite || ETAT.dernier_livre || ETAT.bilan || (ETAT.fin && !ETAT.fin.vue)) joue = false;
       rendre();
     }
     boucle();
@@ -507,7 +558,13 @@ document.addEventListener('click', async (ev) => {
   if (id !== undefined && id !== '') params.id = id;
   if (b.dataset.dom) params.dom = b.dataset.dom;
   if (b.dataset.choix !== undefined) params.choix = Number(b.dataset.choix);
+  if (b.dataset.heures) params.heures = Number(b.dataset.heures);
   await agir(act, params);
+});
+
+document.addEventListener('change', (ev) => {
+  const sel = ev.target.closest('[data-affecter]');
+  if (sel) agir('affecter', { id: Number(sel.dataset.affecter), projet: sel.value ? Number(sel.value) : null });
 });
 
 function ajusterEchelle() {

@@ -287,7 +287,7 @@ class Jeu:
                                        "jours": p["jours"], "type": "contrat", "avis": self._avis(note)})
         else:
             ventes = int(2 * p["potentiel"] * (note / 10) ** 2 * (1 + e["renommee"] / 25))
-            e["produits"].append({"nom": p["nom"], "note": note, "ventes": ventes, "mois": 0, "total": 0})
+            e["produits"].append({"nom": p["nom"], "id_produit": p["id_produit"], "note": note, "ventes": ventes, "mois": 0, "total": 0})
             e["stats"]["produits_lances"] += 1
             if note >= 8:
                 e["renommee"] += 1
@@ -475,8 +475,11 @@ class Jeu:
         if e["stats"]["livres"] >= 2 and r.random() < 0.3:
             possibles.append({"type": "recommandation", "titre": "Bouche-à-oreille",
                               "texte": "Un ancien client vous recommande à son réseau.", "options": ["Merci !"]})
+        vus = e.setdefault("derniers_ev", {})
+        possibles = [x for x in possibles if e["jours_total"] - vus.get(x["type"], -999) >= 60]
         if possibles:
             e["evenement"] = r.choice(possibles)
+            vus[e["evenement"]["type"]] = e["jours_total"]
 
     def _resoudre(self, choix):
         e = self.etat
@@ -488,7 +491,7 @@ class Jeu:
         t, p = ev["type"], e["projet"]
         if t == "penurie" and p:
             if choix == 0:
-                e["argent"] -= ev["cout"]
+                self._payer(ev["cout"])
             else:
                 ph = p["phases"][p["phase"]]
                 ph["besoin"]["e"] = ph["besoin"].get("e", 0) + round(p["taille"] * 0.08)
@@ -498,12 +501,12 @@ class Jeu:
             p["delai"] -= 7
             p["paie"] = int(p["paie"] * 1.2)
         elif t == "salon" and choix == 0:
-            e["argent"] -= 3000
+            self._payer(3000)
             e["renommee"] += 1
-            e["offres"] += [self._offre(bonus_rep=2) for _ in range(2)]
+            e["offres"] = e["offres"][:NB_OFFRES] + [self._offre(bonus_rep=2) for _ in range(2)]
         elif t == "panne":
             if choix == 0:
-                e["argent"] -= ev["cout"]
+                self._payer(ev["cout"])
             else:
                 e["pannes"][ev["materiel"]] = 15
         elif t == "subvention" and choix == 0:
@@ -526,12 +529,17 @@ class Jeu:
     # ------------------------------------------------------------------ actions du joueur
     def action(self, genre, **p):
         e = self.etat
+        for cle in ("jours", "choix"):
+            if cle in p and (isinstance(p[cle], bool) or not isinstance(p[cle], int)):
+                raise ErreurJeu("Paramètres invalides.")
+        if "id" in p and (isinstance(p["id"], bool) or not isinstance(p["id"], (int, str))):
+            raise ErreurJeu("Paramètres invalides.")
         if e["faillite"] and genre != "avancer":
             raise ErreurJeu("La société est en faillite.")
         if genre == "avancer":
             self.avancer(p.get("jours", 1))
         elif genre == "evenement":
-            self._resoudre(int(p.get("choix", 0)))
+            self._resoudre(p.get("choix", 0))
         elif genre == "fermer_note":
             e.pop("dernier_livre", None)
         elif genre == "signer":
@@ -554,6 +562,8 @@ class Jeu:
             prod = next((x for x in PRODUITS if x["id"] == p.get("id")), None)
             if not prod or e["renommee"] < prod["rep_min"]:
                 raise ErreurJeu("Produit indisponible.")
+            if any(x.get("id_produit") == prod["id"] for x in e["produits"]):
+                raise ErreurJeu("Ce produit est déjà en vente.")
             self._payer(prod["cout"])
             total = {d: round(prod["taille"] * part) for d, part in zip(DOMAINES, prod["rep"])}
             base = {"nom": prod["nom"], "taille": sum(total.values()), "total": total,
@@ -572,6 +582,8 @@ class Jeu:
                 raise ErreurJeu("Aucun projet en cours.")
             if pr["type"] == "contrat":
                 e["renommee"] = max(0, e["renommee"] - 1)
+                e["argent"] -= pr.get("acompte", 0)  # l'acompte est rendu au client
+                e["stats"]["ca"] -= pr.get("acompte", 0)
             e["projet"] = None
             self._log(f"Projet « {pr['nom']} » abandonné.", "mauvais")
         elif genre == "embaucher":

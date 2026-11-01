@@ -22,8 +22,10 @@ VERROU = threading.Lock()
 
 def charger():
     try:
-        return Jeu(json.loads(SAUVEGARDE.read_text(encoding="utf-8")))
-    except (OSError, ValueError):
+        jeu = Jeu(json.loads(SAUVEGARDE.read_text(encoding="utf-8")))
+        jeu.vue()  # sauvegarde abîmée ou d'une ancienne version : on repart d'une partie neuve
+        return jeu
+    except Exception:
         return Jeu()
 
 
@@ -55,7 +57,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
         chemin = self.path.split("?")[0]
         if chemin == "/api/etat":
             with VERROU:
-                return self._json(200, JEU.vue())
+                try:
+                    return self._json(200, JEU.vue())
+                except Exception as ex:
+                    return self._json(500, {"ok": False, "erreur": f"Erreur interne : {ex}"})
         if chemin == "/api/catalogue":
             return self._json(200, CATALOGUE)
         fichier = (WEB / (chemin.lstrip("/") or "index.html")).resolve()
@@ -92,8 +97,10 @@ class Gestionnaire(BaseHTTPRequestHandler):
             try:
                 JEU.action(genre, **data)
                 erreur = None
-            except (ErreurJeu, TypeError, ValueError) as ex:
+            except ErreurJeu as ex:
                 erreur = str(ex)
+            except (TypeError, ValueError, OverflowError, KeyError):
+                erreur = "Paramètres invalides."
             sauver(JEU)
             return self._json(200, {"ok": erreur is None, "erreur": erreur, "etat": JEU.vue()})
 

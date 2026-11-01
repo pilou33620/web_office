@@ -84,6 +84,8 @@ class TestJeu(unittest.TestCase):
         j.action("signer", id=j.etat["offres"][0]["id"])
         vus = set()
         for _ in range(200):
+            j.etat["derniers_ev"] = {}
+            j.etat["argent"] = 100000
             j._evenement()
             ev = j.etat["evenement"]
             vus.add(ev["type"])
@@ -113,6 +115,34 @@ class TestJeu(unittest.TestCase):
         self.assertIn("reunion", lieux)
         self.assertTrue(lieux <= {"bureau", "labo", "atelier", "cem", "pause", "reunion"})
         self.assertGreater(len(lieux), 2)
+
+    def test_abandon_rend_acompte(self):
+        j = Jeu(graine=13)
+        j.action("signer", id=j.etat["offres"][0]["id"])
+        j.action("abandonner")
+        self.assertEqual(j.etat["argent"], 15000)
+
+    def test_produit_unique_et_parametres(self):
+        j = Jeu(graine=14)
+        j.etat["renommee"] = 5
+        j.etat["produits"].append({"nom": "x", "id_produit": "meteo", "note": 7, "ventes": 900, "mois": 0, "total": 0})
+        with self.assertRaises(ErreurJeu):
+            j.action("produit", id="meteo")
+        for mauvais in ({"jours": 1e999}, {"jours": "3"}, {"id": [1]}):
+            with self.assertRaises(ErreurJeu):
+                j.action("avancer" if "jours" in mauvais else "signer", **mauvais)
+
+    def test_evenements_espaces(self):
+        j = Jeu(graine=15)
+        j.etat["renommee"], j.etat["argent"] = 3, 100000
+        j._evenement()
+        premier = j.etat["evenement"]["type"]
+        j.action("evenement", choix=len(j.etat["evenement"]["options"]) - 1)
+        for _ in range(30):
+            j._evenement()
+            if j.etat["evenement"]:
+                self.assertNotEqual(j.etat["evenement"]["type"], premier)
+                j.action("evenement", choix=len(j.etat["evenement"]["options"]) - 1)
 
     def test_sauvegarde_json(self):
         j = Jeu(graine=8)

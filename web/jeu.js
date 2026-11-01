@@ -411,8 +411,11 @@ function rendreModale() {
       ${d.montant ? `<p style="text-align:center">Solde encaissé : <b>${eur(d.montant)}</b></p>` : '<p style="text-align:center">Le produit est en vente : les revenus arrivent chaque début de mois.</p>'}
       ${bouton('fermer_note', '', 'Continuer')}`;
   }
+  const etaitCachee = $('#modale').hidden;
   $('#modale').hidden = !h;
+  $('#app').inert = !!h;  // le clavier reste dans la modale
   majHtml('#modale-contenu', h);
+  if (h && etaitCachee) $('#modale-contenu button')?.focus();
 }
 
 // ---------------------------------------------------------------- échanges serveur
@@ -483,8 +486,12 @@ document.addEventListener('click', async (ev) => {
     // fallthrough
     case 'nouvelle-directe': {
       joue = false;
-      const r = await api('/api/nouvelle', {});
-      ETAT = r.etat;
+      try {
+        const r = await api('/api/nouvelle', {});
+        ETAT = r.etat;
+      } catch (err) {
+        toast(err.message);
+      }
       onglet = tablette() ? 'projets' : 'accueil';
       return rendre();
     }

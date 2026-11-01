@@ -119,3 +119,43 @@ PHASES = [
 ]
 
 MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+
+# Horaires de travail (heures par jour) : productivité, moral, fatigue, défauts, surcoût salarial (heures sup)
+HORAIRES = {
+    6:  {"nom": "6 h · mi-temps confort", "prod": 0.80, "moral": 8, "fatigue": 0.5, "defauts": 0.9, "salaire": 0.0},
+    7:  {"nom": "7 h · semaine de 35 h", "prod": 0.92, "moral": 4, "fatigue": 0.75, "defauts": 0.95, "salaire": 0.0},
+    8:  {"nom": "8 h · horaires classiques", "prod": 1.0, "moral": 0, "fatigue": 1.0, "defauts": 1.0, "salaire": 0.0},
+    9:  {"nom": "9 h · on pousse un peu", "prod": 1.10, "moral": -4, "fatigue": 1.35, "defauts": 1.05, "salaire": 0.03},
+    10: {"nom": "10 h · rush", "prod": 1.18, "moral": -9, "fatigue": 1.8, "defauts": 1.15, "salaire": 0.06},
+    12: {"nom": "12 h · crunch", "prod": 1.26, "moral": -18, "fatigue": 2.8, "defauts": 1.4, "salaire": 0.12},
+}
+
+# Combos d'équipe sur un projet
+COMBOS = {
+    "trio":    {"nom": "Équipe complète", "desc": "Un spécialiste (5+) dans chaque domaine du projet : +10 % de production, note +0,4"},
+    "qualite": {"nom": "Duo qualité", "desc": "Un perfectionniste et un chasseur de bugs : 30 % de défauts en moins"},
+    "mentor":  {"nom": "Mentorat", "desc": "Un expert (9+) et un junior : le junior progresse deux fois plus vite"},
+    "soudee":  {"nom": "Équipe soudée", "desc": "4 personnes ou plus, toutes avec un moral de 65 % ou plus : +5 % de production"},
+}
+
+DUREE_PARTIE_ANS = 20
+TROPHEES = {
+    "premier_contrat": {"nom": "Premier client", "desc": "Livrer un premier contrat"},
+    "note_9":          {"nom": "Travail d'orfèvre", "desc": "Obtenir une note de 9 ou plus"},
+    "note_10":         {"nom": "Perfection", "desc": "Obtenir 10/10"},
+    "sans_faute":      {"nom": "Sans faute", "desc": "Livrer un gros contrat (300+) sans échec CEM avec 8 ou plus"},
+    "equipe_6":        {"nom": "Ça s'agrandit", "desc": "Avoir 6 employés"},
+    "equipe_10":       {"nom": "Plateau complet", "desc": "Avoir 10 employés"},
+    "parallele":       {"nom": "Chef d'orchestre", "desc": "Mener 3 projets en même temps"},
+    "trio":            {"nom": "Dream team", "desc": "Activer le combo Équipe complète"},
+    "labo_cem":        {"nom": "Indépendance CEM", "desc": "Ouvrir son propre labo CEM"},
+    "trois_produits":  {"nom": "Fabricant", "desc": "Lancer 3 produits maison"},
+    "produit_star":    {"nom": "Produit star", "desc": "Un produit maison noté 8,5 ou plus"},
+    "vingt_contrats":  {"nom": "Habitué des appels d'offres", "desc": "Livrer 20 contrats"},
+    "renommee_10":     {"nom": "Connu dans la région", "desc": "Atteindre 10 de renommée"},
+    "renommee_25":     {"nom": "Référence nationale", "desc": "Atteindre 25 de renommée"},
+    "cent_mille":      {"nom": "Coussin de sécurité", "desc": "Avoir 100 000 € en trésorerie"},
+    "million":         {"nom": "Millionnaire", "desc": "Avoir 1 000 000 € en trésorerie"},
+}
+TITRES_FIN = [(1000, "Bricoleur du dimanche"), (3000, "Petit bureau d'études"), (7000, "PME reconnue"),
+              (15000, "Référence nationale"), (10 ** 9, "Légende de l'électronique")]

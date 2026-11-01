@@ -21,13 +21,13 @@ class TestJeu(unittest.TestCase):
         for _ in range(400):
             if j.etat["evenement"]:
                 j.action("evenement", choix=0)
-            p = j.etat["projet"]
-            if p is None:
+            if not j.etat["projets"]:
                 break
+            p = j.etat["projets"][0]
             if p["etape"] == "debug" and p["defauts"] < 1:
-                j.action("tests_cem")
+                j.action("tests_cem", id=p["id"])
             j.action("avancer")
-        self.assertIsNone(j.etat["projet"])
+        self.assertEqual(j.etat["projets"], [])
         self.assertEqual(j.etat["stats"]["livres"], 1)
         self.assertTrue(1 <= j.etat["historique"][0]["note"] <= 10)
         self.assertNotEqual(j.etat["argent"], argent)
@@ -41,6 +41,7 @@ class TestJeu(unittest.TestCase):
             j.etat["evenement"] = None
         self.assertEqual(j.etat["jour"], 1)
         self.assertEqual(j.etat["argent"], argent - j.loyer())  # seul le fondateur, sans salaire
+        self.assertEqual(j.etat["exercice"]["charges"], j.loyer())
 
     def test_postes_et_locaux(self):
         j = Jeu(graine=4)
@@ -110,6 +111,7 @@ class TestJeu(unittest.TestCase):
         lieux = set()
         for _ in range(40):
             j.etat["evenement"] = None
+            j.etat.pop("dernier_livre", None)
             j._jour()
             lieux.add(j.etat["employes"][0]["lieu"])
         self.assertIn("reunion", lieux)
@@ -144,6 +146,70 @@ class TestJeu(unittest.TestCase):
                 self.assertNotEqual(j.etat["evenement"]["type"], premier)
                 j.action("evenement", choix=len(j.etat["evenement"]["options"]) - 1)
 
+    def test_projets_en_parallele_et_affectation(self):
+        j = Jeu(graine=16)
+        j.etat["argent"] = 100000
+        j.action("signer", id=j.etat["offres"][0]["id"])
+        with self.assertRaises(ErreurJeu):
+            j.action("signer", id=j.etat["offres"][0]["id"])  # garage : un seul projet
+        j.action("local", id="bureau")
+        j.action("signer", id=j.etat["offres"][0]["id"])
+        self.assertEqual(len(j.etat["projets"]), 2)
+        j.action("embaucher", id=j.etat["candidats"][0]["id"])
+        cible = j.etat["projets"][1]["id"]
+        j.action("affecter", id=j.etat["employes"][1]["id"], projet=cible)
+        j.etat["evenement"] = None
+        j._jour()
+        self.assertIn(j.etat["employes"][1]["id"], j.etat["projets"][1]["equipe"])
+        j.action("affecter", id=j.etat["employes"][1]["id"], projet=None)
+        with self.assertRaises(ErreurJeu):
+            j.action("affecter", id=j.etat["employes"][1]["id"], projet=99999)
+
+    def test_horaires(self):
+        j = Jeu(graine=17)
+        base = j.efficacite(j.etat["employes"][0])
+        j.action("horaires", heures=10)
+        self.assertGreater(j.efficacite(j.etat["employes"][0]), base * 0.95)
+        self.assertLess(j.moral_global(), 60)
+        with self.assertRaises(ErreurJeu):
+            j.action("horaires", heures=11)
+
+    def test_combos(self):
+        j = Jeu(graine=18)
+        p = j._creer_projet({"nom": "x", "taille": 100, "total": {"e": 40, "m": 30, "f": 30}}, "contrat")
+        equipe = [dict(j.etat["employes"][0], id=i, e=a, m=b, f=c, trait=t)
+                  for i, (a, b, c, t) in enumerate([(9, 0, 0, "perfectionniste"), (0, 6, 0, "debug"), (0, 0, 6, "rapide"), (1, 1, 1, "rapide")])]
+        self.assertEqual(set(j._combos(p, equipe)) & {"trio", "qualite", "mentor"}, {"trio", "qualite", "mentor"})
+
+    def test_bilan_annuel_et_fin(self):
+        j = Jeu(graine=19)
+        j.etat["exercice"]["ca"] = 50000
+        j.etat["jours_total"] = 359
+        j.etat["evenement"] = None
+        argent = j.etat["argent"]
+        j._jour()
+        self.assertEqual(j.etat["bilan"]["impot"], 12500)
+        self.assertLess(j.etat["argent"], argent)
+        j.action("avancer")
+        self.assertEqual(j.etat["jours_total"], 360)  # en pause tant que le bilan n'est pas fermé
+        j.action("fermer_bilan")
+        j.etat["jours_total"] = 20 * 360 - 1
+        j.etat["evenement"] = None
+        j._jour()
+        self.assertIn("titre", j.etat["fin"])
+
+    def test_migration_v1(self):
+        j = Jeu(graine=20)
+        j.action("signer", id=j.etat["offres"][0]["id"])
+        ancien = json.loads(json.dumps(j.etat))
+        ancien["projet"] = ancien.pop("projets")[0]
+        for cle in ("heures", "trophees", "bilans", "exercice", "combos_vus"):
+            ancien.pop(cle)
+        nouveau = Jeu(ancien)
+        self.assertEqual(len(nouveau.etat["projets"]), 1)
+        nouveau.action("avancer", jours=3)
+        json.dumps(nouveau.vue())
+
     def test_sauvegarde_json(self):
         j = Jeu(graine=8)
         j.action("signer", id=j.etat["offres"][0]["id"])
@@ -170,11 +236,19 @@ class TestJeu(unittest.TestCase):
                 if e["faillite"]:
                     break
                 if e["evenement"]:
-                    j.action("evenement", choix=r.randrange(len(e["evenement"]["options"])))
-                if not e["projet"] and e["offres"]:
+                    try:
+                        j.action("evenement", choix=r.randrange(len(e["evenement"]["options"])))
+                    except ErreurJeu:
+                        j.action("evenement", choix=len(e["evenement"]["options"]) - 1)
+                for cle in ("bilan", "dernier_livre"):
+                    e.pop(cle, None)
+                if len(e["projets"]) < j.capacite_projets() and e["offres"]:
                     j.action("signer", id=e["offres"][0]["id"])
-                if e["projet"] and e["projet"]["etape"] == "debug" and e["projet"]["defauts"] < 2:
-                    j.action("tests_cem")
+                for p in list(e["projets"]):
+                    if p["etape"] == "debug" and p["defauts"] < 2:
+                        j.action("tests_cem", id=p["id"])
+                if r.random() < 0.01:
+                    j.action("horaires", heures=r.choice([6, 7, 8, 9, 10, 12]))
                 for genre, ident in (("local", "bureau"), ("embaucher", None), ("acheter", "oscillo"), ("deco", "cafe")):
                     if e["argent"] > 25000:
                         try:

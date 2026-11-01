@@ -83,7 +83,7 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 .vues button.actif { background: var(--or); color: var(--trait); }
 .hud-bas { position: absolute; left: 12px; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 .hud-bas > * { pointer-events: auto; }
-.ligne-hud { display: flex; align-items: flex-end; gap: 10px; pointer-events: none; }
+.ligne-hud { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; pointer-events: none; }
 .ligne-hud > * { pointer-events: auto; }
 .carte-projet { flex: 1; min-width: 0; max-width: 420px; text-align: left; padding: 9px 12px; border-radius: 16px; background: var(--fond); border: 2.5px solid var(--bord); box-shadow: 0 4px 0 rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 5px; cursor: pointer; }
 .carte-projet .haut { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -165,3 +165,6 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
   #panneau .fermer { display: none; }
   main { grid-row: 2; grid-column: 1; }
 }
+.toast.ok { background: var(--vert); }
+.choix { flex: 1; min-height: 40px; border-radius: 10px; border: 2.5px solid var(--bord); background: var(--fond2); color: var(--txt); font: 700 14px Nunito, sans-serif; padding: 0 8px; }
+.carte-projet .jauge { height: 7px; }

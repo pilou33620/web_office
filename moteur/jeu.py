@@ -75,7 +75,8 @@ class Jeu:
             e.setdefault(cle, val)
         e.setdefault("exercice", self._exercice_vide())
         for p in e["projets"]:
-            p.setdefault("combos", {})
+            for cle, val in (("combos", {}), ("combos_jour", []), ("equipe", [])):
+                p.setdefault(cle, val)
         for x in e["employes"]:
             x.setdefault("projet", None)
         e["version"] = 2

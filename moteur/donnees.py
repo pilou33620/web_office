@@ -3,59 +3,97 @@
 DOMAINES = ("e", "m", "f")
 NOM_DOMAINE = {"e": "Élec", "m": "Méca 3D", "f": "Firmware"}
 
+# Pièces du plan (coordonnées du monde, en px) et local qu'il faut louer pour les utiliser
+PIECES = {
+    "garage":    {"nom": "Garage", "rect": (18, 26, 228, 226), "local": None},
+    "bureau":    {"nom": "Bureau agrandi", "rect": (246, 26, 126, 226), "local": "bureau"},
+    "labo":      {"nom": "Labo élec", "rect": (18, 258, 175, 364), "local": None},
+    "atelier":   {"nom": "Atelier 3D", "rect": (197, 258, 175, 364), "local": "atelier"},
+    "openspace": {"nom": "Open space", "rect": (18, 628, 175, 274), "local": "openspace"},
+    "cem":       {"nom": "Labo CEM", "rect": (197, 628, 175, 274), "local": "cem"},
+    "pause":     {"nom": "Salle de pause", "rect": (18, 912, 174, 184), "local": "pause"},
+}
+INTERIEUR = list(PIECES)
+TRAVAIL = ["garage", "bureau", "openspace"]
+# Établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
+ETABLIS = [(24, 31, 342, 26), (23, 266, 44, 348)]
+GRILLE = 4
+
+# Poste de travail : l'emprise inclut la chaise et la place de l'employé au-dessus du meuble
+POSTE = {"nom": "Bureau de travail", "prix": 400, "w": 76, "h": 64, "pieces": TRAVAIL}
+POSTES_DEPART = [(34, 66), (147, 66)]
+
 # Matériel : bonus de production (10 % par point), debug (détection des défauts), cem (chance aux tests)
+# w, h : taille sur le plan ; pos : emplacement par défaut (achat automatique, anciennes sauvegardes)
+_FW = ["garage", "bureau", "labo", "openspace"]
 MATERIEL = {
     # Labo électronique
-    "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo"},
-    "station":  {"nom": "Station de soudage", "dom": "e", "prix": 300, "bonus": 1, "piece": "labo"},
-    "alim":     {"nom": "Alimentation de labo", "dom": "e", "prix": 450, "bonus": 1, "piece": "labo"},
-    "micro":    {"nom": "Microscope de soudure", "dom": "e", "prix": 1800, "bonus": 1, "debug": 1, "piece": "labo"},
-    "oscillo":  {"nom": "Oscilloscope 4 voies", "dom": "e", "prix": 2800, "bonus": 2, "debug": 1, "piece": "labo"},
-    "sonde":    {"nom": "Sondes champ proche", "dom": "e", "prix": 1200, "bonus": 0, "cem": 0.10, "piece": "labo"},
-    "four":     {"nom": "Four de refusion", "dom": "e", "prix": 6500, "bonus": 3, "piece": "labo"},
-    "spectre":  {"nom": "Analyseur de spectre", "dom": "e", "prix": 14000, "bonus": 2, "cem": 0.10, "piece": "labo"},
+    "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (30, 278)},
+    "station":  {"nom": "Station de soudage", "dom": "e", "prix": 300, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (30, 326)},
+    "alim":     {"nom": "Alimentation de labo", "dom": "e", "prix": 450, "bonus": 1, "piece": "labo", "w": 32, "h": 32, "pos": (28, 374)},
+    "micro":    {"nom": "Microscope de soudure", "dom": "e", "prix": 1800, "bonus": 1, "debug": 1, "piece": "labo", "w": 32, "h": 36, "pos": (28, 476)},
+    "oscillo":  {"nom": "Oscilloscope 4 voies", "dom": "e", "prix": 2800, "bonus": 2, "debug": 1, "piece": "labo", "w": 36, "h": 44, "pos": (26, 420)},
+    "sonde":    {"nom": "Sondes champ proche", "dom": "e", "prix": 1200, "bonus": 0, "cem": 0.10, "piece": "labo", "w": 28, "h": 30, "pos": (30, 526)},
+    "four":     {"nom": "Four de refusion", "dom": "e", "prix": 6500, "bonus": 3, "piece": "labo", "w": 74, "h": 56, "pos": (110, 284)},
+    "spectre":  {"nom": "Analyseur de spectre", "dom": "e", "prix": 14000, "bonus": 2, "cem": 0.10, "piece": "labo", "w": 74, "h": 44, "pos": (110, 372)},
     # Atelier méca / 3D
-    "fdm":      {"nom": "Imprimante 3D FDM", "dom": "m", "prix": 650, "bonus": 2, "piece": "atelier"},
-    "resine":   {"nom": "Imprimante résine", "dom": "m", "prix": 2400, "bonus": 2, "piece": "atelier"},
-    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier"},
-    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier"},
-    # Firmware (établi du bureau)
-    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "bureau"},
-    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "bureau"},
-    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "bureau"},
-    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "bureau"},
-    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "bureau"},
+    "fdm":      {"nom": "Imprimante 3D FDM", "dom": "m", "prix": 650, "bonus": 2, "piece": "atelier", "w": 46, "h": 46, "pos": (214, 274)},
+    "resine":   {"nom": "Imprimante résine", "dom": "m", "prix": 2400, "bonus": 2, "piece": "atelier", "w": 38, "h": 42, "pos": (270, 276)},
+    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier", "w": 100, "h": 36, "pos": (214, 344)},
+    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier", "w": 140, "h": 100, "pos": (216, 430)},
+    # Firmware (établi du bureau, ou labo)
+    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "bureau", "pieces": _FW, "w": 20, "h": 20, "pos": (30, 34)},
+    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "bureau", "pieces": _FW, "w": 34, "h": 20, "pos": (58, 34)},
+    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "bureau", "pieces": _FW, "w": 28, "h": 20, "pos": (100, 34)},
+    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "bureau", "pieces": _FW, "w": 40, "h": 24, "pos": (136, 32)},
+    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "bureau", "pieces": _FW, "w": 90, "h": 24, "pos": (184, 32)},
     # Labo CEM
-    "esd":      {"nom": "Générateur ESD", "dom": "c", "prix": 3500, "bonus": 0, "cem": 0.08, "piece": "cem"},
-    "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem"},
+    "esd":      {"nom": "Générateur ESD", "dom": "c", "prix": 3500, "bonus": 0, "cem": 0.08, "piece": "cem", "w": 40, "h": 40, "pos": (220, 816)},
+    "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem", "w": 144, "h": 130, "pos": (214, 648)},
 }
+for _m in MATERIEL.values():
+    _m.setdefault("pieces", [_m["piece"]])
 MATERIEL_DEPART = ["multi", "station", "stlink"]
 
+# Aménagement. Effet (moral, prod) compté une fois par type, même avec plusieurs exemplaires.
+# global : amélioration sans objet à poser ; multiple : plusieurs exemplaires possibles ; libre : mural ou au sol, ne gêne rien
 DECO = {
-    "plantes": {"nom": "Plantes vertes", "prix": 180, "moral": 5},
-    "tableau": {"nom": "Tableau blanc", "prix": 250, "moral": 3},
-    "cafe":    {"nom": "Machine à café", "prix": 600, "moral": 7},
-    "clim":    {"nom": "Climatisation", "prix": 2500, "moral": 4, "effet": "Supprime le malus de canicule (juin à août)"},
-    "sieges":  {"nom": "Sièges ergonomiques", "prix": 1500, "moral": 3, "prod": 8, "effet": "+8 % de productivité"},
-    "eclairage": {"nom": "Éclairage LED", "prix": 800, "moral": 2, "prod": 4, "effet": "+4 % de productivité"},
-    "isolation": {"nom": "Isolation phonique", "prix": 3000, "moral": 2, "effet": "Supprime le malus de bruit"},
-    "canape":  {"nom": "Canapé", "prix": 900, "moral": 6, "piece": "pause"},
-    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "piece": "pause"},
+    "plantes":  {"nom": "Plante verte", "prix": 180, "moral": 5, "w": 28, "h": 28, "multiple": True, "pos": (340, 196)},
+    "ficus":    {"nom": "Ficus", "prix": 350, "moral": 2, "w": 36, "h": 36, "multiple": True},
+    "tableau":  {"nom": "Tableau blanc", "prix": 250, "moral": 3, "w": 68, "h": 12, "libre": True, "pos": (294, 60)},
+    "cafe":     {"nom": "Machine à café", "prix": 600, "moral": 7, "w": 20, "h": 28, "pos": (346, 64)},
+    "fontaine": {"nom": "Fontaine à eau", "prix": 300, "moral": 2, "w": 18, "h": 22, "multiple": True},
+    "distrib":  {"nom": "Distributeur de snacks", "prix": 700, "moral": 3, "w": 30, "h": 24},
+    "clim":     {"nom": "Climatisation", "prix": 2500, "moral": 4, "w": 44, "h": 12, "libre": True, "effet": "Supprime le malus de canicule (juin à août)", "pos": (60, 20)},
+    "biblio":   {"nom": "Bibliothèque de datasheets", "prix": 800, "moral": 1, "prod": 2, "w": 64, "h": 16, "effet": "+2 % de productivité"},
+    "armoire":  {"nom": "Armoire à composants", "prix": 1200, "moral": 0, "prod": 3, "w": 44, "h": 22, "effet": "+3 % de productivité"},
+    "imprimante": {"nom": "Imprimante de bureau", "prix": 400, "moral": 0, "prod": 1, "w": 28, "h": 22, "effet": "+1 % de productivité"},
+    "table":    {"nom": "Table de réunion", "prix": 1500, "moral": 2, "prod": 2, "w": 72, "h": 44, "effet": "+2 % de productivité"},
+    "aquarium": {"nom": "Aquarium", "prix": 900, "moral": 4, "w": 40, "h": 24},
+    "lampe":    {"nom": "Lampadaire", "prix": 150, "moral": 1, "w": 16, "h": 16, "multiple": True},
+    "poster":   {"nom": "Affiche de circuit vintage", "prix": 120, "moral": 1, "w": 30, "h": 10, "multiple": True, "libre": True},
+    "tapis":    {"nom": "Tapis", "prix": 200, "moral": 1, "w": 60, "h": 40, "multiple": True, "libre": True},
+    "canape":   {"nom": "Canapé", "prix": 900, "moral": 6, "w": 90, "h": 36, "pieces": ["pause", "openspace"], "pos": (26, 1028)},
+    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "w": 54, "h": 44, "pieces": ["pause", "openspace"], "pos": (100, 960)},
+    "arcade":   {"nom": "Borne d'arcade", "prix": 2000, "moral": 6, "w": 30, "h": 30, "pieces": ["pause", "openspace"]},
+    "sieges":   {"nom": "Sièges ergonomiques", "prix": 1500, "moral": 3, "prod": 8, "global": True, "effet": "+8 % de productivité"},
+    "eclairage": {"nom": "Éclairage LED", "prix": 800, "moral": 2, "prod": 4, "global": True, "effet": "+4 % de productivité"},
+    "isolation": {"nom": "Isolation phonique", "prix": 3000, "moral": 2, "global": True, "effet": "Supprime le malus de bruit"},
 }
+for _d in DECO.values():
+    _d.setdefault("pieces", INTERIEUR)
 
 # Locaux : prix d'achat, loyer mensuel ajouté, renommée requise
 LOCAUX = {
-    "bureau":    {"nom": "Agrandir le bureau d'études", "desc": "4 postes de travail de plus", "prix": 6000, "loyer": 500, "rep": 0},
+    "bureau":    {"nom": "Agrandir le bureau d'études", "desc": "Place pour 2 à 3 bureaux de plus", "prix": 6000, "loyer": 500, "rep": 0},
     "atelier":   {"nom": "Atelier méca / 3D", "desc": "Débloque impression 3D et usinage", "prix": 8000, "loyer": 400, "rep": 0},
-    "openspace": {"nom": "Open space", "desc": "4 postes de plus et un coin détente", "prix": 20000, "loyer": 700, "rep": 3},
+    "openspace": {"nom": "Open space", "desc": "Place pour 4 à 6 bureaux, coin détente possible", "prix": 20000, "loyer": 700, "rep": 3},
     "pause":     {"nom": "Salle de pause", "desc": "Pauses plus reposantes (fatigue −5 par jour au lieu de −3), moral +5", "prix": 5000, "loyer": 300, "rep": 1},
     "cem":       {"nom": "Labo CEM", "desc": "Tests CEM gratuits et équipements dédiés", "prix": 15000, "loyer": 600, "rep": 4},
 }
 LOYER_BASE = 400
-# Postes de travail : 0-1 garage, 2-5 bureau agrandi, 6-9 open space
-POSTES_GARAGE = [0, 1]
-POSTES_BUREAU = [2, 3, 4, 5]
-POSTES_OPENSPACE = [6, 7, 8, 9]
+# Anciennes positions des postes (sauvegardes v2) : coin haut-gauche de l'emprise
+ANCIENS_POSTES = [(34, 66), (147, 66), (260, 66), (34, 152), (147, 152), (260, 152), (26, 660), (108, 660), (26, 760), (108, 760)]
 
 TRAITS = {
     "perfectionniste": {"nom": "Perfectionniste", "desc": "Moins de défauts, un peu plus lent", "vitesse": 0.9, "defauts": 0.5},

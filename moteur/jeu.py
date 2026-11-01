@@ -1,9 +1,9 @@
 """Moteur de Circuit Story : simulation jour par jour d'un bureau d'études électronique."""
 import random
 
-from .donnees import (CHEVEUX, CLIENTS, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS, HORAIRES,
-                      LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX, PHASES, POSTES,
-                      POSTES_BUREAU, POSTES_GARAGE, POSTES_OPENSPACE, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES)
+from .donnees import (ANCIENS_POSTES, CHEVEUX, CLIENTS, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
+                      ETABLIS, GRILLE, HORAIRES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
+                      PHASES, PIECES, POSTE, POSTES, POSTES_DEPART, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES)
 
 JOURS_MOIS = 30
 JOURS_AN = 360
@@ -47,14 +47,17 @@ class Jeu:
             "employes": [], "candidats": [], "offres": [], "projets": [], "produits": [],
             "evenement": None, "journal": [], "historique": [], "faillite": False,
             "stats": {"livres": 0, "ca": 0, "produits_lances": 0},
-            "trophees": [], "bilans": [], "combos_vus": [],
+            "trophees": [], "bilans": [], "combos_vus": [], "objets": [],
         })
         self.etat["exercice"] = self._exercice_vide()
+        bureaux = [self._ajouter_objet("poste", x, y)["id"] for x, y in POSTES_DEPART]
+        for mid in MATERIEL_DEPART:
+            self._ajouter_objet(mid, *MATERIEL[mid]["pos"])
         self.etat["employes"].append({
             "id": self._id(), "nom": "Vous", "poste": "Fondateur · ingé élec", "e": 5, "m": 2, "f": 4,
             "trait": "endurant", "salaire": 0, "couleur": "#ffc94d", "cheveux": "#5a3a22", "peau": "#f6cfa6",
             "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 3, "absent": 0, "formation": None,
-            "bureau": 0, "fondateur": True, "tache": None, "gain": 0, "projet": None,
+            "bureau": bureaux[0], "fondateur": True, "tache": None, "gain": 0, "projet": None,
         })
         for _ in range(NB_CANDIDATS):
             self.etat["candidats"].append(self._candidat())
@@ -79,7 +82,26 @@ class Jeu:
                 p.setdefault(cle, val)
         for x in e["employes"]:
             x.setdefault("projet", None)
-        e["version"] = 2
+        if "objets" not in e:
+            self._migrer_v3()
+        e["version"] = 3
+
+    def _migrer_v3(self):
+        """v2 -> v3 : postes fixes et matériel/déco sans position deviennent des objets placés."""
+        e = self.etat
+        e["objets"] = []
+        ouverts = [0, 1] + ([2, 3, 4, 5] if "bureau" in e["locaux"] else []) + ([6, 7, 8, 9] if "openspace" in e["locaux"] else [])
+        ids = {i: self._ajouter_objet("poste", *ANCIENS_POSTES[i])["id"] for i in ouverts}
+        for x in e["employes"]:
+            x["bureau"] = ids.get(x["bureau"]) or next(i for i in ids.values() if i not in {y["bureau"] for y in e["employes"]})
+        for mid in e["materiel"]:
+            self._ajouter_objet(mid, *MATERIEL[mid]["pos"])
+        for did in e["deco"]:
+            if not DECO[did].get("global"):
+                try:
+                    self._ajouter_objet(did, *self._place_auto(did))
+                except ErreurJeu:
+                    pass  # pièce non louée ou pleine : l'effet reste acquis, l'objet n'apparaît pas
 
     def _exercice_vide(self):
         return {"ca": 0, "charges": 0, "livres": 0, "notes": [], "rep0": self.etat.get("renommee", 0)}
@@ -144,12 +166,98 @@ class Jeu:
         raise ErreurJeu("Projet introuvable.")
 
     def postes_ouverts(self):
-        p = list(POSTES_GARAGE)
-        if "bureau" in self.etat["locaux"]:
-            p += POSTES_BUREAU
-        if "openspace" in self.etat["locaux"]:
-            p += POSTES_OPENSPACE
-        return p
+        return [o["id"] for o in self.etat["objets"] if o["type"] == "poste"]
+
+    # ------------------------------------------------------------------ aménagement libre
+    @staticmethod
+    def fiche(genre):
+        if genre == "poste":
+            return POSTE
+        fiche = MATERIEL.get(genre) or DECO.get(genre)
+        if not fiche or fiche.get("global"):
+            raise ErreurJeu("Objet inconnu.")
+        return fiche
+
+    def pieces_dispo(self):
+        return [k for k, p in PIECES.items() if p["local"] is None or p["local"] in self.etat["locaux"]]
+
+    def _verifier_place(self, genre, x, y, ignorer=None):
+        """Renvoie la pièce où l'objet tient entièrement ; refuse les chevauchements."""
+        if not (entier(x) and entier(y)):
+            raise ErreurJeu("Paramètres invalides.")
+        f = self.fiche(genre)
+        w, h = f["w"], f["h"]
+        dispo = self.pieces_dispo()
+        piece = None
+        for k in f["pieces"]:
+            px, py, pw, ph = PIECES[k]["rect"]
+            if px <= x and py <= y and x + w <= px + pw and y + h <= py + ph:
+                piece = k
+                break
+        if piece is None:
+            noms = ", ".join(PIECES[k]["nom"] for k in f["pieces"])
+            raise ErreurJeu(f"{f['nom']} : à placer entièrement dans {noms}.")
+        if piece not in dispo:
+            raise ErreurJeu(f"Il faut d'abord louer : {LOCAUX[PIECES[piece]['local']]['nom']}.")
+        if f.get("libre"):
+            return piece
+        if genre not in MATERIEL and any(x < ex + ew and ex < x + w and y < ey + eh and ey < y + h for ex, ey, ew, eh in ETABLIS):
+            raise ErreurJeu("Pas sur l'établi : seul le petit matériel peut y être posé.")
+        for o in self.etat["objets"]:
+            if o["id"] == ignorer:
+                continue
+            g = self.fiche(o["type"])
+            if g.get("libre"):
+                continue
+            if x < o["x"] + g["w"] and o["x"] < x + w and y < o["y"] + g["h"] and o["y"] < y + h:
+                raise ErreurJeu("La place est déjà prise.")
+        return piece
+
+    def _place_auto(self, genre):
+        f = self.fiche(genre)
+        for k in f["pieces"]:
+            if k not in self.pieces_dispo():
+                continue
+            px, py, pw, ph = PIECES[k]["rect"]
+            for y in range(py + 4, py + ph - f["h"] + 1, 8):
+                for x in range(px + 4, px + pw - f["w"] + 1, 8):
+                    try:
+                        self._verifier_place(genre, x, y)
+                        return x, y
+                    except ErreurJeu:
+                        pass
+        raise ErreurJeu(f"Plus de place libre pour : {f['nom']}.")
+
+    def _ajouter_objet(self, genre, x, y):
+        o = {"id": self._id(), "type": genre, "x": x, "y": y}
+        self.etat["objets"].append(o)
+        return o
+
+    def _poser(self, genre, x=None, y=None):
+        e = self.etat
+        f = self.fiche(genre)
+        if genre in MATERIEL and genre in e["materiel"]:
+            raise ErreurJeu(f"{f['nom']} : déjà installé.")
+        if genre in DECO and genre in e["deco"] and not f.get("multiple"):
+            raise ErreurJeu(f"{f['nom']} : vous en avez déjà un.")
+        if x is None or y is None:
+            x, y = self._place_auto(genre)
+        else:
+            x, y = round(x / GRILLE) * GRILLE if entier(x) else x, round(y / GRILLE) * GRILLE if entier(y) else y
+        self._verifier_place(genre, x, y)
+        self._payer(f["prix"])
+        self._ajouter_objet(genre, x, y)
+        if genre in MATERIEL:
+            e["materiel"].append(genre)
+        elif genre in DECO and genre not in e["deco"]:
+            e["deco"].append(genre)
+        self._log(f"{f['nom']} installé.", "bon")
+
+    def objet(self, oid):
+        o = next((x for x in self.etat["objets"] if x["id"] == oid), None)
+        if not o:
+            raise ErreurJeu("Objet introuvable.")
+        return o
 
     def capacite_projets(self):
         return 1 + ("bureau" in self.etat["locaux"]) + ("openspace" in self.etat["locaux"])
@@ -865,7 +973,7 @@ class Jeu:
                 raise ErreurJeu("Candidat introuvable.")
             libres = [b for b in self.postes_ouverts() if b not in {x["bureau"] for x in e["employes"]}]
             if not libres:
-                raise ErreurJeu("Plus de poste libre : agrandissez les locaux.")
+                raise ErreurJeu("Plus de bureau libre : achetez-en un dans Locaux.")
             e["candidats"].remove(c)
             e["employes"].append({**c, "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 0, "absent": 0,
                                   "formation": None, "bureau": libres[0], "fondateur": False, "tache": None,
@@ -894,26 +1002,40 @@ class Jeu:
                 raise ErreurJeu(f"{emp['nom']} est déjà absent.")
             emp["absent"] = DUREE_CONGES
             self._log(f"{emp['nom']} part {DUREE_CONGES} jours en congés.", "info")
-        elif genre == "acheter":
-            mid = p.get("id")
-            m = MATERIEL.get(mid)
-            if not m or mid in e["materiel"]:
+        elif genre in ("acheter", "deco", "poser"):
+            ident = p.get("id")
+            if genre == "acheter" and ident not in MATERIEL:
                 raise ErreurJeu("Matériel indisponible.")
-            if m["piece"] in ("atelier", "cem") and m["piece"] not in e["locaux"]:
-                raise ErreurJeu(f"Il faut d'abord louer le {'Labo CEM' if m['piece'] == 'cem' else 'local atelier'}.")
-            self._payer(m["prix"])
-            e["materiel"].append(mid)
-            self._log(f"{m['nom']} installé.", "bon")
-        elif genre == "deco":
-            did = p.get("id")
-            d = DECO.get(did)
-            if not d or did in e["deco"]:
-                raise ErreurJeu("Aménagement indisponible.")
-            if d.get("piece") and d["piece"] not in e["locaux"]:
-                raise ErreurJeu(f"Il faut d'abord louer : {LOCAUX[d['piece']]['nom']}.")
-            self._payer(d["prix"])
-            e["deco"].append(did)
-            self._log(f"{d['nom']} installé : le moral remonte.", "bon")
+            if DECO.get(ident, {}).get("global"):
+                if ident in e["deco"]:
+                    raise ErreurJeu("Déjà installé.")
+                self._payer(DECO[ident]["prix"])
+                e["deco"].append(ident)
+                self._log(f"{DECO[ident]['nom']} installé.", "bon")
+            else:
+                self._poser(ident, p.get("x"), p.get("y"))
+        elif genre == "deplacer":
+            o = self.objet(p.get("id"))
+            x, y = p.get("x"), p.get("y")
+            if entier(x) and entier(y):
+                x, y = round(x / GRILLE) * GRILLE, round(y / GRILLE) * GRILLE
+            self._verifier_place(o["type"], x, y, ignorer=o["id"])
+            o["x"], o["y"] = x, y
+        elif genre == "vendre":
+            o = self.objet(p.get("id"))
+            if o["type"] == "poste":
+                if any(x["bureau"] == o["id"] for x in e["employes"]):
+                    raise ErreurJeu("Ce bureau est occupé.")
+            f = self.fiche(o["type"])
+            e["objets"].remove(o)
+            if o["type"] in MATERIEL:
+                e["materiel"].remove(o["type"])
+                e["pannes"].pop(o["type"], None)
+            elif not any(x["type"] == o["type"] for x in e["objets"]):
+                e["deco"].remove(o["type"])
+            reprise = f["prix"] // 2
+            self._encaisser(reprise)
+            self._log(f"{f['nom']} revendu (+{reprise:,} €).".replace(",", " "), "info")
         elif genre == "local":
             lid = p.get("id")
             l = LOCAUX.get(lid)

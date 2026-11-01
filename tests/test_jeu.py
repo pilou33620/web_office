@@ -235,6 +235,22 @@ class TestJeu(unittest.TestCase):
         j._jour()
         self.assertIn("titre", j.etat["fin"])
 
+    def test_noms_entreprise_et_directeur(self):
+        j = Jeu(graine=30, entreprise="  Ohm   Sweet Ohm ", directeur="Ada")
+        self.assertEqual(j.etat["entreprise"], "Ohm Sweet Ohm")
+        self.assertEqual(j.etat["employes"][0]["nom"], "Ada")
+        self.assertIn("Ohm Sweet Ohm", [c["nom"] for c in j.vue()["classement"]])
+        fin = j.score_final()
+        self.assertEqual((fin["entreprise"], fin["directeur"]), ("Ohm Sweet Ohm", "Ada"))
+        d = Jeu(graine=30, entreprise="   ", directeur=None)
+        self.assertEqual((d.etat["entreprise"], d.etat["employes"][0]["nom"]), ("Mon bureau d'études", "Vous"))
+        for mauvais in ("x" * 31, "a\nb", 42, ["liste"]):
+            with self.assertRaises(ErreurJeu):
+                Jeu(entreprise=mauvais)
+        ancien = json.loads(json.dumps(j.etat))
+        ancien.pop("entreprise")
+        self.assertEqual(Jeu(ancien).vue()["entreprise"], "Votre bureau")
+
     def test_migration_v1(self):
         j = Jeu(graine=20)
         j.action("signer", id=j.etat["offres"][0]["id"])

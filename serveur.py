@@ -18,6 +18,7 @@ import socketserver
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 import webbrowser
 from pathlib import Path
@@ -33,18 +34,19 @@ EMPLACEMENTS = (1, 2, 3)
 VERROU = threading.Lock()
 JOURS_ENTRE_SAUVEGARDES = 10   # en jeu, on n'écrit pas la carte SD à chaque jour simulé
 SAUVE_JOUR = 0
+NB_RECORDS = 10
 
 
 def fichier_partie(n):
     return DOSSIER / f"partie_{n}.json"
 
 
-def mettre_de_cote(n):
-    """Renomme une sauvegarde illisible au lieu de la laisser écraser par une partie neuve."""
+def mettre_de_cote(fichier):
+    """Renomme un fichier illisible au lieu de le laisser écraser par un état neuf."""
     i = 1
-    while (abime := DOSSIER / f"partie_{n}.abime{'' if i == 1 else f'-{i}'}.json").exists():
+    while (abime := fichier.with_name(f"{fichier.stem}.abime{'' if i == 1 else f'-{i}'}.json")).exists():
         i += 1
-    os.replace(fichier_partie(n), abime)
+    os.replace(fichier, abime)
     return abime
 
 
@@ -57,7 +59,7 @@ def lire_partie(n):
         return None
     except Exception as exc:
         try:
-            abime = mettre_de_cote(n)
+            abime = mettre_de_cote(fichier_partie(n))
             print(f"[!] Sauvegarde {n} illisible ({type(exc).__name__}) : mise de côté dans {abime}", flush=True)
         except OSError as err:
             print(f"[!] Sauvegarde {n} illisible et impossible à mettre de côté : {err}", flush=True)
@@ -66,11 +68,47 @@ def lire_partie(n):
 
 def sauver(jeu):
     global SAUVE_JOUR
-    DOSSIER.mkdir(exist_ok=True)
-    tmp = fichier_partie(EMPLACEMENT).with_suffix(".tmp")
-    tmp.write_text(json.dumps(jeu.etat, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, fichier_partie(EMPLACEMENT))  # écriture atomique : pas de sauvegarde corrompue si coupure
+    ecrire_json(fichier_partie(EMPLACEMENT), jeu.etat)
     SAUVE_JOUR = jeu.etat["jours_total"]
+
+
+def ecrire_json(fichier, data):
+    DOSSIER.mkdir(exist_ok=True)
+    tmp = fichier.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, fichier)  # écriture atomique : pas de fichier corrompu si coupure
+
+
+def lire_records():
+    fichier = DOSSIER / "records.json"
+    try:
+        records = json.loads(fichier.read_text(encoding="utf-8"))
+        if not isinstance(records, list):
+            raise ValueError("pas une liste")
+        return records
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError) as exc:
+        try:
+            print(f"[!] Records illisibles ({exc}) : mis de côté dans {mettre_de_cote(fichier)}", flush=True)
+        except OSError:
+            pass
+        return []
+
+
+def noter_record(jeu):
+    """Ajoute le score de fin de partie aux meilleurs scores de toujours, une seule fois par partie."""
+    fin = jeu.etat.get("fin")
+    if not fin or fin.get("record"):
+        return
+    nouveau = {k: fin.get(k) for k in ("entreprise", "directeur", "score", "titre")}
+    nouveau["date"] = time.strftime("%d/%m/%Y")
+    records = sorted(lire_records() + [nouveau], key=lambda r: -r.get("score", 0) if isinstance(r, dict) else 0)
+    try:
+        ecrire_json(DOSSIER / "records.json", records[:NB_RECORDS])
+        fin["record"] = True
+    except OSError as exc:
+        print(f"[!] Record non enregistré : {exc}", flush=True)   # nouvel essai à la prochaine action
 
 
 def resume_partie(n):
@@ -78,7 +116,7 @@ def resume_partie(n):
     if not jeu:
         return {"emplacement": n, "existe": False}
     v = jeu.vue()
-    return {"emplacement": n, "existe": True, "date": v["date"], "argent": v["argent"], "annee": v["annee_jeu"],
+    return {"emplacement": n, "existe": True, "entreprise": v["entreprise"], "date": v["date"], "argent": v["argent"], "annee": v["annee_jeu"],
             "renommee": v["renommee"], "scenario": donnees.SCENARIOS[v["scenario"]]["nom"],
             "difficulte": donnees.DIFFICULTES[v["difficulte"]]["nom"], "faillite": v["faillite"]}
 
@@ -152,7 +190,8 @@ class Gestionnaire(http.server.SimpleHTTPRequestHandler):
             return self._json(200, CATALOGUE)
         if chemin == "/api/parties":
             with VERROU:
-                return self._json(200, {"actuelle": EMPLACEMENT, "parties": [resume_partie(n) for n in EMPLACEMENTS]})
+                return self._json(200, {"actuelle": EMPLACEMENT, "parties": [resume_partie(n) for n in EMPLACEMENTS],
+                                        "records": lire_records()})
         return super().do_GET()
 
     def do_POST(self):
@@ -184,7 +223,8 @@ class Gestionnaire(http.server.SimpleHTTPRequestHandler):
                         return self._json(200, {"ok": False, "erreur": "Emplacement vide.", "etat": JEU.vue()})
                 else:
                     try:
-                        jeu = Jeu(scenario=data.get("scenario", "garage"), difficulte=data.get("difficulte", "normal"))
+                        jeu = Jeu(scenario=data.get("scenario", "garage"), difficulte=data.get("difficulte", "normal"),
+                                  entreprise=data.get("entreprise"), directeur=data.get("directeur"))
                     except (ErreurJeu, TypeError) as ex:
                         return self._json(200, {"ok": False, "erreur": str(ex) if isinstance(ex, ErreurJeu) else "Paramètres invalides.", "etat": JEU.vue()})
                 sauver(JEU)
@@ -202,6 +242,7 @@ class Gestionnaire(http.server.SimpleHTTPRequestHandler):
                 erreur = str(ex)
             except (TypeError, ValueError, OverflowError, KeyError):
                 erreur = "Paramètres invalides."
+            noter_record(JEU)
             if genre != "avancer" or JEU.en_pause() or JEU.etat["jours_total"] - SAUVE_JOUR >= JOURS_ENTRE_SAUVEGARDES:
                 sauver(JEU)
             return self._json(200, {"ok": erreur is None, "erreur": erreur, "etat": JEU.vue()})

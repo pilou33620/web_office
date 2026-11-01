@@ -445,7 +445,7 @@ class Extensions:
 
     def vue_extensions(self, v):
         e = self.etat
-        v["classement"] = sorted([{"nom": "Votre bureau", "renommee": e["renommee"], "vous": True}] +
+        v["classement"] = sorted([{"nom": e["entreprise"], "renommee": e["renommee"], "vous": True}] +
                                  [dict(c) for c in e["concurrents"]], key=lambda c: -c["renommee"])
         v["mensualites"] = self.mensualites()
         v["dette"] = self.dette()

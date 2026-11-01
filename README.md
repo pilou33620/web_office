@@ -23,6 +23,8 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 
 ## Comment on joue
 
+- **Menu** : un écran titre s'affiche à chaque ouverture (Continuer, Nouvelle partie, Charger, Comment jouer, Trophées et records). En jeu, le bouton ☰ en haut à gauche met en pause et ouvre ce menu. Les 10 meilleurs scores de fin de partie sont gardés dans `sauvegardes/records.json`.
+- **Nom de l'entreprise et du directeur** : choisis à la création de la partie (30 caractères au plus), puis définitifs. Ils apparaissent dans la barre du haut, le classement, l'équipe, la liste des sauvegardes et l'écran de fin.
 - **Projets** : signez un contrat (un acompte de 30 % est versé), puis lancez le temps. Chaque projet passe par le schéma, le routage PCB et les pièces 3D, la fabrication du prototype (4 jours, 2 avec un four de refusion, payante), puis le firmware et le bring-up, un debug facultatif puis des **tests CEM** qui peuvent échouer et obliger à corriger le routage.
 - **Qualité** : le travail génère des défauts. Le matériel de debug et les « chasseurs de bugs » les éliminent. À la livraison, le client donne une **note sur 10** qui fixe le solde payé et la renommée gagnée. Le retard fait baisser la note.
 - **Produits maison** : développez votre propre produit, il se vend ensuite chaque mois selon sa note et votre renommée.
@@ -62,7 +64,7 @@ tests/              tests unitaires du moteur, banc du serveur
 appairage.py        sécurité réseau, copie identique de web_suite/lanceur/appairage.py
 ```
 
-API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle {emplacement, scenario, difficulte}`, `POST /api/charger {emplacement}`. Les POST exigent l'en-tête `X-WEB_OFFICE: 1`.
+API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle {emplacement, scenario, difficulte, entreprise, directeur}`, `POST /api/charger {emplacement}`. Les POST exigent l'en-tête `X-WEB_OFFICE: 1`.
 
 ## Tests
 

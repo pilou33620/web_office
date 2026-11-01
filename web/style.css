@@ -181,7 +181,7 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 .cliquable { cursor: pointer; }
 .choisi { outline: 3px solid var(--or); outline-offset: 2px; z-index: 6 !important; }
 #zone.amenage .hud-bas { display: none; }
-.titre-date small { display: block; font-family: Nunito, sans-serif; font-size: 11px; font-weight: 800; color: #a9b39a; letter-spacing: .5px; }
+.titre-date small { display: block; font-family: Nunito, sans-serif; font-size: 11px; font-weight: 800; color: #a9b39a; letter-spacing: .5px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav button { font-size: 12px; }
 #ambiance { pointer-events: none; z-index: 8; }
 #monde[data-saison="hiver"] { background-color: #cfe3d6; background-image: radial-gradient(#ffffff 2px, transparent 2.5px); }
@@ -199,3 +199,9 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 @keyframes neige { to { background-position: 10px 46px, -8px 31px; } }
 @keyframes eclair { 0%, 96% { filter: none; } 97% { background-color: rgba(255, 255, 255, .55); } }
 @media (prefers-reduced-motion: reduce) { #ambiance { animation: none !important; } }
+
+/* Menu : écran titre et nouvelle partie */
+.boite h2.logo { font-size: 34px; color: var(--or); text-align: center; text-shadow: 0 3px 0 var(--bord); }
+.champ { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 800; color: var(--doux); }
+.champ input { min-height: 44px; padding: 0 12px; border-radius: 12px; border: 2.5px solid var(--bord); background: var(--fond2); color: var(--txt); font: 700 16px Nunito, system-ui, sans-serif; }
+.champ input:focus-visible { outline: 3px solid var(--vert); outline-offset: 2px; }

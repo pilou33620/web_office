@@ -111,6 +111,30 @@ verifier("sauvegarde illisible : mise de côté intacte",
 statut, corps, _ = requete("/api/nouvelle", methode="POST", corps=b'{"emplacement": 3}', entetes={"X-WEB_OFFICE": "1"})
 verifier("nouvelle partie à sa place : la copie reste", (Path(tmp.name) / "partie_3.abime.json").is_file(), True)
 
+# Noms choisis à la création, visibles dans la liste des parties
+corps_nouvelle = json.dumps({"emplacement": 1, "entreprise": "Ohm Sweet Ohm", "directeur": "Ada"}).encode()
+statut, corps, _ = requete("/api/nouvelle", methode="POST", corps=corps_nouvelle, entetes={"X-WEB_OFFICE": "1"})
+verifier("nouvelle partie nommée", json.loads(corps)["etat"]["entreprise"], "Ohm Sweet Ohm")
+statut, corps, _ = requete("/api/nouvelle", methode="POST", corps=json.dumps({"emplacement": 1, "entreprise": "x" * 31}).encode(), entetes={"X-WEB_OFFICE": "1"})
+verifier("nom trop long refusé", json.loads(corps)["ok"], False)
+statut, corps, _ = requete("/api/parties")
+parties = json.loads(corps)
+verifier("liste : nom de l'entreprise", parties["parties"][0]["entreprise"], "Ohm Sweet Ohm")
+verifier("liste : records vides au départ", parties["records"], [])
+
+# Fin de partie : le score entre une seule fois dans les records, triés et limités à 10
+for score in range(12):
+    j = serveur.Jeu(entreprise=f"Société {score}", directeur="Ada")
+    j.etat["fin"] = {**j.score_final(), "score": score}
+    serveur.noter_record(j)
+    serveur.noter_record(j)
+records = serveur.lire_records()
+verifier("records : 10 au plus, sans doublon", len(records), 10)
+verifier("records : meilleur en tête", (records[0]["score"], records[0]["entreprise"], records[0]["directeur"]), (11, "Société 11", "Ada"))
+(Path(tmp.name) / "records.json").write_text("{abîmé", encoding="utf-8")
+verifier("records illisibles : liste vide", serveur.lire_records(), [])
+verifier("records illisibles : mis de côté", (Path(tmp.name) / "records.abime.json").is_file(), True)
+
 srv.shutdown()
 print("OK (%d vérifications)" % essais if not echecs else "%d ECHEC(S) sur %d" % (echecs, essais))
 sys.exit(1 if echecs else 0)

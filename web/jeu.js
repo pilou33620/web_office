@@ -461,6 +461,12 @@ function panneauJournal(limite) {
   return j + `<div class="btns" style="margin-top:16px">${bouton('parties', '', 'Parties et sauvegardes', true, 'secondaire petit')}</div>`;
 }
 
+function chipsTrophees(e) {
+  return `<div class="chips" style="margin-top:8px">${Object.entries(CAT.trophees).map(([id, t]) => {
+    const ok = e.trophees.includes(id);
+    return `<span class="chip" style="${ok ? 'background:#ffc94d;color:#2b1d14' : 'opacity:.6'}" title="${esc(t.desc)}">${ok ? '★ ' : ''}${esc(t.nom)}</span>`;
+  }).join('')}</div>`;
+}
 function panneauAccueil() {
   const e = ETAT;
   return `<div class="encart"><div class="stat">
@@ -473,10 +479,7 @@ function panneauAccueil() {
     <span>Équipe</span><b>${e.employes.length} personne${e.employes.length > 1 ? 's' : ''}</b>
     <span>Moral</span><b>${e.moral} %</b></div></div>
     <div class="section">Trophées · ${e.trophees.length} / ${Object.keys(CAT.trophees).length}</div>
-    <div class="chips" style="margin-top:8px">${Object.entries(CAT.trophees).map(([id, t]) => {
-      const ok = e.trophees.includes(id);
-      return `<span class="chip" style="${ok ? 'background:#ffc94d;color:#2b1d14' : 'opacity:.6'}" title="${esc(t.desc)}">${ok ? '★ ' : ''}${esc(t.nom)}</span>`;
-    }).join('')}</div>
+    ${chipsTrophees(e)}
     ${e.bilans.length ? `<div class="section">Bilans annuels</div>` + e.bilans.slice(-5).reverse().map((b) => ligne({
       couleur: b.benefice >= 0 ? '#7be08a' : '#ff8a7a', t1: `Année ${b.annee}`, t2: `CA ${eur(b.ca)} · bénéfice ${eur(b.benefice)} · impôt ${eur(b.impot)}`,
       t3: `${b.livres} livraison${b.livres > 1 ? 's' : ''}${b.note_moy ? ' · note moyenne ' + dec(b.note_moy) : ''}`,
@@ -494,7 +497,7 @@ function majHtml(sel, html) {
 function rendre() {
   const e = ETAT;
   if (!e || !CAT) return;
-  $('#date').innerHTML = `${esc(e.date)}<small>${SAISON_NOM[e.saison]} · ${METEO_NOM[e.meteo] || ''}</small>`;
+  $('#date').innerHTML = `${esc(e.date)}<small>${esc(e.entreprise)} · ${SAISON_NOM[e.saison]} · ${METEO_NOM[e.meteo] || ''}</small>`;
   const monde = $('#monde');
   monde.dataset.saison = e.saison;
   monde.dataset.meteo = e.meteo;
@@ -588,7 +591,7 @@ function rendreModale() {
   if (parties) {
     h = modaleParties();
   } else if (e.faillite) {
-    h = `<h2 id="modale-titre">Faillite</h2><p>La banque a fermé le compte de votre bureau d'études après ${e.jours_total} jours d'activité et ${e.stats.livres} contrats livrés.</p>${bouton('nouvelle-directe', '', 'Nouvelle partie')}`;
+    h = `<h2 id="modale-titre">Faillite</h2><p>La banque a fermé le compte de ${esc(e.entreprise)} après ${e.jours_total} jours d'activité et ${e.stats.livres} contrats livrés.</p>${bouton('nouvelle-directe', '', 'Nouvelle partie')}`;
   } else if (e.evenement) {
     const ev = e.evenement;
     h = `<h2 id="modale-titre">${esc(ev.titre)}</h2><p>${esc(ev.texte)}</p>` +
@@ -597,7 +600,7 @@ function rendreModale() {
     h = `<h2 id="modale-titre">${e.victoire.ok ? 'Objectif atteint !' : 'Objectif manqué'}</h2><p>${esc(e.victoire.texte)}</p>${bouton('fermer_victoire', '', 'Continuer')}`;
   } else if (e.fin && !e.fin.vue) {
     const f = e.fin;
-    h = `<h2 id="modale-titre">20 ans d'activité !</h2><p>Votre bureau d'études entre dans l'histoire.</p>
+    h = `<h2 id="modale-titre">20 ans d'activité !</h2><p>${esc(f.entreprise || e.entreprise)}, dirigée par ${esc(f.directeur || '')}, entre dans l'histoire.</p>
       <div class="note-geante" style="background:#ffc94d;width:auto;height:auto;border-radius:22px;padding:14px 22px;font-size:26px">${esc(f.titre)}<small>score ${f.score.toLocaleString('fr-FR')}</small></div>
       <div class="stat"><span>Chiffre d'affaires cumulé</span><b>${eur(f.ca)}</b><span>Contrats livrés</span><b>${f.livres}</b>
       <span>Note moyenne</span><b>${dec(f.note_moy)}</b><span>Renommée</span><b>${f.renommee}</b><span>Trophées</span><b>${f.trophees}</b></div>
@@ -648,18 +651,64 @@ function modaleSignature() {
   }
   return h + bouton('sig-ok', '', sg.genre === 'signer' ? 'Signer' : 'Lancer le développement') + bouton('sig-annuler', '', 'Annuler', true, 'secondaire');
 }
+const AIDE = [
+  ['Projets', "Signez un contrat (acompte de 30 %), puis lancez le temps. Schéma, routage PCB et 3D, prototype, firmware, debug puis tests CEM."],
+  ['Note du client', "Les défauts et le retard font baisser la note sur 10. Elle fixe le solde payé et la renommée gagnée."],
+  ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware), un trait, un moral et une fatigue. Formez-les, envoyez-les en congés."],
+  ['Conditions de travail', "Décoration, café, climatisation, isolation et horaires changent la production (vue Productivité)."],
+  ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Agrandir les locaux permet plus de projets en parallèle."],
+  ['Aménagement', "Le bouton en haut à gauche permet de placer, déplacer ou revendre bureaux, appareils et décoration."],
+  ['Société', "Recherche, certifications, fournisseurs, prêts et levée de fonds débloquent de meilleurs contrats."],
+  ['Argent', "Loyer, salaires et frais tombent chaque mois, l'impôt chaque année. Sous −5 000 €, c'est la faillite."],
+  ['Fin de partie', "Au bout de 20 ans, un score et un titre. Les 10 meilleurs scores restent dans les records."],
+];
 function modaleParties() {
   const pa = parties;
+  const retour = bouton('par-menu', '', 'Retour', true, 'secondaire');
+  if (pa.etape === 'menu') {
+    const cur = pa.liste.find((x) => x.emplacement === pa.actuelle);
+    return `<h2 id="modale-titre" class="logo">Circuit Story</h2><p>Le bureau d'études électronique dont vous êtes le patron.</p>
+      ${cur && cur.existe ? bouton('par-fermer', '', `Continuer · ${cur.entreprise}`) : ''}
+      ${bouton('par-liste', 'nouvelle', 'Nouvelle partie', true, cur && cur.existe ? 'secondaire' : '')}
+      ${bouton('par-liste', 'charger', 'Charger une partie', pa.liste.some((x) => x.existe), 'secondaire')}
+      ${bouton('par-etape', 'aide', 'Comment jouer', true, 'secondaire')}
+      ${bouton('par-etape', 'records', 'Trophées et records', true, 'secondaire')}`;
+  }
+  if (pa.etape === 'aide') {
+    return `<h2 id="modale-titre">Comment jouer</h2>` + AIDE.map(([t, x]) => `<p><b>${t}.</b> ${x}</p>`).join('') + retour;
+  }
+  if (pa.etape === 'records') {
+    const rec = pa.records.filter((r) => r && typeof r === 'object');
+    return `<h2 id="modale-titre">Trophées et records</h2>
+      <div class="section">Trophées de la partie · ${ETAT.trophees.length} / ${Object.keys(CAT.trophees).length}</div>
+      ${chipsTrophees(ETAT)}
+      <div class="section">Meilleurs scores</div>` +
+      (rec.length ? rec.map((r, i) => `<div class="encart"><h3>${i + 1}. ${esc(r.entreprise)} · ${Number(r.score).toLocaleString('fr-FR')}</h3>
+        <div class="t2" style="font-size:13px">${esc(r.titre)} · ${esc(r.directeur)} · ${esc(r.date)}</div></div>`).join('')
+        : '<p>Aucune partie de 20 ans terminée pour l\'instant.</p>') + retour;
+  }
   if (pa.etape === 'nouvelle') {
     return `<h2 id="modale-titre">Nouvelle partie · emplacement ${pa.emplacement}</h2>
+      <label class="champ">Nom de l'entreprise<input data-champ="entreprise" maxlength="30" autocomplete="off" placeholder="Mon bureau d'études" value="${esc(pa.entreprise)}"></label>
+      <label class="champ">Nom du directeur<input data-champ="directeur" maxlength="30" autocomplete="off" placeholder="Vous" value="${esc(pa.directeur)}"></label>
+      <p style="font-size:13px">Les noms ne pourront plus être changés.</p>
       <div class="section">Scénario</div>${Object.entries(CAT.scenarios).map(([k, sc]) => `<button type="button" class="btn ${pa.scenario === k ? '' : 'secondaire'}" data-act="par-scen" data-id="${k}" style="text-align:left;padding:8px 12px">${esc(sc.nom)}<br><span style="font-weight:600;font-size:12px">${esc(sc.desc)}</span></button>`).join('')}
       <div class="section">Difficulté</div><div class="onglets">${Object.entries(CAT.difficultes).map(([k, d]) => `<button type="button" data-act="par-diff" data-id="${k}" class="${pa.difficulte === k ? 'actif' : ''}" style="${pa.difficulte === k ? 'background:#ffc94d' : ''}">${esc(d.nom)}</button>`).join('')}</div>
       ${bouton('par-commencer', '', 'Commencer')}${bouton('par-retour', '', 'Retour', true, 'secondaire')}`;
   }
-  return `<h2 id="modale-titre">Parties</h2>` + (pa.liste || []).map((x) => `<div class="encart"><h3>Emplacement ${x.emplacement}${x.emplacement === pa.actuelle ? ' · en cours' : ''}</h3>
+  const titre = { nouvelle: 'Nouvelle partie', charger: 'Charger une partie' }[pa.mode] || 'Parties';
+  return `<h2 id="modale-titre">${titre}</h2>` + pa.liste.filter((x) => pa.mode !== 'charger' || x.existe).map((x) => `<div class="encart"><h3>Emplacement ${x.emplacement}${x.existe ? ' · ' + esc(x.entreprise) : ''}${x.emplacement === pa.actuelle ? ' · en cours' : ''}</h3>
       ${x.existe ? `<div class="t2" style="font-size:13px">${esc(x.scenario)} · ${esc(x.difficulte)} · année ${x.annee} · ${eur(x.argent)} · renommée ${x.renommee}${x.faillite ? ' · faillite' : ''}</div>` : '<div class="t2" style="font-size:13px">Vide</div>'}
-      <div class="btns">${x.existe && x.emplacement !== pa.actuelle ? bouton('par-charger', x.emplacement, 'Charger', true, 'petit') : ''}${bouton('par-nouvelle', x.emplacement, 'Nouvelle partie ici', true, 'petit secondaire')}</div></div>`).join('') +
-    bouton('par-fermer', '', 'Fermer', true, 'secondaire');
+      <div class="btns">${pa.mode !== 'nouvelle' && x.existe && x.emplacement !== pa.actuelle ? bouton('par-charger', x.emplacement, 'Charger', true, 'petit') : ''}${pa.mode !== 'charger' ? bouton('par-nouvelle', x.emplacement, 'Nouvelle partie ici', true, 'petit secondaire') : ''}</div></div>`).join('') +
+    (pa.mode ? retour : bouton('par-fermer', '', 'Fermer', true, 'secondaire'));
+}
+async function ouvrirMenu(etape, mode) {
+  joue = false;
+  try {
+    const r = await api('/api/parties');
+    parties = { liste: r.parties, actuelle: r.actuelle, records: r.records, etape, mode, scenario: 'garage', difficulte: 'normal', entreprise: '', directeur: '' };
+  } catch (err) { toast(err.message); }
+  rendre();
 }
 let signature = null, parties = null;
 
@@ -737,16 +786,13 @@ document.addEventListener('click', async (ev) => {
     case 'catmat': catMat = id; return rendre();
     case 'vitesse': vitesse = vitesse === 1 ? 2 : vitesse === 2 ? 4 : 1; rendre(); return boucle();
     case 'lecture': joue = !joue; rendre(); return boucle();
-    case 'nouvelle-directe':
-    case 'parties': {
-      joue = false;
-      try {
-        const r = await api('/api/parties');
-        parties = { liste: r.parties, actuelle: r.actuelle, etape: 'liste', scenario: 'garage', difficulte: 'normal' };
-      } catch (err) { toast(err.message); }
-      return rendre();
-    }
+    case 'menu': return ouvrirMenu('menu');
+    case 'nouvelle-directe': return ouvrirMenu('liste', 'nouvelle');
+    case 'parties': return ouvrirMenu('liste');
     case 'par-fermer': parties = null; return rendre();
+    case 'par-menu': parties.etape = 'menu'; parties.mode = undefined; return rendre();
+    case 'par-liste': parties.etape = 'liste'; parties.mode = id; return rendre();
+    case 'par-etape': parties.etape = id; return rendre();
     case 'par-nouvelle': parties.etape = 'nouvelle'; parties.emplacement = id; return rendre();
     case 'par-retour': parties.etape = 'liste'; return rendre();
     case 'par-scen': parties.scenario = id; return rendre();
@@ -755,7 +801,7 @@ document.addEventListener('click', async (ev) => {
     case 'par-commencer': {
       const existe = act === 'par-commencer' && parties.liste.find((x) => x.emplacement === parties.emplacement).existe;
       if (existe && !confirm('Écraser la partie de cet emplacement ?')) return;
-      const r = await (act === 'par-charger' ? api('/api/charger', { emplacement: id }) : api('/api/nouvelle', { emplacement: parties.emplacement, scenario: parties.scenario, difficulte: parties.difficulte })).catch((err) => ({ ok: false, erreur: err.message }));
+      const r = await (act === 'par-charger' ? api('/api/charger', { emplacement: id }) : api('/api/nouvelle', { emplacement: parties.emplacement, scenario: parties.scenario, difficulte: parties.difficulte, entreprise: parties.entreprise, directeur: parties.directeur })).catch((err) => ({ ok: false, erreur: err.message }));
       if (r.etat) ETAT = r.etat;
       if (!r.ok) return toast(r.erreur);
       parties = null; amenage = false; placement = null; selection = null;
@@ -816,6 +862,11 @@ $('#cadre').addEventListener('click', async (ev) => {
   }
 });
 
+document.addEventListener('input', (ev) => {
+  const c = ev.target.closest('[data-champ]');
+  if (c && parties) parties[c.dataset.champ] = c.value;
+});
+
 document.addEventListener('change', (ev) => {
   const sel = ev.target.closest('[data-affecter]');
   if (sel) agir('affecter', { id: Number(sel.dataset.affecter), projet: sel.value ? Number(sel.value) : null });
@@ -841,7 +892,7 @@ async function demarrer() {
     toast('Impossible de joindre le serveur du jeu.');
     return;
   }
-  rendre();
+  ouvrirMenu('menu');  // écran titre à chaque ouverture
 }
 
 demarrer();

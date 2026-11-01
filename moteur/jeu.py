@@ -16,18 +16,31 @@ NB_CANDIDATS = 4
 DUREE_CEM = 3
 DUREE_FORMATION = 10
 DUREE_CONGES = 5
+NOM_MAX = 30
 
 
 def entier(v):
     return isinstance(v, int) and not isinstance(v, bool)
 
 
+def nom_propre(v, defaut):
+    """Nom saisi par le joueur : espaces resserrés, défaut si vide, refusé si trop long ou avec caractères de contrôle."""
+    if v is None:
+        return defaut
+    if not isinstance(v, str) or any(ord(c) < 32 or ord(c) == 127 for c in v):
+        raise ErreurJeu("Nom invalide.")
+    v = " ".join(v.split())
+    if len(v) > NOM_MAX:
+        raise ErreurJeu(f"Nom trop long ({NOM_MAX} caractères au plus).")
+    return v or defaut
+
+
 class Jeu(Extensions):
-    def __init__(self, etat=None, graine=None, scenario="garage", difficulte="normal"):
+    def __init__(self, etat=None, graine=None, scenario="garage", difficulte="normal", entreprise=None, directeur=None):
         self.rng = random.Random(graine)
         if etat is None:
             self.etat = {}
-            self._nouvel_etat()
+            self._nouvel_etat(nom_propre(entreprise, "Mon bureau d'études"), nom_propre(directeur, "Vous"))
             self._init_extensions(scenario, difficulte)
             self._appliquer_scenario()
         else:
@@ -36,9 +49,9 @@ class Jeu(Extensions):
             self._init_extensions()
 
     # ------------------------------------------------------------------ création
-    def _nouvel_etat(self):
+    def _nouvel_etat(self, entreprise, directeur):
         self.etat.update({
-            "version": 3, "jour": 1, "mois": 8, "annee": 2026, "jours_total": 0,
+            "version": 3, "entreprise": entreprise, "jour": 1, "mois": 8, "annee": 2026, "jours_total": 0,
             "argent": 15000, "renommee": 0, "prochain_id": 1, "heures": 8,
             "locaux": [], "materiel": list(MATERIEL_DEPART), "deco": [], "pannes": {},
             "employes": [], "candidats": [], "offres": [], "projets": [], "produits": [],
@@ -51,7 +64,7 @@ class Jeu(Extensions):
         for mid in MATERIEL_DEPART:
             self._ajouter_objet(mid, *MATERIEL[mid]["pos"])
         self.etat["employes"].append({
-            "id": self._id(), "nom": "Vous", "poste": "Fondateur · ingé élec", "e": 5, "m": 2, "f": 4,
+            "id": self._id(), "nom": directeur, "poste": "Fondateur · ingé élec", "e": 5, "m": 2, "f": 4,
             "trait": "endurant", "salaire": 0, "couleur": "#ffc94d", "cheveux": "#5a3a22", "peau": "#f6cfa6",
             "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 3, "absent": 0, "formation": None,
             "bureau": bureaux[0], "fondateur": True, "tache": None, "gain": 0, "projet": None,
@@ -60,7 +73,7 @@ class Jeu(Extensions):
             self.etat["candidats"].append(self._candidat())
         for _ in range(NB_OFFRES):
             self.etat["offres"].append(self._offre())
-        self._log("Bienvenue ! Vous êtes seul dans votre garage : signez un premier contrat dans Projets.", "info")
+        self._log(f"{entreprise} ouvre ses portes ! Vous êtes seul dans votre garage : signez un premier contrat dans Projets.", "info")
 
     def _migrer(self):
         """Met à niveau une sauvegarde de la version 1 (un seul projet, sans horaires ni trophées)."""
@@ -71,7 +84,7 @@ class Jeu(Extensions):
             if p:
                 p["id"] = self._id()
                 e["projets"].append(p)
-        for cle, val in (("heures", 8), ("trophees", []), ("bilans", []), ("combos_vus", [])):
+        for cle, val in (("heures", 8), ("trophees", []), ("bilans", []), ("combos_vus", []), ("entreprise", "Votre bureau")):
             e.setdefault(cle, val)
         e.setdefault("exercice", self._exercice_vide())
         for p in e["projets"]:
@@ -659,7 +672,8 @@ class Jeu(Extensions):
         moy = sum(notes) / len(notes) if notes else 0
         score = round((e["stats"]["ca"] / 1000 + e["renommee"] * 40 + len(e["trophees"]) * 150 + moy * 100) * e.get("parts", 1))
         titre = next(t for seuil, t in TITRES_FIN if score < seuil)
-        return {"score": score, "titre": titre, "vue": False, "ca": e["stats"]["ca"], "livres": e["stats"]["livres"],
+        directeur = next(x["nom"] for x in e["employes"] if x.get("fondateur"))
+        return {"score": score, "titre": titre, "vue": False, "entreprise": e["entreprise"], "directeur": directeur, "ca": e["stats"]["ca"], "livres": e["stats"]["livres"],
                 "renommee": e["renommee"], "trophees": len(e["trophees"]), "note_moy": round(moy, 1)}
 
     # ------------------------------------------------------------------ temps

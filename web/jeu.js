@@ -14,7 +14,9 @@ const SAISON_NOM = { hiver: 'Hiver', printemps: 'Printemps', ete: 'Été', autom
 
 let ETAT = null, CAT = null;
 let onglet = 'accueil', vue = 'bureau', catMat = 'e';
-let joue = false, vitesse = 1, minuteur = null, envoi = false, nbTrophees = null;
+let joue = false, vitesse = 'normal', minuteur = null, envoi = false, nbTrophees = null;
+// Durée réelle d'une journée de jeu (ms) selon la vitesse choisie
+const VITESSES = { lent: ['Lent', 16000], normal: ['Normal', 8000], rapide: ['Rapide', 3000], tresrapide: ['Très rapide', 1000] };
 let amenage = false, selection = null, placement = null;  // mode aménagement, objet choisi, objet en cours de placement
 const cache = {};
 
@@ -137,7 +139,7 @@ const sprite = (x) => `<div class="perso">${corps(x)}</div>`;
 const PERSOS = {};
 function rendrePersos() {
   const e = ETAT, p = e.projets.length > 0, cont = $('#persos'), vus = new Set(), groupes = {};
-  const duree = Math.min(0.9, 0.7 / vitesse);
+  const duree = Math.min(1.2, VITESSES[vitesse][1] / 2000);
   const salle = e.locaux.includes('pause');
   const pos = {};
   const objs = Object.fromEntries(e.objets.map((o) => [o.id, o]));
@@ -563,11 +565,8 @@ function rendre() {
   nbTrophees = e.trophees.length;
   const j = e.journal[0] || { date: '', texte: '' };
   majHtml('#bandeau', `<span class="d">${esc(j.date)}</span><span class="t">${esc(j.texte)}</span>`);
-  $('#vitesse').textContent = (vitesse === 0.5 ? '½' : vitesse) + '×';
-  $('#lecture').setAttribute('aria-label', joue ? 'Pause' : 'Lecture');
-  majHtml('#lecture', joue
-    ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>'
-    : '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>');
+  majHtml('#temps', `<button type="button" data-act="temps" data-id="pause" class="${joue ? '' : 'actif'}" aria-pressed="${!joue}" aria-label="Pause"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg></button>`
+    + Object.entries(VITESSES).map(([k, [nom]]) => `<button type="button" data-act="temps" data-id="${k}" class="${joue && vitesse === k ? 'actif' : ''}" aria-pressed="${joue && vitesse === k}">${nom}</button>`).join(''));
   document.querySelectorAll('.nav button').forEach((b) => b.classList.toggle('actif', b.dataset.id === onglet || (onglet === 'journal' && b.dataset.id === 'accueil')));
   $('#panneau').classList.toggle('ouvert', onglet !== 'accueil');
   $('#titre-panneau').textContent = TITRES[onglet];
@@ -808,7 +807,7 @@ function boucle() {
       rendre();
     }
     boucle();
-  }, 800 / vitesse);
+  }, VITESSES[vitesse][1]);
 }
 
 document.addEventListener('click', async (ev) => {
@@ -832,8 +831,10 @@ document.addEventListener('click', async (ev) => {
       selection = null;
       break;
     case 'catmat': catMat = id; return rendre();
-    case 'vitesse': vitesse = { 0.5: 1, 1: 2, 2: 4, 4: 0.5 }[vitesse]; rendre(); return boucle();
-    case 'lecture': joue = !joue; rendre(); return boucle();
+    case 'temps':
+      if (id === 'pause') joue = false;
+      else { joue = true; vitesse = id; }
+      rendre(); return boucle();
     case 'menu': return ouvrirMenu('menu');
     case 'nouvelle-directe': return ouvrirMenu('liste', 'nouvelle');
     case 'parties': return ouvrirMenu('liste');

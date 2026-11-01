@@ -51,7 +51,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **22 produits maison** dont 7 suites (v2, v3) : une suite se vend d'autant mieux que le modèle précédent a été bien noté.
 - **Bâtiment B** : plateau R&D (8 bureaux, un projet de plus) et ligne de production CMS (prototypes en 1 jour, séries +50 %, machines de production). 12 technologies et 7 certifications au total.
 - **40 missions** enchaînées, trois proposées à la fois sur le tableau de bord, avec une prime et parfois de la renommée.
-- **Vitesse** : ½×, 1×, 2× et 4×.
+- **Temps** : barre de 5 boutons, Pause, Lent (16 s par jour), Normal (8 s), Rapide (3 s) et Très rapide (1 s). La météo dure plusieurs jours.
 - **Scénarios** (Le garage, Startup IoT, Sous-traitant aéro, Reprise d'entreprise), **3 niveaux de difficulté** et **3 emplacements de sauvegarde** (Journal › Parties et sauvegardes).
 
 Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, et se retrouvent sur la terrasse pour les réunions de phase. Ils vont aussi demander de l'aide au collègue le plus fort de leur domaine, et progressent grâce à lui. Leurs pauses se passent sur la terrasse, ou dans la **salle de pause** une fois louée (moral +5, meilleure récupération), avec canapé et baby-foot.

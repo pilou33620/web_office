@@ -7,6 +7,7 @@ from .donnees import (CERTIFS, CHOIX_TECH, CONCURRENTS, DIFFICULTES, ENTRETIEN_C
 DUREE_GARANTIE = 120
 DUREE_STAGE = 90
 DELAI_SEMINAIRE = 180
+CHANGEMENT_METEO = 0.2  # chance par jour que le temps change (en moyenne tous les 5 jours)
 
 
 class ErreurJeu(Exception):
@@ -277,12 +278,14 @@ class Extensions:
     def _debut_jour_extensions(self):
         e, r = self.etat, self.rng
         saison = SAISONS[e["mois"]]
-        tirage, cumul = r.random(), 0.0
-        for nom, pr in METEO[saison].items():
-            cumul += pr
-            if tirage < cumul:
-                e["meteo"] = nom
-                break
+        # le temps dure plusieurs jours (un tirage quotidien faisait clignoter la pluie) ; nouveau tirage au changement de saison
+        if e["meteo"] not in METEO[saison] or r.random() < CHANGEMENT_METEO:
+            tirage, cumul = r.random(), 0.0
+            for nom, pr in METEO[saison].items():
+                cumul += pr
+                if tirage < cumul:
+                    e["meteo"] = nom
+                    break
         e["fete"] = None
         if e.get("pot"):
             e["fete"] = {"type": "pot"}

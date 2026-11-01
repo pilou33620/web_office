@@ -89,10 +89,11 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 .carte-projet .haut { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .carte-projet .nomp { font-family: var(--titre); font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .carte-projet small { font-size: 11px; font-weight: 800; color: #a9b39a; flex: none; }
-.commandes { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.rond { border-radius: 50%; border: 2.5px solid var(--bord); cursor: pointer; box-shadow: 0 4px 0 rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; }
-.vitesse { width: 52px; height: 52px; background: var(--fond); font-family: var(--titre); font-weight: 600; font-size: 17px; }
-.lecture { width: 64px; height: 64px; border-width: 3px; background: var(--vert); color: var(--bord); box-shadow: inset 0 -6px 0 #4fb860, 0 4px 0 rgba(0,0,0,.35); }
+.temps { display: flex; gap: 4px; padding: 4px; max-width: 420px; border-radius: 16px; background: var(--fond); border: 2.5px solid var(--bord); box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+.temps button { flex: 1; min-height: 40px; padding: 0 4px; border: 0; border-radius: 11px; background: transparent; color: var(--txt); font: 800 12px Nunito, system-ui, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.temps button:first-child { flex: 0 0 44px; }
+.temps button.actif { background: var(--vert); color: var(--bord); }
+.temps button:first-child.actif { background: var(--or); }
 .bandeau { height: 40px; padding: 0 14px; border-radius: 14px; background: var(--fond); border: 2.5px solid var(--bord); display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 700; text-align: left; cursor: pointer; }
 .bandeau .d { font-family: ui-monospace, Menlo, monospace; color: #c9cfbd; flex: none; }
 .bandeau .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -187,18 +188,21 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #monde[data-saison="hiver"] { background-color: #cfe3d6; background-image: radial-gradient(#ffffff 2px, transparent 2.5px); }
 #monde[data-saison="automne"] { background-color: #a8b85a; background-image: radial-gradient(#d18b3a 2px, transparent 2.5px); }
 #monde[data-saison="printemps"] { background-image: radial-gradient(#ffd3e8 2px, transparent 2.5px), radial-gradient(#68b357 2px, transparent 2.5px); background-size: 37px 37px, 18px 18px; }
-#monde[data-meteo="pluie"] #ambiance, #monde[data-meteo="orage"] #ambiance { background: repeating-linear-gradient(105deg, transparent 0 14px, rgba(160, 200, 255, .35) 14px 16px); background-size: 40px 40px; animation: pluie .5s linear infinite; }
-#monde[data-meteo="orage"] #ambiance { animation: pluie .4s linear infinite, eclair 6s steps(1) infinite; }
-#monde[data-meteo="neige"] #ambiance { background-image: radial-gradient(#fff 2px, transparent 2.6px), radial-gradient(#fff 1.5px, transparent 2px); background-size: 46px 46px, 31px 31px; animation: neige 3s linear infinite; }
+#ambiance { overflow: hidden; }
+#ambiance::before { content: ""; position: absolute; left: 0; right: 0; top: -92px; bottom: 0; will-change: transform; }
+#monde[data-meteo="pluie"] #ambiance::before, #monde[data-meteo="orage"] #ambiance::before { background: repeating-linear-gradient(105deg, transparent 0 14px, rgba(160, 200, 255, .35) 14px 16px); background-size: 40px 40px; animation: pluie .5s linear infinite; }
+#monde[data-meteo="orage"] #ambiance::before { animation-duration: .4s; }
+#monde[data-meteo="orage"] #ambiance { animation: eclair 6s steps(1) infinite; }
+#monde[data-meteo="neige"] #ambiance::before { background-image: radial-gradient(#fff 2px, transparent 2.6px), radial-gradient(#fff 1.5px, transparent 2px); background-size: 46px 46px; background-position: 0 0, 23px 20px; animation: neige 3s linear infinite; }
 #monde[data-meteo="brouillard"] #ambiance { background: rgba(240, 244, 246, .45); }
 #monde[data-meteo="canicule"] #ambiance { background: rgba(255, 170, 60, .12); }
 #ambiance::after { content: ""; position: absolute; inset: 0; }
 #monde[data-soir="soir"] #ambiance::after { background-color: rgba(255, 120, 60, .12); }
 #monde[data-soir="nuit"] #ambiance::after { background-color: rgba(30, 30, 90, .25); }
-@keyframes pluie { to { background-position: -12px 40px; } }
-@keyframes neige { to { background-position: 10px 46px, -8px 31px; } }
+@keyframes pluie { to { transform: translateY(40px); } }
+@keyframes neige { to { transform: translateY(92px); } }
 @keyframes eclair { 0%, 96% { filter: none; } 97% { background-color: rgba(255, 255, 255, .55); } }
-@media (prefers-reduced-motion: reduce) { #ambiance { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { #ambiance, #ambiance::before { animation: none !important; } }
 
 /* Menu : écran titre et nouvelle partie */
 .boite h2.logo { font-size: 34px; color: var(--or); text-align: center; text-shadow: 0 3px 0 var(--bord); }

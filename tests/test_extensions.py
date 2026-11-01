@@ -162,11 +162,14 @@ class TestExtensions(unittest.TestCase):
         jour(j)
         self.assertEqual(j.etat["fete"]["type"], "anniv")
         self.assertEqual(f["lieu"], "fete")
-        meteos = set()
+        meteos, changements, hier = set(), 0, j.etat["meteo"]
         for _ in range(400):
             jour(j)
             meteos.add(j.etat["meteo"])
+            changements += j.etat["meteo"] != hier
+            hier = j.etat["meteo"]
         self.assertTrue({"soleil", "pluie", "neige"} <= meteos)
+        self.assertLess(changements, 120)  # le temps dure plusieurs jours, il ne clignote pas d'un jour à l'autre
 
     def test_scenarios_et_difficulte(self):
         for sc in SCENARIOS:

@@ -64,7 +64,7 @@ DECO = {
     "cafe":     {"nom": "Machine à café", "prix": 600, "moral": 7, "w": 20, "h": 28, "pos": (346, 64)},
     "fontaine": {"nom": "Fontaine à eau", "prix": 300, "moral": 2, "w": 18, "h": 22, "multiple": True},
     "distrib":  {"nom": "Distributeur de snacks", "prix": 700, "moral": 3, "w": 30, "h": 24},
-    "clim":     {"nom": "Climatisation", "prix": 2500, "moral": 4, "w": 44, "h": 12, "libre": True, "effet": "Supprime le malus de canicule (juin à août)", "pos": (60, 20)},
+    "clim":     {"nom": "Climatisation", "prix": 2500, "moral": 4, "w": 44, "h": 12, "libre": True, "effet": "Supprime le malus en cas de canicule", "pos": (60, 20)},
     "biblio":   {"nom": "Bibliothèque de datasheets", "prix": 800, "moral": 1, "prod": 2, "w": 64, "h": 16, "effet": "+2 % de productivité"},
     "armoire":  {"nom": "Armoire à composants", "prix": 1200, "moral": 0, "prod": 3, "w": 44, "h": 22, "effet": "+3 % de productivité"},
     "imprimante": {"nom": "Imprimante de bureau", "prix": 400, "moral": 0, "prod": 1, "w": 28, "h": 22, "effet": "+1 % de productivité"},
@@ -126,19 +126,94 @@ CLIENTS = ["Atelier Bois et Co", "DomoSud", "AgriTech Gironde", "VéloMotion", "
            "Rail Services", "SolarFerme", "Brasserie du Bassin"]
 
 # Modèles de contrats : nom, répartition e/m/f, taille de base, renommée minimale
+# Modèles de contrats : nom, répartition e/m/f, taille de base, renommée minimale, technologie ou certification requise
 CONTRATS = [
-    ("Carte LED pour enseigne", (0.75, 0.0, 0.25), 40, 0),
-    ("Interface capteur industriel", (0.7, 0.1, 0.2), 60, 0),
-    ("Thermostat connecté", (0.4, 0.3, 0.3), 90, 0),
-    ("Boîtier domotique Zigbee", (0.35, 0.35, 0.3), 120, 1),
-    ("Chargeur de batterie lithium", (0.6, 0.15, 0.25), 140, 2),
-    ("Capteur LoRa agricole", (0.4, 0.2, 0.4), 150, 3),
-    ("Contrôleur moteur BLDC", (0.45, 0.1, 0.45), 260, 5),
-    ("Tracker GPS pour flotte", (0.4, 0.2, 0.4), 240, 6),
-    ("Module radio 2,4 GHz", (0.55, 0.15, 0.3), 380, 9),
-    ("Instrument médical portable", (0.4, 0.3, 0.3), 500, 12),
-    ("Calculateur pour drone", (0.4, 0.2, 0.4), 650, 16),
+    ("Carte LED pour enseigne", (0.75, 0.0, 0.25), 40, 0, None),
+    ("Interface capteur industriel", (0.7, 0.1, 0.2), 60, 0, None),
+    ("Thermostat connecté", (0.4, 0.3, 0.3), 90, 0, None),
+    ("Boîtier domotique Zigbee", (0.35, 0.35, 0.3), 120, 1, "ble"),
+    ("Bracelet connecté", (0.35, 0.35, 0.3), 110, 1, "ble"),
+    ("Chargeur de batterie lithium", (0.6, 0.15, 0.25), 140, 2, "hv"),
+    ("Capteur LoRa agricole", (0.4, 0.2, 0.4), 150, 3, "rf"),
+    ("Onduleur solaire", (0.6, 0.2, 0.2), 230, 4, "hv"),
+    ("Contrôleur moteur BLDC", (0.45, 0.1, 0.45), 260, 5, "moteur"),
+    ("Tracker GPS pour flotte", (0.4, 0.2, 0.4), 240, 6, "rf"),
+    ("Caméra intelligente", (0.35, 0.2, 0.45), 320, 7, "ia"),
+    ("Module radio 2,4 GHz", (0.55, 0.15, 0.3), 380, 9, "rf"),
+    ("Instrument médical portable", (0.4, 0.3, 0.3), 500, 10, "medical"),
+    ("Calculateur pour drone", (0.4, 0.2, 0.4), 650, 12, "moteur"),
+    ("Équipement avionique", (0.5, 0.2, 0.3), 700, 14, "aero"),
 ]
+PRIMES = {"medical": 1.3, "aero": 1.4}
+
+# Choix techniques faits à la signature d'un projet
+CHOIX_TECH = {
+    "couches": {"nom": "Couches du PCB", "defaut": "4", "options": {
+        "2": {"nom": "2 couches", "desc": "Proto −40 % et 1 jour de moins, CEM plus difficile", "proto": 0.6, "jours": -1, "cem": -0.08},
+        "4": {"nom": "4 couches", "desc": "Le bon compromis"},
+        "6": {"nom": "6 couches", "desc": "Proto ×2,5 et 2 jours de plus, CEM facile, note +0,2", "proto": 2.5, "jours": 2, "cem": 0.10, "note": 0.2},
+    }},
+    "mcu": {"nom": "Microcontrôleur", "defaut": "stm32", "options": {
+        "stm32": {"nom": "STM32", "desc": "Polyvalent et bien connu"},
+        "esp32": {"nom": "ESP32", "desc": "Wi-Fi intégré : firmware −15 %, CEM plus délicate", "f": 0.85, "cem": -0.05},
+        "nrf": {"nom": "nRF52", "desc": "BLE basse conso : firmware +15 %, note +0,3", "f": 1.15, "note": 0.3, "requis": "ble"},
+    }},
+    "boitier": {"nom": "Boîtier", "defaut": "usine", "options": {
+        "impression": {"nom": "Impression 3D", "desc": "Méca −30 %, note −0,3", "m": 0.7, "note": -0.3},
+        "usine": {"nom": "Usiné", "desc": "Solide et standard"},
+        "injection": {"nom": "Moule d'injection", "desc": "Moule 3 000 €, méca +25 %, note +0,5", "m": 1.25, "note": 0.5, "cout": 3000},
+    }},
+}
+# Négociation : prix et délai proposés au client (multiplicateurs)
+PRIX_PROPOSES = {"1.0": "Prix affiché", "1.1": "+10 %", "1.2": "+20 %", "1.3": "+30 %"}
+DELAIS_PROPOSES = {"0.8": "−20 %", "1.0": "Délai affiché", "1.2": "+20 %"}
+CONCURRENTS = [("ElectroConcept", 3), ("Circuits du Sud-Ouest", 6), ("Volta Ingénierie", 10)]
+
+TECHNOS = {
+    "ble":    {"nom": "Bluetooth Low Energy", "prix": 4000, "jours": 30, "desc": "Objets connectés et nRF52 ; firmware +10 %"},
+    "rf":     {"nom": "Radiofréquence", "prix": 8000, "jours": 45, "desc": "Radio, LoRa et GPS ; tests CEM +5 %"},
+    "hv":     {"nom": "Électronique de puissance", "prix": 7000, "jours": 40, "desc": "Chargeurs et onduleurs"},
+    "moteur": {"nom": "Contrôle moteur", "prix": 9000, "jours": 45, "desc": "Contrôleurs BLDC et drones"},
+    "dfm":    {"nom": "Conception pour la fabrication", "prix": 6000, "jours": 30, "desc": "Prototypes −30 %, défauts −10 %"},
+    "ia":     {"nom": "IA embarquée", "prix": 15000, "jours": 60, "requis": "ble", "desc": "Caméras intelligentes ; note +0,2"},
+}
+CERTIFS = {
+    "ce":      {"nom": "Marquage CE maîtrisé", "prix": 3000, "jours": 20, "desc": "Paie des contrats +5 %"},
+    "iso":     {"nom": "ISO 9001", "prix": 10000, "jours": 60, "desc": "Défauts −15 %, note +0,2"},
+    "medical": {"nom": "ISO 13485 (médical)", "prix": 18000, "jours": 90, "requis": "iso", "desc": "Dispositifs médicaux, payés 30 % de plus"},
+    "aero":    {"nom": "EN 9100 (aéronautique)", "prix": 25000, "jours": 120, "requis": "iso", "desc": "Avionique, payée 40 % de plus"},
+}
+ENTRETIEN_CERTIF = 150  # € par mois et par certification (audits de suivi)
+
+FOURNISSEURS = {
+    "europe": {"nom": "Distributeur européen", "desc": "Fiable, prix standard", "proto": 1.0, "jours": 0, "defauts": 1.0, "serie": 1.0, "risque": 0.0},
+    "asie":   {"nom": "Grossiste asiatique", "desc": "Protos −40 %, +2 jours, risque de contrefaçons et de ruptures", "proto": 0.6, "jours": 2, "defauts": 1.08, "serie": 1.1, "risque": 0.05},
+    "local":  {"nom": "Fabricant local premium", "desc": "Protos +30 %, 1 jour de moins, moins de défauts", "proto": 1.3, "jours": -1, "defauts": 0.9, "serie": 0.95, "risque": 0.0},
+}
+PRETS = [10000, 25000, 50000]
+TAUX_PRET = 0.06  # par an, sur 24 mois
+
+SCENARIOS = {
+    "garage":  {"nom": "Le garage", "desc": "Partir de zéro, seul avec 15 000 €. Objectif libre : 20 ans pour devenir une légende."},
+    "iot":     {"nom": "Startup IoT", "desc": "Vous maîtrisez déjà le BLE. Objectif : lancer 4 produits maison en 2 ans.",
+                "argent": 25000, "technos": ["ble"], "renommee": 1, "objectif": {"type": "produits", "n": 4, "ans": 2}},
+    "aero":    {"nom": "Sous-traitant aéro", "desc": "Certifié ISO 9001 dès le départ. Objectif : obtenir l'EN 9100 et 30 de renommée en 4 ans.",
+                "argent": 40000, "certifs": ["iso"], "renommee": 3, "objectif": {"type": "aero", "n": 30, "ans": 4}},
+    "reprise": {"nom": "Reprise d'entreprise", "desc": "Vous rachetez un bureau de 4 personnes… et son prêt de 60 000 €. Objectif : 300 000 € de trésorerie en 4 ans, prêt remboursé.",
+                "argent": 20000, "employes": 3, "locaux": ["bureau"], "pret": 60000, "objectif": {"type": "tresorerie", "n": 300000, "ans": 4}},
+}
+DIFFICULTES = {
+    "facile":    {"nom": "Détente", "argent": 1.6, "impot": 0.15, "attente": -0.5, "paie": 1.1},
+    "normal":    {"nom": "Normal", "argent": 1.0, "impot": 0.25, "attente": 0.0, "paie": 1.0},
+    "difficile": {"nom": "Expert", "argent": 0.6, "impot": 0.33, "attente": 1.0, "paie": 0.82},
+}
+SAISONS = ["hiver", "hiver", "printemps", "printemps", "printemps", "ete", "ete", "ete", "automne", "automne", "automne", "hiver"]
+METEO = {  # probabilités par saison
+    "hiver": {"soleil": 0.4, "pluie": 0.3, "neige": 0.3},
+    "printemps": {"soleil": 0.65, "pluie": 0.35},
+    "ete": {"soleil": 0.6, "canicule": 0.3, "orage": 0.1},
+    "automne": {"soleil": 0.45, "pluie": 0.45, "brouillard": 0.1},
+}
 
 # Produits propres : nom, répartition, taille, coût de prototypage, ventes mensuelles potentielles, renommée
 PRODUITS = [

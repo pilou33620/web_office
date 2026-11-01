@@ -181,3 +181,21 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 .cliquable { cursor: pointer; }
 .choisi { outline: 3px solid var(--or); outline-offset: 2px; z-index: 6 !important; }
 #zone.amenage .hud-bas { display: none; }
+.titre-date small { display: block; font-family: Nunito, sans-serif; font-size: 11px; font-weight: 800; color: #a9b39a; letter-spacing: .5px; }
+.nav button { font-size: 12px; }
+#ambiance { pointer-events: none; z-index: 8; }
+#monde[data-saison="hiver"] { background-color: #cfe3d6; background-image: radial-gradient(#ffffff 2px, transparent 2.5px); }
+#monde[data-saison="automne"] { background-color: #a8b85a; background-image: radial-gradient(#d18b3a 2px, transparent 2.5px); }
+#monde[data-saison="printemps"] { background-image: radial-gradient(#ffd3e8 2px, transparent 2.5px), radial-gradient(#68b357 2px, transparent 2.5px); background-size: 37px 37px, 18px 18px; }
+#monde[data-meteo="pluie"] #ambiance, #monde[data-meteo="orage"] #ambiance { background: repeating-linear-gradient(105deg, transparent 0 14px, rgba(160, 200, 255, .35) 14px 16px); background-size: 40px 40px; animation: pluie .5s linear infinite; }
+#monde[data-meteo="orage"] #ambiance { animation: pluie .4s linear infinite, eclair 6s steps(1) infinite; }
+#monde[data-meteo="neige"] #ambiance { background-image: radial-gradient(#fff 2px, transparent 2.6px), radial-gradient(#fff 1.5px, transparent 2px); background-size: 46px 46px, 31px 31px; animation: neige 3s linear infinite; }
+#monde[data-meteo="brouillard"] #ambiance { background: rgba(240, 244, 246, .45); }
+#monde[data-meteo="canicule"] #ambiance { background: rgba(255, 170, 60, .12); }
+#ambiance::after { content: ""; position: absolute; inset: 0; }
+#monde[data-soir="soir"] #ambiance::after { background-color: rgba(255, 120, 60, .12); }
+#monde[data-soir="nuit"] #ambiance::after { background-color: rgba(30, 30, 90, .25); }
+@keyframes pluie { to { background-position: -12px 40px; } }
+@keyframes neige { to { background-position: 10px 46px, -8px 31px; } }
+@keyframes eclair { 0%, 96% { filter: none; } 97% { background-color: rgba(255, 255, 255, .55); } }
+@media (prefers-reduced-motion: reduce) { #ambiance { animation: none !important; } }

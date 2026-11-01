@@ -171,7 +171,7 @@ const PLAN = (() => {
   };
 
   // ---------------------------------------------------------------- carte du garage
-  const carteGarage = (e) => {
+  const carteGarage = (e, cat) => {
     let s = rue();
     s += R(40, 120, 780, 7, '#c99a63') + R(40, 120, 7, 680, '#c99a63') + R(813, 120, 7, 680, '#c99a63');
     for (let k = 0; k < 40; k++) s += R(42 + k * 19.5, 116, 4, 14, '#a8703f');
@@ -185,10 +185,15 @@ const PLAN = (() => {
     // le garage : murs, sol, établi (avec panneau à outils), étagère de composants, carton, vélo
     const gx = 430, gy = 400, gw = 250, gh = 250;
     s += R(gx + 10, gy + 12, gw, gh, 'rgba(20,14,8,.22)', 8) + R(gx, gy, gw, gh, '#6b4a31', 8, 4) + R(gx + 8, gy + 8, gw - 16, gh - 16, 'url(#p-beton)');
-    s += ombre(440, 408, 232, 40, 4) + R(440, 408, 232, 40, '#a8703f', 4, 2) + R(442, 410, 228, 5, '#8a5a36', 2);
-    for (let k = 0; k < 9; k++) s += R(448 + k * 24, 409, k % 2 ? 4 : 10, 5, ['#9aa1a8', '#d9534f', '#3d3d3d'][k % 3], 1);
-    s += ombre(636, 468, 32, 112, 3) + R(636, 468, 32, 112, '#8a5a36', 3, 2);
-    ['#ef6f9a', '#6aa8f0', '#ffc94d', '#7be08a', '#b08af0', '#ff9a4a'].forEach((c, k) => { s += R(640, 473 + k * 18, 24, 13, c, 2, 1); });
+    // établi (avec panneau à outils) et étagère : mêmes rectangles que le moteur
+    for (const [x, y, w, h] of cat.etablis.garage) {
+      s += ombre(x, y, w, h, 4) + R(x, y, w, h, '#a8703f', 4, 2) + R(x + 2, y + 2, w - 4, 5, '#8a5a36', 2);
+      for (let k = 0; k < Math.floor((w - 16) / 24); k++) s += R(x + 8 + k * 24, y + 1, k % 2 ? 4 : 10, 5, ['#9aa1a8', '#d9534f', '#3d3d3d'][k % 3], 1);
+    }
+    for (const [x, y, w, h] of cat.obstacles.garage) {
+      s += ombre(x, y, w, h, 3) + R(x, y, w, h, '#8a5a36', 3, 2);
+      ['#ef6f9a', '#6aa8f0', '#ffc94d', '#7be08a', '#b08af0', '#ff9a4a'].forEach((c, k) => { if (5 + k * 18 + 13 <= h) s += R(x + 4, y + 5 + k * 18, w - 8, 13, c, 2, 1); });
+    }
     s += R(gx + 196, gy + gh - 52, 30, 26, '#d8b07a', 3, 1.5) + L(gx + 196, gy + gh - 39, gx + 226, gy + gh - 39, '#a8803a');
     s += `<g class="soleil"><polygon points="${gx + 50},${gy + 238} ${gx + 200},${gy + 238} ${gx + 220},${gy + 170} ${gx + 30},${gy + 170}" fill="url(#g-soleil)" transform="rotate(180 ${gx + 125} ${gy + 204})"/></g>`;
     s += `<g class="lum-soir">${R(gx + 10, gy + 10, gw - 20, gh - 20, 'url(#g-piece-soir)', 8)}</g>` + lampe(gx + 125, gy + 120, 4);
@@ -242,17 +247,16 @@ const PLAN = (() => {
       }
       return s + R(x + 6, y + h - 12, w - 12, 7, '#d8dde3', 2, 1.5);
     },
-    pause: (x, y, w) => {
-      let s = ombre(x + 2, y + 2, w - 4, 24, 4) + R(x + 2, y + 2, w - 4, 24, '#d8d0c0', 4, 2);
+    pause: (x, y, w, h) => {  // la cuisine occupe le rectangle de mobilier fixe du moteur
+      let s = ombre(x, y, w - 30, h - 6, 4) + R(x, y, w - 30, h - 6, '#d8d0c0', 4, 2);
       s += R(x + 8, y + 5, 22, 16, '#9aa1a8', 3, 1) + Cc(x + 19, y + 13, 5, '#bfe6ff', 1) + R(x + 38, y + 4, 16, 18, '#3d3d3d', 3, 1) + Cc(x + 46, y + 10, 2.5, '#ff6b5a');
       s += R(x + 60, y + 4, 22, 16, '#e8e8e0', 3, 1) + R(x + 62, y + 6, 14, 10, '#1f2a3a', 1);
-      return s + R(x + w - 30, y + 2, 26, 26, '#f4f4f4', 3, 2) + R(x + w - 26, y + 14, 3, 10, '#9aa1a8');
+      return s + R(x + w - 28, y, 28, h, '#f4f4f4', 3, 2) + R(x + w - 24, y + 12, 3, 10, '#9aa1a8');
     },
-    labo: (x, y, w, h) => ombre(x, y, 36, h, 5) + R(x, y, 36, h, '#4f93b8', 5, 2) + R(x + 4, y + 4, 28, h - 8, '#5aa0c8', 3),
   };
   const FENETRES = Array.from({ length: 9 }, (_, k) => k);
-  const carteBatiment = (e) => {
-    const loues = new Set(e.locaux);
+  const carteBatiment = (e, cat) => {
+    const loues = new Set(e.locaux), [cuisine, hangar] = cat.obstacles.batiment;
     let s = rue();
     // parvis, totem, jardin, parking, vélos, banc, arbres
     s += R(BX + P + 40, BY + B + 8, B - 2 * P - 80, H - 90 - BY - B - 8, 'url(#p-pave)');
@@ -277,7 +281,8 @@ const PLAN = (() => {
       const X = BX + x, Y = BY + y, ouvert = loues.has(local);
       s += R(X + 3, Y + 3, w - 6, h - 6, ouvert ? sol : 'url(#p-hachures)', 0, 0, 'stroke="#4a3424" stroke-width="6"');
       if (!ouvert) continue;
-      if (FIXES[k] && k !== 'labo') s += FIXES[k](X + 6, Y + 6, w - 12, h - 12, e);
+      if (k === 'pause') s += FIXES.pause(...cuisine);
+      else if (FIXES[k]) s += FIXES[k](X + 6, Y + 6, w - 12, h - 12, e);
       const [dx, dy, horiz, sens] = prt;
       s += porte(BX + dx, BY + dy, horiz, k === 'wc' || k === 'serveur' ? 30 : 36, sens);
       // lumière : soleil sous les fenêtres le jour, éclairage chaud le soir
@@ -293,7 +298,7 @@ const PLAN = (() => {
       if (e.deco.includes('eclairage')) s += lampe(X + w / 2, Y + h / 2, 3);
       if (e.deco.includes('isolation')) s += R(X + 6, Y + 6, w - 12, h - 12, 'none', 4, 0, 'stroke="#a88cf0" stroke-width="3" stroke-dasharray="8 4"');
     }
-    s += FIXES.labo(BX + 8, BY + P + 6, 0, B - 2 * P - 12);
+    for (const [x, y, w, h] of cat.etablis.batiment) s += ombre(x, y, w, h, 5) + R(x, y, w, h, '#4f93b8', 5, 2) + R(x + 4, y + 4, w - 8, h - 8, '#5aa0c8', 3);  // établi du labo
     // couloir : plantes, fontaine, extincteur, panneau d'affichage, portemanteau, sortie, plafonniers
     s += plante(BX + P + 16, BY + P + 16, 9, 1) + plante(BX + B - P - 16, BY + B - P - 16, 9, 0) + plante(BX + B - P - 16, BY + P + 16, 9, 2);
     s += R(BX + P + C + 4, BY + B - P - 30, 18, 22, '#bfe6ff', 4, 1.5) + R(BX + B - P - C - 30, BY + P + 8, 22, 14, '#d9534f', 3, 1.5);
@@ -314,9 +319,10 @@ const PLAN = (() => {
     // hangar de production
     if (loues.has('cms')) {
       s += R(HX + 8, HY + 10, HW, HH, 'rgba(20,14,8,.25)', 8) + R(HX, HY, HW, HH, '#4f5a66', 8, 3) + R(HX + 8, HY + 8, HW - 16, HH - 16, 'url(#p-beton)');
-      s += R(752, 128, 16, 364, '#3d3d3d', 3, 1.5);
-      for (let k = 0; k < 11; k++) s += R(754, 134 + k * 32, 12, 10, '#2e8b57', 1);
-      for (let k = 0; k < 4; k++) s += R(772, 132 + k * 90, 48, 72, '#c48a52', 3, 1.5) + R(776, 136 + k * 90, 40, 30, '#d8b07a', 2) + R(776, 170 + k * 90, 40, 30, '#d8b07a', 2);
+      const [cx, cy, cw, ch] = hangar;  // convoyeur puis rayonnages : rectangle de mobilier fixe du moteur
+      s += R(cx, cy, 16, ch, '#3d3d3d', 3, 1.5);
+      for (let k = 0; k < Math.floor(ch / 32); k++) s += R(cx + 2, cy + 6 + k * 32, 12, 10, '#2e8b57', 1);
+      for (let k = 0; k < Math.floor(ch / 90); k++) s += R(cx + 20, cy + 4 + k * 90, cw - 22, 72, '#c48a52', 3, 1.5) + R(cx + 24, cy + 8 + k * 90, cw - 30, 30, '#d8b07a', 2) + R(cx + 24, cy + 42 + k * 90, cw - 30, 30, '#d8b07a', 2);
       s += R(HX + 30, HY - 4, 90, 10, '#ffc94d', 2, 2) + ombre(HX + 40, HY - 50, 70, 34, 6) + R(HX + 40, HY - 50, 70, 34, '#e8e8e8', 6, 2) + R(HX + 92, HY - 46, 16, 26, '#4a8ad8', 3, 1.5);
       s += R(BX + B + 10, HY + 160, HX - BX - B - 10, 44, 'url(#p-couloir)', 0, 3) + R(BX + B + 10, HY + 160, HX - BX - B - 10, 6, '#bfe6ff');
       s += `<g class="lum-soir">${R(HX + 8, HY + 8, HW - 16, HH - 16, 'rgba(220,235,255,.25)', 6)}</g>`;
@@ -337,7 +343,7 @@ const PLAN = (() => {
 
   return {
     W, H, DEFS, perso, poste, objet, etiquettes, PEAUX,
-    decor: (e) => `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DEFS}${e.locaux.includes('bureau') ? carteBatiment(e) : carteGarage(e)}</svg>`,
+    decor: (e, cat) => `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${DEFS}${e.locaux.includes('bureau') ? carteBatiment(e, cat) : carteGarage(e, cat)}</svg>`,
     // Zone du plan à montrer en premier (recentrage)
     centre: (e) => (e.locaux.includes('bureau') ? [380, 380] : [556, 524]),
     cadreMoral: (e) => (e.locaux.includes('bureau') ? [BX - 10, BY - 10, B + 20, B + 20] : [430, 400, 250, 250]),

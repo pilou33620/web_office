@@ -6,7 +6,6 @@ NOM_DOMAINE = {"e": "Élec", "m": "Méca 3D", "f": "Firmware"}
 # Deux cartes : le garage du fondateur au départ, puis le bâtiment carré (local « bureau » = déménagement).
 # Pièces : intérieur utilisable (coordonnées du monde, en px, calées sur la grille) et local à louer.
 # carte "garage" : seulement avant le déménagement ; carte "batiment" : seulement après.
-MONDE = (860, 900)
 PIECES = {
     "garage":    {"nom": "Garage", "rect": (440, 408, 232, 232), "local": None, "carte": "garage"},
     "etudes":    {"nom": "Bureau d'études", "rect": (48, 496, 156, 156), "local": "bureau", "carte": "batiment"},
@@ -18,17 +17,14 @@ PIECES = {
     "pause":     {"nom": "Salle de pause", "rect": (476, 496, 156, 156), "local": "pause", "carte": "batiment"},
     "cms":       {"nom": "Ligne CMS", "rect": (688, 128, 136, 364), "local": "cms", "carte": "batiment"},
 }
-# Pièces dessinées mais sans placement libre (mobilier fixe) : accueil, réunion, sanitaires, serveurs
-PIECES_FIXES = {
-    "accueil": (216, 496, 248, 156), "reunion": (256, 276, 96, 168), "wc": (364, 276, 60, 80), "serveur": (364, 364, 60, 80),
-}
 # Ordre de placement automatique de la déco : salle de pause et pièces de travail avant le bureau d'études (gardé pour les postes)
 INTERIEUR = ["garage", "pause", "openspace", "plateau", "labo", "atelier", "cem", "cms", "etudes"]
 TRAVAIL = ["garage", "etudes", "openspace", "plateau"]
 # Par carte (les deux cartes partagent les coordonnées) :
 # établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
 ETABLIS = {"garage": [(440, 408, 232, 44)], "batiment": [(48, 236, 36, 248)]}
-# mobilier fixe : rien ne peut y être posé (étagère du garage ; cuisine, convoyeur et rayonnages du hangar)
+# mobilier fixe : rien ne peut y être posé (étagère du garage ; cuisine, convoyeur et rayonnages du hangar).
+# plan.js dessine ces meubles à partir de ces rectangles, dans cet ordre.
 OBSTACLES = {"garage": [(636, 468, 32, 112)], "batiment": [(476, 496, 156, 30), (752, 128, 72, 364)]}
 GRILLE = 4
 
@@ -77,13 +73,13 @@ MATERIEL_DEPART = ["multi", "station", "stlink"]
 # Aménagement. Effet (moral, prod) compté une fois par type, même avec plusieurs exemplaires.
 # global : amélioration sans objet à poser ; multiple : plusieurs exemplaires possibles ; libre : mural ou au sol, ne gêne rien
 DECO = {
-    "plantes":  {"nom": "Plante verte", "prix": 180, "moral": 5, "w": 28, "h": 28, "multiple": True, "pos": (340, 196)},
+    "plantes":  {"nom": "Plante verte", "prix": 180, "moral": 5, "w": 28, "h": 28, "multiple": True},
     "ficus":    {"nom": "Ficus", "prix": 350, "moral": 2, "w": 36, "h": 36, "multiple": True},
-    "tableau":  {"nom": "Tableau blanc", "prix": 250, "moral": 3, "w": 68, "h": 12, "libre": True, "pos": (294, 60)},
-    "cafe":     {"nom": "Machine à café", "prix": 600, "moral": 7, "w": 20, "h": 28, "pos": (346, 64)},
+    "tableau":  {"nom": "Tableau blanc", "prix": 250, "moral": 3, "w": 68, "h": 12, "libre": True},
+    "cafe":     {"nom": "Machine à café", "prix": 600, "moral": 7, "w": 20, "h": 28},
     "fontaine": {"nom": "Fontaine à eau", "prix": 300, "moral": 2, "w": 18, "h": 22, "multiple": True},
     "distrib":  {"nom": "Distributeur de snacks", "prix": 700, "moral": 3, "w": 30, "h": 24},
-    "clim":     {"nom": "Climatisation", "prix": 2500, "moral": 4, "w": 44, "h": 12, "libre": True, "effet": "Supprime le malus en cas de canicule", "pos": (60, 20)},
+    "clim":     {"nom": "Climatisation", "prix": 2500, "moral": 4, "w": 44, "h": 12, "libre": True, "effet": "Supprime le malus en cas de canicule"},
     "biblio":   {"nom": "Bibliothèque de datasheets", "prix": 800, "moral": 1, "prod": 2, "w": 64, "h": 16, "effet": "+2 % de productivité"},
     "armoire":  {"nom": "Armoire à composants", "prix": 1200, "moral": 0, "prod": 3, "w": 44, "h": 22, "effet": "+3 % de productivité"},
     "imprimante": {"nom": "Imprimante de bureau", "prix": 400, "moral": 0, "prod": 1, "w": 28, "h": 22, "effet": "+1 % de productivité"},
@@ -92,8 +88,8 @@ DECO = {
     "lampe":    {"nom": "Lampadaire", "prix": 150, "moral": 1, "w": 16, "h": 16, "multiple": True},
     "poster":   {"nom": "Affiche de circuit vintage", "prix": 120, "moral": 1, "w": 30, "h": 10, "multiple": True, "libre": True},
     "tapis":    {"nom": "Tapis", "prix": 200, "moral": 1, "w": 60, "h": 40, "multiple": True, "libre": True},
-    "canape":   {"nom": "Canapé", "prix": 900, "moral": 6, "w": 90, "h": 36, "pieces": ["pause", "openspace"], "pos": (26, 1028)},
-    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "w": 54, "h": 44, "pieces": ["pause", "openspace"], "pos": (100, 960)},
+    "canape":   {"nom": "Canapé", "prix": 900, "moral": 6, "w": 90, "h": 36, "pieces": ["pause", "openspace"]},
+    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "w": 54, "h": 44, "pieces": ["pause", "openspace"]},
     "arcade":   {"nom": "Borne d'arcade", "prix": 2000, "moral": 6, "w": 30, "h": 30, "pieces": ["pause", "openspace"]},
     "sieges":   {"nom": "Sièges ergonomiques", "prix": 1500, "moral": 3, "prod": 8, "global": True, "effet": "+8 % de productivité"},
     "eclairage": {"nom": "Éclairage LED", "prix": 800, "moral": 2, "prod": 4, "global": True, "effet": "+4 % de productivité"},
@@ -155,7 +151,6 @@ SECTEURS = {
     "telecom":   {"nom": "Télécoms", "clients": ["TéléRéseaux", "FibreOuest", "NetBox", "OndeCom"]},
     "spatial":   {"nom": "Spatial", "clients": ["Orbital Sud", "AstroLab", "StarTrack", "Lune & Co"]},
 }
-CLIENTS = [c for s in SECTEURS.values() for c in s["clients"]]
 FIDELITE_MAX = 5
 NIVEAUX_FIDELITE = ["Nouveau client", "Client", "Client régulier", "Client fidèle", "Client fidèle", "Partenaire"]
 
@@ -293,8 +288,8 @@ SCENARIOS = {
     "garage":  {"nom": "Le garage", "desc": "Partir de zéro, seul avec 15 000 €. Objectif libre : 20 ans pour devenir une légende."},
     "iot":     {"nom": "Startup IoT", "desc": "Vous maîtrisez déjà le BLE. Objectif : lancer 4 produits maison en 2 ans.",
                 "argent": 25000, "technos": ["ble"], "renommee": 1, "objectif": {"type": "produits", "n": 4, "ans": 2}},
-    "aero":    {"nom": "Sous-traitant aéro", "desc": "Certifié ISO 9001 dès le départ. Objectif : obtenir l'EN 9100 et 30 de renommée en 4 ans.",
-                "argent": 40000, "certifs": ["iso"], "renommee": 3, "objectif": {"type": "aero", "n": 30, "ans": 4}},
+    "aero":    {"nom": "Sous-traitant aéro", "desc": "Certifié ISO 9001 dès le départ. Objectif : obtenir l'EN 9100 et 12 de renommée en 4 ans.",
+                "argent": 40000, "certifs": ["iso"], "renommee": 3, "objectif": {"type": "aero", "n": 12, "ans": 4}},
     "reprise": {"nom": "Reprise d'entreprise", "desc": "Vous rachetez un bureau de 4 personnes… et son prêt de 60 000 €. Objectif : 300 000 € de trésorerie en 4 ans, prêt remboursé.",
                 "argent": 20000, "employes": 3, "locaux": ["bureau"], "pret": 60000, "objectif": {"type": "tresorerie", "n": 300000, "ans": 4}},
 }
@@ -396,7 +391,7 @@ TROPHEES = {
 MISSIONS = [
     ("m_premier", "Livrer votre premier contrat", "livres", 1, 1000, 0),
     ("m_equipe2", "Embaucher un premier employé", "employes", 2, 1000, 0),
-    ("m_bureau", "Agrandir le bureau d'études", "local:bureau", 1, 1500, 0),
+    ("m_bureau", "Emménager dans le bâtiment", "local:bureau", 1, 1500, 0),
     ("m_livres5", "Livrer 5 contrats", "livres", 5, 2500, 1),
     ("m_note8", "Obtenir une note de 8 ou plus", "note", 8, 2000, 0),
     ("m_produit", "Lancer un produit maison", "produits", 1, 2500, 0),

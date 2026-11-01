@@ -5,7 +5,7 @@ const $ = (s) => document.querySelector(s);
 const DN = { e: 'Élec', m: 'Méca 3D', f: 'Firmware', c: 'CEM' };
 const COURT = { e: 'élec', m: '3D', f: 'fw' };
 const DC = { e: '#ffc94d', m: '#f08a6c', f: '#7cc0f2', c: '#b08af0' };
-const PIECE = { labo: 'Labo élec', atelier: 'Atelier 3D', bureau: "Bureau d'études", cem: 'Labo CEM', cms: 'Ligne CMS' };
+const PIECE = { labo: 'Labo élec', atelier: 'Atelier 3D', etudes: "Bureau d'études", cem: 'Labo CEM', cms: 'Ligne CMS' };
 const PCT_BONUS = 6;  // % de production par point de matériel (moteur : _production)
 const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', equipe: 'Équipe', materiel: 'Matériel', locaux: 'Locaux', journal: 'Journal', societe: 'Société' };
 const ABSENCE = { formation: 'En formation', conges: 'En congés', seminaire: 'Séminaire' };
@@ -145,7 +145,7 @@ function rendreMonde() {
   if (cache.decor !== cle) {
     const demenage = cache.decor && cache.decor.split('|')[0] !== carte();
     cache.decor = cle;
-    $('#statique').innerHTML = PLAN.decor(e);
+    $('#statique').innerHTML = PLAN.decor(e, CAT);
     if (demenage) requestAnimationFrame(recentrer);
   }
   const p = e.projets.length > 0;
@@ -381,9 +381,10 @@ function panneauLocaux() {
   h += `<div class="section">Agrandissements</div>`;
   h += Object.entries(CAT.locaux).map(([id, l]) => {
     const fait = e.locaux.includes(id), bloque = e.renommee < l.rep;
+    const avantEmmenager = id !== 'bureau' && !e.locaux.includes('bureau');  // le moteur refuse : il faut d'abord emménager
     return ligne({
       couleur: '#efc488', t1: esc(l.nom), t2: `${esc(l.desc)} · ${eur(l.prix)}`, t3: `Loyer +${eur(l.loyer)} / mois`,
-      btn: bouton('local', id, fait ? 'Fait' : bloque ? `★ ${l.rep} requis` : 'Louer', !fait && !bloque && e.argent >= l.prix),
+      btn: bouton('local', id, fait ? 'Fait' : avantEmmenager ? "Après l'emménagement" : bloque ? `★ ${l.rep} requis` : 'Louer', !fait && !avantEmmenager && !bloque && e.argent >= l.prix),
     });
   }).join('');
   h += `<div class="section">Aménagement · moral ${e.moral} %</div>`;

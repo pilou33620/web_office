@@ -326,6 +326,19 @@ class TestJeu(unittest.TestCase):
             o["x"], o["y"] = 30, 300
         bien_places(Jeu(ancien))
 
+    def test_ancienne_partie_pieces_louees_sans_emmenager(self):
+        """Avant, on pouvait louer l'atelier sans le local « bureau » : la partie s'ouvre dans le bâtiment, matériel visible."""
+        j = Jeu(graine=1)
+        e = j.etat
+        e["locaux"] += ["atelier", "openspace"]
+        e["materiel"].append("fdm")
+        e["objets"].append({"id": 9999, "type": "fdm", "x": 214, "y": 274})
+        e.pop("version_plan")
+        k = Jeu(json.loads(json.dumps(e)))
+        self.assertEqual(k.carte(), "batiment")
+        self.assertTrue(any(o["type"] == "fdm" for o in k.etat["objets"]))
+        k.action("vendre", id=9999)  # revendable : elle est bien sur le plan
+
     def test_tout_tient_dans_le_batiment(self):
         """Quel que soit l'ordre d'achat, chaque appareil trouve sa place et le bâtiment garde 16 postes."""
         from moteur.donnees import MATERIEL

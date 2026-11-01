@@ -97,6 +97,8 @@ class Jeu(Extensions):
         if "objets" not in e:
             self._migrer_v3()
         if e.get("version_plan") != 2:  # plan garage + bâtiment carré : tout est replacé automatiquement
+            if "bureau" not in e["locaux"] and e["locaux"]:
+                e["locaux"].append("bureau")  # pièces louées avant d'emménager (permis autrefois) : on emménage
             self._replacer_objets()
             e["version_plan"] = 2
         e["version"] = 3

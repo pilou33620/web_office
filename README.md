@@ -50,7 +50,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Secteurs et clients fidèles** : 54 types de contrats dans 10 secteurs (industrie, maison connectée, énergie, agriculture, mobilité, grand public, médical, aéro, télécoms, spatial). Un client bien servi devient fidèle (★ à ★★★★★ « Partenaire ») et revient avec des projets plus gros, plus faciles à négocier.
 - **Méga-projets** : dès 10 de renommée, de rares projets géants (usine 4.0, métro automatique, constellation de satellites…) qui occupent deux places, demandent une grande équipe et plusieurs technologies, et paient 25 % de plus.
 - **22 produits maison** dont 7 suites (v2, v3) : une suite se vend d'autant mieux que le modèle précédent a été bien noté.
-- **Bâtiment B** : plateau R&D (8 bureaux, un projet de plus) et ligne de production CMS (prototypes en 1 jour, séries +50 %, machines de production). 12 technologies et 7 certifications au total.
+- **Fin de l'expansion** : plateau R&D (6 postes, un projet de plus) et hangar de production CMS (prototypes en 1 jour, séries +50 %, machines de production). 12 technologies et 7 certifications au total.
 - **40 missions** enchaînées, trois proposées à la fois sur le tableau de bord, avec une prime et parfois de la renommée.
 - **Temps** : barre de 5 boutons, Pause, Lent (16 s par jour), Normal (8 s), Rapide (3 s) et Très rapide (1 s). La météo dure plusieurs jours.
 - **Scénarios** (Le garage, Startup IoT, Sous-traitant aéro, Reprise d'entreprise), **3 niveaux de difficulté** et **3 emplacements de sauvegarde** (Journal › Parties et sauvegardes).

@@ -60,7 +60,7 @@ def verifier(nom, obtenu, attendu):
 
 # --- Fichiers servis et refusés ---------------------------------------------
 for chemin, attendu in [
-    ("/", 200), ("/index.html", 200), ("/jeu.js", 200), ("/style.css", 200),
+    ("/", 200), ("/index.html", 200), ("/jeu.js", 200), ("/plan.js", 200), ("/style.css", 200),
     ("/api/etat", 200), ("/api/catalogue", 200), ("/api/parties", 200),
     ("/.git/config", 404), ("/.gitignore", 404), ("/serveur.py", 404), ("/appairage.py", 404),
     ("/../serveur.py", 404), ("/%2e%2e/serveur.py", 404), ("/.env", 404), ("/README.md", 404),

@@ -64,6 +64,8 @@ class Extensions:
         e["objectif"] = sc.get("objectif")
         for lid in sc.get("locaux", []):
             e["locaux"].append(lid)
+        if "bureau" in e["locaux"]:
+            self._replacer_objets()
         for _ in range(sc.get("employes", 0)):
             c = self._candidat()
             libres = self.bureaux_libres()

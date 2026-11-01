@@ -25,144 +25,62 @@ const eur = (n) => Math.round(n).toLocaleString('fr-FR') + ' €';
 const dec = (n) => (Math.round(n * 10) / 10).toLocaleString('fr-FR');
 const tablette = () => window.matchMedia('(min-width: 900px)').matches;
 
-// ---------------------------------------------------------------- plan du bâtiment
-// Style par type d'objet : fond, rayon, largeur et hauteur du détail, couleur du détail, rayon du détail
-const STYLE = {
-  multi: ['#ffc94d', 6, 16, 9, '#bfe3a8', 2], station: ['#3d3d3d', 6, 12, 12, '#ff6b5a', 6], alim: ['#4a4a4a', 6, 20, 7, '#7be08a', 2],
-  oscillo: ['#e8e8e0', 6, 24, 18, '#1f4a6e', 3], micro: ['#d8dde3', 16, 14, 14, '#3a4a5e', 7], sonde: ['#b08af0', 6, 8, 14, '#ffc94d', 3],
-  four: ['#9aa1a8', 8, 54, 22, '#ff9a4a', 4], spectre: ['#dfe3e8', 8, 40, 22, '#215a3a', 3],
-  fdm: ['#3d3d3d', 8, 22, 22, '#ffc94d', 4], resine: ['#f4f4f4', 9, 24, 24, '#ff9a4a', 6], cao: ['#d0955a', 6, 58, 10, '#2a3a56', 3], cnc: ['#8d96a1', 10, 98, 60, '#c9ced4', 5],
-  stlink: ['#4a8ad8', 5, 6, 6, '#ffc94d', 3], logique: ['#3d3d3d', 5, 22, 4, '#7be08a', 2], jlink: ['#2b2b2b', 5, 6, 6, '#ff9a4a', 3],
-  ci: ['#2b3442', 4, 30, 4, '#7be08a', 2], banc: ['#6a7d92', 5, 58, 10, '#1f4a6e', 3],
-  pickplace: ['#c9ced4', 8, 100, 20, 'repeating-linear-gradient(90deg,#3d3d3d 0 8px,#ffc94d 8px 12px)', 3], rayonx: ['#5a6a7a', 8, 40, 30, '#7be08a', 4],
-  aoi: ['#e8e8e0', 8, 36, 22, '#4a8ad8', 4],
-  esd: ['#ffc94d', 8, 16, 16, '#3d3d3d', 8], chambre: ['#5a6a7a', 10, 120, 104, 'repeating-conic-gradient(#2f3a46 0 25%, #46566a 0 50%) 0 0/16px 16px', 6],
-  plantes: 'plante', ficus: 'plante', lampe: 'lampe',
-  tableau: ['#ffffff', 3, 48, 3, '#4a8ad8', 1], cafe: ['#3d3d3d', 5, 6, 6, '#ff6b5a', 3], clim: ['#f4f4f4', 4, 34, 3, '#b8d8e8', 2],
-  fontaine: ['#bfe6ff', 8, 10, 10, '#4a8ad8', 5], distrib: ['#d9534f', 4, 20, 14, '#ffe08a', 2],
-  biblio: ['#8a5a36', 3, 58, 8, 'repeating-linear-gradient(90deg,#ef6f9a 0 6px,#6aa8f0 6px 12px,#ffc94d 12px 18px)', 1],
-  armoire: ['#9aa1a8', 4, 36, 14, 'repeating-linear-gradient(0deg,#5a6a7a 0 3px,#c9ced4 3px 6px)', 2],
-  imprimante: ['#e8e8e0', 4, 18, 6, '#3d3d3d', 2], table: ['#c48a52', 22, 60, 32, '#d8a46a', 18], aquarium: ['#5ccfc4', 6, 32, 16, '#8fe0ff', 4],
-  poster: ['#fff7e6', 2, 24, 6, '#ef6f9a', 1], tapis: ['#b08af0', 10, 50, 30, '#c8a8f8', 8], arcade: ['#3a2a5a', 6, 18, 14, '#7be08a', 3],
-  canape: ['#6aa8f0', 10, 76, 14, '#8cc0ff', 6], babyfoot: ['#7a5236', 6, 42, 32, '#5cb84c', 3],
-};
-// Améliorations globales, dessinées à des emplacements fixes
-const DECO_POS = {
-  eclairage: [[96, 142, 14, 14, 'lampe'], [210, 142, 14, 14, 'lampe'], [322, 142, 14, 14, 'lampe'], [120, 470, 14, 14, 'lampe'], [280, 400, 14, 14, 'lampe'], [96, 760, 14, 14, 'lampe']],
-  isolation: [[19, 66, 7, 150, '#8a6bd1', 3, 3, 130, '#a88cf0', 2], [364, 66, 7, 150, '#8a6bd1', 3, 3, 130, '#a88cf0', 2], [19, 660, 7, 200, '#8a6bd1', 3, 3, 180, '#a88cf0', 2]],
-};
+// ---------------------------------------------------------------- plan (dessin dans plan.js)
 const fiche = (type) => (type === 'poste' ? CAT.poste : CAT.materiel[type] || CAT.deco[type]);
-// Emplacements debout (coin haut-gauche du personnage) par pièce
+const carte = () => (ETAT.locaux.includes('bureau') ? 'batiment' : 'garage');
+// Pièces utilisables maintenant (carte courante, local loué)
+const pieceDispo = (k) => { const pc = CAT.pieces[k]; return pc.carte === carte() && (!pc.local || ETAT.locaux.includes(pc.local)); };
+// Emplacements debout (centre du personnage) par lieu, sur chaque carte
 const SPOTS = {
-  labo: [[72, 284], [72, 352], [72, 424], [116, 440], [146, 500], [72, 500]],
-  atelier: [[262, 322], [318, 326], [232, 386], [300, 390], [240, 540], [300, 540]],
-  cem: [[228, 782], [290, 786], [322, 830], [250, 836]],
-  terrasse: [[216, 932], [256, 936], [296, 932], [216, 1040], [256, 1046], [330, 1040]],
-  salle: [[28, 960], [28, 996], [128, 1010], [150, 950], [40, 1046], [130, 1048]],
-  babyfoot: [[66, 964], [154, 964]],
-  reunion: [[226, 976], [324, 976], [226, 1020], [324, 1020], [274, 946], [274, 1040], [214, 1060], [334, 1060], [174, 990], [174, 1030]],
+  garage: {
+    labo: [[470, 462], [520, 462], [600, 462], [620, 600]],
+    reunion: [[136, 717], [184, 717], [160, 695], [160, 742], [220, 712], [250, 726]],
+    terrasse: [[280, 262], [304, 280], [330, 262], [240, 290], [350, 290]],
+  },
+  batiment: {
+    labo: [[100, 262], [100, 332], [100, 410], [150, 300], [160, 420], [110, 462]],
+    atelier: [[70, 204], [120, 204], [184, 132], [184, 190]],
+    cem: [[492, 210], [540, 210], [590, 210], [620, 150]],
+    terrasse: [[690, 522], [730, 522], [700, 600], [740, 590], [680, 570], [762, 540]],
+    salle: [[500, 570], [540, 592], [572, 570], [612, 612], [512, 632], [590, 632]],
+    accueil: [[245, 611], [275, 611], [405, 611], [435, 611], [330, 560], [370, 560]],
+    reunion: [[268, 320], [268, 346], [268, 372], [268, 398], [342, 320], [342, 346], [342, 372], [342, 398], [305, 300], [305, 436]],
+  },
 };
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
-const HAUTEUR_MONDE = 1530;
-const PIECES_VERROU = {
-  bureau: [246, 26, 126, 226],
-  atelier: [197, 258, 175, 364],
-  openspace: [18, 628, 175, 274],
-  pause: [18, 912, 174, 184],
-  cem: [197, 628, 175, 274],
-  plateau: [18, 1176, 354, 150],
-  cms: [18, 1332, 354, 140],
-};
-
-function construireStatique() {
-  const haie = Array.from({ length: 28 }, (_, i) =>
-    `<div class="a" style="left:${i * 14 - 2}px;top:${i % 2 ? 1 : 3}px;width:17px;height:17px;border-radius:50%;border:2px solid #24401f;background:${i % 3 ? '#4fa043' : '#5cb84c'}"></div>`).join('');
-  $('#statique').innerHTML = haie + `
-    <div class="a" style="left:-4px;top:1490px;width:398px;height:30px;background:#5d6266;border-top:3px solid #2b1d14;border-bottom:3px solid #2b1d14"></div>
-    <div class="a" style="left:0;top:1503px;width:390px;height:3px;background:repeating-linear-gradient(90deg,#ffe08a 0 18px,transparent 18px 30px)"></div>
-    <div class="a" style="left:180px;top:1104px;width:30px;height:66px;background:#d8c9a8;border-left:3px solid #2b1d14;border-right:3px solid #2b1d14"></div>
-    <div class="a" style="left:10px;top:1168px;width:370px;height:312px;border:3px solid #2b1d14;border-radius:12px;background:#5a6672;box-shadow:0 8px 0 rgba(0,0,0,.22)"></div>
-    <div class="piece" style="left:18px;top:1176px;width:354px;height:150px;background:repeating-linear-gradient(90deg,#d9c3a0 0 16px,#ccb48e 16px 18px)"></div>
-    <div class="piece" style="left:18px;top:1332px;width:354px;height:140px;background-color:#dfe6ea;background-image:linear-gradient(#c7d2d9 2px,transparent 2px),linear-gradient(90deg,#c7d2d9 2px,transparent 2px);background-size:20px 20px"></div>
-    <div class="a ol" style="left:24px;top:1420px;width:342px;height:14px;border-radius:5px;background:repeating-linear-gradient(90deg,#3d3d3d 0 10px,#6a7480 10px 20px)"></div>
-    <div class="a" style="left:180px;top:1320px;width:32px;height:16px;background:#d9c3a0"></div>
-    <div class="etiq-piece" style="left:24px;top:1304px">Plateau R&amp;D</div>
-    <div class="etiq-piece" style="left:24px;top:1448px">Ligne de production CMS</div>
-    <div class="a" style="left:10px;top:906px;width:190px;height:198px;border:3px solid #2b1d14;border-radius:0 0 12px 12px;background:#7a5236;box-shadow:0 8px 0 rgba(0,0,0,.22)"></div>
-    <div class="piece" style="left:18px;top:912px;width:174px;height:184px;background-color:#f3c9a8;background-image:linear-gradient(45deg,#e8b48e 25%,transparent 25%,transparent 75%,#e8b48e 75%),linear-gradient(45deg,#e8b48e 25%,transparent 25%,transparent 75%,#e8b48e 75%);background-size:24px 24px;background-position:0 0,12px 12px"></div>
-    <div class="a ol" style="left:24px;top:918px;width:162px;height:20px;border-radius:6px;background:#a8703f;box-shadow:inset 0 -4px 0 #8a5a30"></div>
-    <div class="a ol" style="left:34px;top:921px;width:22px;height:13px;border-radius:4px;background:#d8dde3"></div>
-    <div class="a ol" style="left:150px;top:920px;width:16px;height:16px;border-radius:50%;background:#ff6b5a"></div>
-    <div class="a ol" style="left:206px;top:916px;width:170px;height:186px;border-radius:10px;background:repeating-linear-gradient(0deg,#c99a63 0 13px,#b8884f 13px 15px);box-shadow:0 4px 0 rgba(0,0,0,.2)"></div>
-    <div class="a ol" style="left:262px;top:990px;width:60px;height:42px;border-radius:50%;background:#f4f1e8;box-shadow:0 4px 0 rgba(0,0,0,.25)"></div>
-    <div class="a ol" style="left:340px;top:926px;width:26px;height:26px;border-radius:50%;background:#5cb84c;box-shadow:inset -4px -4px 0 #3e8f33"></div>
-    <div class="a ol" style="left:76px;top:1100px;width:36px;height:20px;border-top:0;background:#e6d3a8"></div>
-    <div class="etiq-piece" style="left:24px;top:1072px">Salle de pause</div>
-    <div class="etiq-piece" style="left:214px;top:1074px">Terrasse</div>
-    <div class="a" style="left:10px;top:18px;width:370px;height:892px;border:3px solid #2b1d14;border-radius:12px;background:#7a5236;box-shadow:0 8px 0 rgba(0,0,0,.22)"></div>
-    <div class="piece" style="left:18px;top:26px;width:354px;height:226px;background:repeating-linear-gradient(90deg,#efc488 0 16px,#e2b277 16px 18px)"></div>
-    <div class="piece" style="left:18px;top:258px;width:175px;height:364px;background-color:#d3ebe2;background-image:linear-gradient(#b8d8cc 2px,transparent 2px),linear-gradient(90deg,#b8d8cc 2px,transparent 2px);background-size:24px 24px"></div>
-    <div class="piece" style="left:197px;top:258px;width:175px;height:364px;background-color:#ddd5c6;background-image:radial-gradient(#cbc2b1 2px,transparent 2.5px);background-size:16px 16px"></div>
-    <div class="piece" style="left:18px;top:628px;width:175px;height:274px;background-color:#a9c7e8;background-image:radial-gradient(#97b8dc 3px,transparent 3.5px);background-size:20px 20px"></div>
-    <div class="piece" style="left:197px;top:628px;width:175px;height:274px;background-color:#e9eef2;background-image:linear-gradient(#d4dde4 2px,transparent 2px),linear-gradient(90deg,#d4dde4 2px,transparent 2px);background-size:30px 30px"></div>
-    <div class="a" style="left:90px;top:248px;width:34px;height:14px;background:#e2b277"></div>
-    <div class="a" style="left:270px;top:248px;width:34px;height:14px;background:#e2b277"></div>
-    <div class="a" style="left:189px;top:420px;width:12px;height:34px;background:#d3ebe2"></div>
-    <div class="a" style="left:64px;top:618px;width:32px;height:14px;background:#d3ebe2"></div>
-    <div class="a" style="left:270px;top:618px;width:32px;height:14px;background:#ddd5c6"></div>
-    <div class="a" style="left:64px;top:898px;width:32px;height:14px;background:#a9c7e8"></div>
-    <div class="a ol" style="left:24px;top:31px;width:342px;height:26px;border-radius:7px;background:#a8703f;box-shadow:inset 0 -5px 0 #8a5a30,0 3px 0 rgba(0,0,0,.2)"></div>
-    <div class="a ol" style="left:23px;top:266px;width:44px;height:348px;border-radius:7px;background:#4f93b8;box-shadow:inset -5px 0 0 #3b7596"></div>
-    <div class="etiq-piece" style="left:24px;top:230px">Bureau d'études</div>
-    <div class="etiq-piece" style="left:72px;top:596px">Labo élec</div>
-    <div class="etiq-piece" style="left:204px;top:596px">Atelier 3D</div>
-    <div class="etiq-piece" style="left:24px;top:878px">Open space</div>
-    <div class="etiq-piece" style="left:204px;top:878px">Labo CEM</div>`;
-}
-
-function objet(p, cls = '', attr = '') {
-  if (p[4] === 'lampe') return `<div class="a ${cls}"${attr} style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px;border-radius:50%;border:2px solid #2b1d14;background:#fff3a0;box-shadow:0 0 0 8px rgba(255,240,150,.35),0 0 0 18px rgba(255,240,150,.15);z-index:5"></div>`;
-  if (p[4] === 'plante') return `<div class="objet plante ${cls}"${attr} style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px"><i></i></div>`;
-  return `<div class="objet ${cls}"${attr} style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px;background:${p[4]};border-radius:${p[5]}px"><i style="width:${p[6]}px;height:${p[7]}px;background:${p[8]};border-radius:${p[9]}px"></i></div>`;
-}
 
 function corps(x) {
-  const triste = (x.moral ?? 70) < 45;
-  return `<div class="anim"><div class="corps" style="background:${esc(x.couleur)}"></div>` +
-    `<div class="tete" style="background:${esc(x.peau)}"><i class="oeil g"></i><i class="oeil d"></i><i class="bouche${triste ? ' triste' : ''}"></i></div>` +
-    `<div class="cheveux" style="background:${esc(x.cheveux)}"></div></div>`;
+  return `<div class="anim"><svg viewBox="-17 -17 34 34" width="34" height="34" aria-hidden="true">${PLAN.perso(0, 0, esc(x.couleur), esc(x.cheveux), (x.id || 0) % 4, esc(x.peau || PLAN.PEAUX[0]))}</svg></div>`;
 }
-const sprite = (x) => `<div class="perso">${corps(x)}</div>`;
 
-// Personnages : éléments conservés d'un jour à l'autre pour animer leurs déplacements
 const PERSOS = {};
 function rendrePersos() {
   const e = ETAT, p = e.projets.length > 0, cont = $('#persos'), vus = new Set(), groupes = {};
   const duree = Math.min(1.2, VITESSES[vitesse][1] / 2000);
-  const salle = e.locaux.includes('pause');
+  const salle = e.locaux.includes('pause'), S = SPOTS[carte()];
   const pos = {};
   const objs = Object.fromEntries(e.objets.map((o) => [o.id, o]));
+  // devant chaque appareil du labo, de l'atelier et du labo CEM
   const spots = { labo: [], atelier: [], cem: [] };
   for (const o of e.objets) {
     const m = CAT.materiel[o.type];
     if (!m) continue;
-    const salleObj = Object.entries(CAT.pieces).find(([, pc]) => { const [x, y, w, hh] = pc.rect; return o.x >= x && o.y >= y && o.x < x + w && o.y < y + hh; });
-    const k = salleObj && salleObj[0];
-    if (k in spots) {
-      const [x, y, w] = CAT.pieces[k].rect;
-      spots[k].push([Math.min(o.x + m.w + 2, x + w - 34), Math.max(y + 2, o.y - 6)]);
-    }
+    const k = Object.keys(spots).find((cle) => { const [x, y, w, hh] = CAT.pieces[cle].rect; return o.x >= x && o.y >= y && o.x < x + w && o.y < y + hh; });
+    if (k) { const [x, , w] = CAT.pieces[k].rect; spots[k].push([Math.min(o.x + m.w + 12, x + w - 14), o.y + m.h / 2]); }
   }
-  const SP = (lieu) => (spots[lieu] && spots[lieu].length ? spots[lieu].concat(SPOTS[lieu]) : SPOTS[lieu]);
+  const baby = salle && e.objets.find((o) => o.type === 'babyfoot');
+  if (baby) { const f = fiche('babyfoot'); spots.babyfoot = [[baby.x - 10, baby.y + f.h / 2], [baby.x + f.w + 10, baby.y + f.h / 2]]; }
+  const SP = (lieu) => (spots[lieu] && spots[lieu].length ? spots[lieu].concat(S[lieu] || []) : S[lieu]);
   const placer = (emp) => {
     const mauvais = ['pluie', 'neige', 'orage'].includes(e.meteo);
-    let lieu = emp.lieu === 'pause' ? (salle ? 'salle' : mauvais ? 'bureau' : 'terrasse') : emp.lieu;
-    if (lieu === 'fete') lieu = salle ? 'salle' : 'reunion';  // on fête à la salle de pause, sinon sur la terrasse
-    if (lieu === 'salle' && e.deco.includes('babyfoot') && (groupes.babyfoot || 0) < 2) lieu = 'babyfoot';
-    if (!SPOTS[lieu]) lieu = 'bureau';
+    let lieu = emp.lieu;
+    if (lieu === 'pause') lieu = salle ? 'salle' : carte() === 'batiment' ? 'accueil' : mauvais ? 'bureau' : 'terrasse';
+    if (lieu === 'fete') lieu = salle ? 'salle' : 'reunion';  // on fête à la salle de pause, sinon autour de la table
+    if (lieu === 'salle' && spots.babyfoot && (groupes.babyfoot || 0) < 2) lieu = 'babyfoot';
+    if (lieu !== 'babyfoot' && !(S[lieu] || spots[lieu])) lieu = 'bureau';
     let x, y;
-    if (lieu === 'bureau') { const o = objs[emp.bureau] || { x: 30, y: 60 }; x = o.x + 21; y = o.y - 4; }
+    if (lieu === 'bureau') { const o = objs[emp.bureau] || { x: 452, y: 468 }; x = o.x + 38; y = o.y + 46; }
     else { const liste = SP(lieu), g = groupes[lieu] = (groupes[lieu] || 0) + 1; [x, y] = liste[(g - 1) % liste.length]; }
     return { lieu, x, y };
   };
@@ -172,10 +90,11 @@ function rendrePersos() {
     if (emp.lieu !== 'visite') continue;
     const cible = pos[emp.visite];
     // à côté du collègue qu'il vient voir, sinon à son propre bureau
-    pos[emp.id] = cible ? { lieu: 'visite', x: cible.x + 30, y: cible.y + (cible.lieu === 'bureau' ? 6 : 2) } : placer({ ...emp, lieu: 'bureau' });
+    pos[emp.id] = cible ? { lieu: 'visite', x: cible.x + 22, y: cible.y + 4 } : placer({ ...emp, lieu: 'bureau' });
   }
   for (const emp of presents) {
-    const { lieu, x, y } = pos[emp.id];
+    const { lieu, x: cx, y: cy } = pos[emp.id];
+    const x = cx - 17, y = cy - 17;
     let t = '', c = '';
     if (vue === 'moral') { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
     else if (joue && e.fete && emp.lieu === 'fete') { t = e.fete.type === 'anniv' ? (emp.nom === e.fete.nom ? 'Merci !' : 'Joyeux anniversaire !') : 'Santé !'; c = '#ffc94d'; }
@@ -185,7 +104,7 @@ function rendrePersos() {
     else if (joue && p && 'emf'.includes(emp.tache || '_')) { t = `+${dec(emp.gain)} ${COURT[emp.tache]}`; c = DC[emp.tache]; }
     else if (joue && p && emp.tache === 'debug') { t = `−${dec(emp.gain)} bug`; c = '#ffb3a8'; }
     else if (joue && p && emp.tache === 'cem') { t = 'CEM…'; c = DC.c; }
-    else if (joue && (lieu === 'salle' || lieu === 'terrasse')) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
+    else if (joue && ['salle', 'terrasse', 'accueil'].includes(lieu)) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
     else if (joue && !p) { t = 'zzz'; c = '#e8e8e8'; }
     const html = corps(emp) + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
     let el = PERSOS[emp.id];
@@ -215,61 +134,92 @@ function rendrePersos() {
   for (const id of Object.keys(PERSOS)) if (!vus.has(id)) { PERSOS[id].remove(); delete PERSOS[id]; }
 }
 
+// Pièce à louer -> pièce du plan où afficher le verrou
+const VERROUS = { atelier: 'atelier', plateau: 'plateau', cem: 'cem', openspace: 'openspace', pause: 'pause', cms: 'cms' };
+// Pastilles de la vue Productivité : [domaine, carte, x, y]
+const PUCES = [['f', 'garage', 560, 376], ['e', 'garage', 446, 376], ['e', 'batiment', 90, 242], ['f', 'batiment', 54, 502], ['m', 'batiment', 54, 74], ['c', 'batiment', 482, 74]];
+
 function rendreMonde() {
-  const e = ETAT, h = [];
+  const e = ETAT, h = [], svg = [];
+  const cle = carte() + '|' + [...e.locaux].sort().join(',') + '|' + e.deco.filter((d) => d === 'eclairage' || d === 'isolation').sort().join(',') + '|' + e.entreprise;
+  if (cache.decor !== cle) {
+    const demenage = cache.decor && cache.decor.split('|')[0] !== carte();
+    cache.decor = cle;
+    $('#statique').innerHTML = PLAN.decor(e);
+    if (demenage) requestAnimationFrame(recentrer);
+  }
   const p = e.projets.length > 0;
-  for (const id of e.deco) for (const part of DECO_POS[id] || []) h.push(objet(part));
   const occupes = {};
   for (const x of e.employes) occupes[x.bureau] = x;
   const tries = [...e.objets].sort((a, b) => (b.type === 'tapis') - (a.type === 'tapis'));  // les tapis dessous
   for (const o of tries) {
-    const choisi = amenage && selection === o.id ? ' choisi' : '';
-    const attr = amenage ? ` data-obj="${o.id}"` : '';
+    const f = fiche(o.type);
+    if (!f) continue;
+    let dessin, titre = f.nom;
     if (o.type === 'poste') {
-      if (e.deco.includes('sieges')) h.push(`<div class="a" style="left:${o.x + 18}px;top:${o.y + 8}px;width:40px;height:30px;border:2.5px solid #2b1d14;border-radius:12px 12px 4px 4px;background:#3a5a8a;z-index:1"></div>`);
       const emp = occupes[o.id];
       const travaille = emp && !emp.absent && (emp.lieu || 'bureau') === 'bureau' && joue && p;
-      const ecran = !emp ? '#2b3442' : travaille ? '#8fe0ff' : '#5a7a9a';
-      const nom = !emp ? 'Libre' : emp.absent ? ABSENCE[emp.absence] || 'Absent' : emp.nom;
-      h.push(`<div class="bureau-meuble${amenage ? ' cliquable' : ''}${choisi}"${attr} style="left:${o.x}px;top:${o.y + 30}px"><div class="ecran"><i style="background:${ecran}"></i></div><div class="clavier"></div><div class="nom">${esc(nom)}</div></div>`);
-      continue;
+      dessin = PLAN.poste(o.x, o.y, !emp ? '#2b3442' : travaille ? 'url(#g-ecran)' : '#5a7a9a', !!emp, !!emp && emp.id % 2 === 0);
+      titre = !emp ? 'Bureau libre' : emp.absent ? `${emp.nom} · ${ABSENCE[emp.absence] || 'absent'}` : `Bureau de ${emp.nom}`;
+    } else {
+      dessin = PLAN.objet(o.type, o.x, o.y, f.w, f.h);
     }
-    const f = fiche(o.type), st = STYLE[o.type] || ['#cccccc', 4, 8, 8, '#888888', 2];
-    const parts = typeof st === 'string' ? [o.x, o.y, f.w, f.h, st] : [o.x, o.y, f.w, f.h, ...st];
-    h.push(objet(parts, `${o.type in e.pannes ? 'panne' : ''}${amenage ? ' cliquable' : ''}${choisi}`, attr));
+    const panne = o.type in e.pannes ? `<g class="panne"><circle cx="${o.x + f.w}" cy="${o.y}" r="9" fill="#ff8a7a" stroke="#2b1d14" stroke-width="2"/><text x="${o.x + f.w}" y="${o.y + 4}" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#2b1d14">!</text></g>` : '';
+    const choisi = amenage && selection === o.id ? `<rect x="${o.x - 3}" y="${o.y - 3}" width="${f.w + 6}" height="${f.h + 6}" rx="6" fill="rgba(255,201,77,.2)" stroke="#ffc94d" stroke-width="3" stroke-dasharray="6 4"/>` : '';
+    svg.push(`<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${dessin}${panne}${choisi}</g>`);
   }
+  svg.push(PLAN.etiquettes(e));
   if (placement) {
     // zones autorisées pour l'objet en cours de placement
-    const f = fiche(placement.type);
-    for (const k of f.pieces) {
-      const pc = CAT.pieces[k];
-      if (pc.local && !e.locaux.includes(pc.local)) continue;
-      const [x, y, w, hh] = pc.rect;
-      h.push(`<div class="zone-ok" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px"></div>`);
+    for (const k of fiche(placement.type).pieces) {
+      if (!pieceDispo(k)) continue;
+      const [x, y, w, hh] = CAT.pieces[k].rect;
+      svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="6" fill="rgba(123,224,138,.14)" stroke="rgba(47,138,58,.9)" stroke-width="2.5" stroke-dasharray="8 5"/>`);
     }
   }
-  for (const [lid, [x, y, w, hh]] of Object.entries(PIECES_VERROU)) {
-    if (e.locaux.includes(lid)) continue;
-    const l = CAT.locaux[lid];
-    const bloque = e.renommee < l.rep;
-    h.push(`<div class="verrou" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px">
+  if (vue === 'moral') {
+    const t = e.moral >= 70 ? '123,224,138' : e.moral >= 55 ? '255,201,77' : '255,138,122', [x, y, w, hh] = PLAN.cadreMoral(e);
+    svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="12" fill="rgba(${t},.25)"/>`);
+  }
+  h.push(`<svg class="couche" viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}" xmlns="http://www.w3.org/2000/svg">${svg.join('')}</svg>`);
+  const verrou = (lid, [x, y, w, hh]) => {
+    const l = CAT.locaux[lid], bloque = e.renommee < l.rep;
+    return `<div class="verrou" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px">
       <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#fff7e6" stroke-width="2.4"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="#ffc94d" stroke="#2b1d14" stroke-width="1.8"/></svg>
       <b>${esc(l.nom)}</b><small>${bloque ? `Renommée ${l.rep} requise` : 'Local à louer'}</small>
-      <button type="button" class="btn petit" data-act="local" data-id="${lid}" ${bloque || e.argent < l.prix ? 'disabled' : ''}>Louer · ${eur(l.prix)}</button></div>`);
-  }
+      <button type="button" class="btn petit" data-act="local" data-id="${lid}" ${bloque || e.argent < l.prix ? 'disabled' : ''}>Louer · ${eur(l.prix)}</button></div>`;
+  };
+  if (carte() === 'garage') h.push(verrou('bureau', [560, 150, 250, 170]));
+  else for (const [lid, k] of Object.entries(VERROUS)) if (!e.locaux.includes(lid)) h.push(verrou(lid, CAT.pieces[k].rect));
   if (vue === 'prod') {
     const b = e.bonus;
-    h.push(`<div class="puce-prod" style="left:186px;top:226px;background:${DC.f}">Firmware +${b.f * 10} %</div>`);
-    h.push(`<div class="puce-prod" style="left:72px;top:556px;background:${DC.e}">Élec +${b.e * 10} %</div>`);
-    if (e.locaux.includes('atelier')) h.push(`<div class="puce-prod" style="left:232px;top:556px;background:${DC.m}">Méca 3D +${b.m * 10} %</div>`);
-    h.push(`<div class="puce-prod" style="left:214px;top:842px;background:${DC.c}">CEM +${Math.round(b.cem * 100)} %</div>`);
-  }
-  if (vue === 'moral') {
-    const t = e.moral >= 70 ? '123,224,138' : e.moral >= 55 ? '255,201,77' : '255,138,122';
-    h.push(`<div class="a" style="left:10px;top:18px;width:370px;height:892px;border-radius:12px;background:rgba(${t},.25);pointer-events:none"></div>`);
+    for (const [d, c, x, y] of PUCES) {
+      if (c !== carte() || (d === 'm' && !e.locaux.includes('atelier')) || (d === 'c' && !e.locaux.includes('cem'))) continue;
+      h.push(`<div class="puce-prod" style="left:${x}px;top:${y}px;background:${DC[d]}">${d === 'c' ? `CEM +${Math.round(b.cem * 100)} %` : `${DN[d]} +${b[d] * PCT_BONUS} %`}</div>`);
+    }
   }
   majHtml('#dyn', h.join(''));
   rendrePersos();
+}
+
+// ---------------------------------------------------------------- zoom et déplacement du plan
+let zoom = null;
+const echelleMin = () => Math.min(1, $('#cadre').clientWidth / PLAN.W);
+function appliquerZoom(s, cx = $('#cadre').clientWidth / 2, cy = $('#cadre').clientHeight / 2) {
+  const cadre = $('#cadre'), ech = $('#echelle');
+  s = Math.max(echelleMin(), Math.min(2, s));
+  // le point du plan sous (cx, cy) reste sous le doigt
+  const wx = zoom ? (cadre.scrollLeft + cx - ech.offsetLeft) / zoom : null, wy = zoom ? (cadre.scrollTop + cy - ech.offsetTop) / zoom : null;
+  zoom = s;
+  ech.style.width = PLAN.W * s + 'px';
+  ech.style.height = PLAN.H * s + 'px';
+  $('#monde').style.transform = `scale(${s})`;
+  if (wx !== null) { cadre.scrollLeft = wx * s + ech.offsetLeft - cx; cadre.scrollTop = wy * s + ech.offsetTop - cy; }
+}
+function recentrer() {
+  const cadre = $('#cadre'), ech = $('#echelle'), [x, y] = PLAN.centre(ETAT);
+  cadre.scrollLeft = x * zoom + ech.offsetLeft - cadre.clientWidth / 2;
+  cadre.scrollTop = y * zoom + ech.offsetTop - cadre.clientHeight / 2;
 }
 
 // ---------------------------------------------------------------- panneaux
@@ -597,25 +547,24 @@ function rendreAmenagement() {
   ban.hidden = !h;
   $('#zone').classList.toggle('amenage', !!h);
   majHtml('#placement', h);
-  $('.outils .outil').classList.toggle('actif', amenage);
+  $('.outils [data-act="amenage"]').classList.toggle('actif', amenage);
   $('#fantome').hidden = !placement;
 }
 
 // Validation locale (le serveur revalide) : même règles que le moteur
 function validePlace(type, x, y, ignorer) {
   const f = fiche(type);
-  const piece = f.pieces.find((k) => { const [px, py, pw, ph] = CAT.pieces[k].rect; return px <= x && py <= y && x + f.w <= px + pw && y + f.h <= py + ph; });
+  const piece = f.pieces.find((k) => { const [px, py, pw, ph] = CAT.pieces[k].rect; return pieceDispo(k) && px <= x && py <= y && x + f.w <= px + pw && y + f.h <= py + ph; });
   if (!piece) return false;
-  const loc = CAT.pieces[piece].local;
-  if (loc && !ETAT.locaux.includes(loc)) return false;
   if (f.libre) return true;
   const chevauche = (ax, ay, aw, ah) => x < ax + aw && ax < x + f.w && y < ay + ah && ay < y + f.h;
-  if (!CAT.materiel[type] && CAT.etablis.some(([ex, ey, ew, eh]) => chevauche(ex, ey, ew, eh))) return false;
+  if (!CAT.materiel[type] && CAT.etablis[carte()].some(([ex, ey, ew, eh]) => chevauche(ex, ey, ew, eh))) return false;
+  if (CAT.obstacles[carte()].some(([ex, ey, ew, eh]) => chevauche(ex, ey, ew, eh))) return false;
   return !ETAT.objets.some((o) => { const g = fiche(o.type); return o.id !== ignorer && !g.libre && chevauche(o.x, o.y, g.w, g.h); });
 }
 
 function pointMonde(ev) {
-  const r = $('#monde').getBoundingClientRect(), s = r.width / 390, f = fiche(placement.type), g = CAT.grille;
+  const r = $('#monde').getBoundingClientRect(), s = r.width / PLAN.W, f = fiche(placement.type), g = CAT.grille;
   return [Math.round(((ev.clientX - r.left) / s - f.w / 2) / g) * g, Math.round(((ev.clientY - r.top) / s - f.h / 2) / g) * g];
 }
 
@@ -703,7 +652,8 @@ const AIDE = [
   ['Missions', "Trois missions sont proposées à la fois sur le tableau de bord. Chacune rapporte une prime, parfois de la renommée."],
   ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware), un trait, un moral et une fatigue. Formez-les, envoyez-les en congés."],
   ['Conditions de travail', "Décoration, café, climatisation, isolation et horaires changent la production (vue Productivité)."],
-  ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Agrandir les locaux permet plus de projets en parallèle, jusqu'au bâtiment B (plateau R&D et ligne CMS)."],
+  ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Quittez le garage pour le bâtiment, puis louez ses pièces une à une : plus de projets en parallèle, jusqu'au hangar de production."],
+  ['Plan', "Sur téléphone, faites glisser le plan au doigt et pincez pour zoomer. Les boutons + / − / ⌖ zooment et recentrent."],
   ['Aménagement', "Le bouton en haut à gauche permet de placer, déplacer ou revendre bureaux, appareils et décoration."],
   ['Société', "Recherche, certifications, fournisseurs, prêts et levée de fonds débloquent de meilleurs contrats."],
   ['Argent', "Loyer, salaires et frais tombent chaque mois, l'impôt chaque année. Sous −5 000 €, c'est la faillite."],
@@ -822,6 +772,9 @@ document.addEventListener('click', async (ev) => {
       if (onglet === 'accueil' && !tablette()) onglet = 'accueil';
       return rendre();
     case 'vue': vue = id; return rendre();
+    case 'zoom':
+      if (id === 'centre') return recentrer();
+      return appliquerZoom(zoom * (id === 'plus' ? 1.25 : 0.8));
     case 'amenage': joue = false; amenage = !amenage; selection = null; placement = null; if (!tablette()) onglet = 'accueil'; return rendre();
     case 'placer': joue = false; placement = { type: id }; amenage = true; selection = null; if (!tablette()) onglet = 'accueil'; return rendre();
     case 'placer-fin': placement = null; return rendre();
@@ -921,19 +874,30 @@ document.addEventListener('change', (ev) => {
   if (sel) agir('affecter', { id: Number(sel.dataset.affecter), projet: sel.value ? Number(sel.value) : null });
 });
 
-function ajusterEchelle() {
-  const w = $('#cadre').clientWidth;
-  const s = Math.min(2, w / 390);
-  $('#echelle').style.width = 390 * s + 'px';
-  $('#echelle').style.height = HAUTEUR_MONDE * s + 'px';
-  $('#monde').style.transform = `scale(${s})`;
-}
+// Pincer pour zoomer (téléphone), Ctrl + molette (ordinateur)
+let pince = null;
+const ecart = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+$('#cadre').addEventListener('touchstart', (ev) => { if (ev.touches.length === 2) pince = { d: ecart(ev.touches), s: zoom }; }, { passive: true });
+$('#cadre').addEventListener('touchmove', (ev) => {
+  if (!pince || ev.touches.length !== 2) return;
+  ev.preventDefault();
+  const r = $('#cadre').getBoundingClientRect(), [a, b] = ev.touches;
+  appliquerZoom(pince.s * ecart(ev.touches) / pince.d, (a.clientX + b.clientX) / 2 - r.left, (a.clientY + b.clientY) / 2 - r.top);
+}, { passive: false });
+$('#cadre').addEventListener('touchend', (ev) => { if (ev.touches.length < 2) pince = null; });
+$('#cadre').addEventListener('wheel', (ev) => {
+  if (!ev.ctrlKey) return;
+  ev.preventDefault();
+  const r = $('#cadre').getBoundingClientRect();
+  appliquerZoom(zoom * (ev.deltaY < 0 ? 1.12 : 0.89), ev.clientX - r.left, ev.clientY - r.top);
+}, { passive: false });
 
 async function demarrer() {
-  construireStatique();
   $('#monde').insertAdjacentHTML('beforeend', '<div id="fantome" class="fantome" hidden></div>');
-  ajusterEchelle();
-  window.addEventListener('resize', ajusterEchelle);
+  $('#monde').style.width = PLAN.W + 'px';
+  $('#monde').style.height = PLAN.H + 'px';
+  appliquerZoom(tablette() ? $('#cadre').clientWidth / PLAN.W : 0.8);
+  window.addEventListener('resize', () => appliquerZoom(zoom));
   if (tablette()) onglet = 'projets';
   try {
     [CAT, ETAT] = await Promise.all([api('/api/catalogue'), api('/api/etat')]);
@@ -941,6 +905,8 @@ async function demarrer() {
     toast('Impossible de joindre le serveur du jeu.');
     return;
   }
+  rendre();
+  recentrer();
   ouvrirMenu('menu');  // écran titre à chaque ouverture
 }
 

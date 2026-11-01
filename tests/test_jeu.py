@@ -55,6 +55,9 @@ class TestJeu(unittest.TestCase):
         self.assertEqual(len({x["bureau"] for x in j.etat["employes"]}), 3)
         with self.assertRaises(ErreurJeu):
             j.action("acheter", id="fdm")
+        with self.assertRaises(ErreurJeu):
+            j.action("local", id="atelier")  # il faut d'abord emménager dans le bâtiment
+        j.action("local", id="bureau")
         j.action("local", id="atelier")
         j.action("acheter", id="fdm")
         self.assertEqual(j.bonus()["m"], 2)
@@ -107,6 +110,7 @@ class TestJeu(unittest.TestCase):
     def test_deplacements(self):
         j = Jeu(graine=12)
         j.etat["argent"] = 50000
+        j.action("local", id="bureau")
         j.action("local", id="atelier")
         j.action("signer", id=j.etat["offres"][0]["id"])
         lieux = set()
@@ -169,6 +173,7 @@ class TestJeu(unittest.TestCase):
     def test_salle_de_pause_et_visites(self):
         j = Jeu(graine=21)
         j.etat["argent"], j.etat["renommee"] = 100000, 1
+        j.action("local", id="bureau")
         moral = j.moral_global()
         j.action("local", id="pause")
         self.assertEqual(j.moral_global(), moral + 5)
@@ -264,24 +269,45 @@ class TestJeu(unittest.TestCase):
         json.dumps(nouveau.vue())
 
     def test_amenagement_libre(self):
+        from moteur.donnees import PIECES
+        def bien_places(j):
+            dispo = j.pieces_dispo()
+            for o in j.etat["objets"]:
+                f = j.fiche(o["type"])
+                self.assertTrue(any(PIECES[k]["rect"][0] <= o["x"] and PIECES[k]["rect"][1] <= o["y"]
+                                    and o["x"] + f["w"] <= PIECES[k]["rect"][0] + PIECES[k]["rect"][2]
+                                    and o["y"] + f["h"] <= PIECES[k]["rect"][1] + PIECES[k]["rect"][3] for k in dispo), o)
+            postes = {o["id"] for o in j.etat["objets"] if o["type"] == "poste"}
+            self.assertTrue(all(x["bureau"] in postes for x in j.etat["employes"]))
         j = Jeu(graine=23)
-        j.etat["argent"] = 100000
+        j.etat["argent"], j.etat["renommee"] = 100000, 1
+        self.assertEqual(j.carte(), "garage")
+        bien_places(j)
         with self.assertRaises(ErreurJeu):
-            j.action("poser", id="poste", x=300, y=100)  # partie droite : bureau agrandi pas loué
+            j.action("poser", id="poste", x=48, y=496)  # bureau d'études : il faut d'abord emménager
         with self.assertRaises(ErreurJeu):
-            j.action("poser", id="poste", x=34, y=66)  # déjà occupé par le bureau de départ
+            j.action("poser", id="poste", x=452, y=468)  # déjà occupé par le bureau de départ
         with self.assertRaises(ErreurJeu):
-            j.action("poser", id="canape", x=30, y=300)  # canapé : salle de pause ou open space uniquement
-        j.action("local", id="bureau")
-        j.action("poser", id="poste", x=272, y=150)
+            j.action("poser", id="poste", x=592, y=480)  # sur l'étagère du garage (mobilier fixe)
+        with self.assertRaises(ErreurJeu):
+            j.action("poser", id="canape", x=440, y=580)  # canapé : salle de pause ou open space uniquement
+        with self.assertRaises(ErreurJeu):
+            j.action("local", id="pause")  # il faut d'abord emménager
+        j.action("local", id="bureau")  # déménagement : tout le garage est replacé dans le bâtiment
+        self.assertEqual(j.carte(), "batiment")
+        bien_places(j)
+        j.action("poser", id="poste", x=50, y=575)
         poste = j.etat["objets"][-1]
-        self.assertEqual((poste["x"], poste["y"]), (272, 152))  # calé sur la grille
-        j.action("deplacer", id=poste["id"], x=272, y=72)
-        self.assertEqual(poste["y"], 72)
+        self.assertEqual((poste["x"], poste["y"]), (48, 576))  # calé sur la grille
+        j.action("deplacer", id=poste["id"], x=128, y=576)
+        self.assertEqual(poste["x"], 128)
         j.action("poser", id="plantes")
         j.action("poser", id="plantes")
         self.assertEqual(j.etat["deco"].count("plantes"), 1)
-        j.action("poser", id="tapis", x=40, y=140)  # au sol : ne gêne rien
+        j.action("poser", id="tapis", x=100, y=300)  # au sol : ne gêne rien
+        j.action("local", id="pause")
+        with self.assertRaises(ErreurJeu):
+            j.action("poser", id="plantes", x=480, y=500)  # sur la cuisine (mobilier fixe)
         j.action("acheter", id="oscillo")
         oscillo = next(o for o in j.etat["objets"] if o["type"] == "oscillo")
         with self.assertRaises(ErreurJeu):
@@ -293,6 +319,32 @@ class TestJeu(unittest.TestCase):
         occupe = j.etat["employes"][0]["bureau"]
         with self.assertRaises(ErreurJeu):
             j.action("vendre", id=occupe)
+        bien_places(j)
+        ancien = json.loads(json.dumps(j.etat))  # sauvegarde de l'ancien plan : objets aux anciennes coordonnées
+        ancien.pop("version_plan")
+        for o in ancien["objets"]:
+            o["x"], o["y"] = 30, 300
+        bien_places(Jeu(ancien))
+
+    def test_tout_tient_dans_le_batiment(self):
+        """Quel que soit l'ordre d'achat, chaque appareil trouve sa place et le bâtiment garde 16 postes."""
+        from moteur.donnees import MATERIEL
+        for g in range(8):
+            j = Jeu(graine=g)
+            e = j.etat
+            e["argent"], e["renommee"] = 10 ** 7, 30
+            for l in ("bureau", "atelier", "pause", "openspace", "cem", "plateau", "cms"):
+                j.action("local", id=l)
+            mats = [m for m in MATERIEL if m not in e["materiel"]]
+            random.Random(g).shuffle(mats)
+            for m in mats:
+                j.action("acheter", id=m)
+            while True:
+                try:
+                    j.action("poser", id="poste")
+                except ErreurJeu:
+                    break
+            self.assertEqual(sum(o["type"] == "poste" for o in e["objets"]), 16, f"graine {g}")
 
     def test_migration_v2_vers_v3(self):
         j = Jeu(graine=24)

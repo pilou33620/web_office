@@ -3,35 +3,46 @@
 DOMAINES = ("e", "m", "f")
 NOM_DOMAINE = {"e": "Élec", "m": "Méca 3D", "f": "Firmware"}
 
-# Pièces du plan (coordonnées du monde, en px) et local qu'il faut louer pour les utiliser
+# Deux cartes : le garage du fondateur au départ, puis le bâtiment carré (local « bureau » = déménagement).
+# Pièces : intérieur utilisable (coordonnées du monde, en px, calées sur la grille) et local à louer.
+# carte "garage" : seulement avant le déménagement ; carte "batiment" : seulement après.
+MONDE = (860, 900)
 PIECES = {
-    "garage":    {"nom": "Garage", "rect": (18, 26, 228, 226), "local": None},
-    "bureau":    {"nom": "Bureau agrandi", "rect": (246, 26, 126, 226), "local": "bureau"},
-    "labo":      {"nom": "Labo élec", "rect": (18, 258, 175, 364), "local": None},
-    "atelier":   {"nom": "Atelier 3D", "rect": (197, 258, 175, 364), "local": "atelier"},
-    "openspace": {"nom": "Open space", "rect": (18, 628, 175, 274), "local": "openspace"},
-    "cem":       {"nom": "Labo CEM", "rect": (197, 628, 175, 274), "local": "cem"},
-    "pause":     {"nom": "Salle de pause", "rect": (18, 912, 174, 184), "local": "pause"},
-    "plateau":   {"nom": "Plateau R&D", "rect": (18, 1176, 354, 150), "local": "plateau"},
-    "cms":       {"nom": "Ligne CMS", "rect": (18, 1332, 354, 140), "local": "cms"},
+    "garage":    {"nom": "Garage", "rect": (440, 408, 232, 232), "local": None, "carte": "garage"},
+    "etudes":    {"nom": "Bureau d'études", "rect": (48, 496, 156, 156), "local": "bureau", "carte": "batiment"},
+    "labo":      {"nom": "Labo élec", "rect": (48, 236, 156, 248), "local": "bureau", "carte": "batiment"},
+    "atelier":   {"nom": "Atelier 3D", "rect": (48, 68, 156, 156), "local": "atelier", "carte": "batiment"},
+    "plateau":   {"nom": "Plateau R&D", "rect": (216, 68, 248, 156), "local": "plateau", "carte": "batiment"},
+    "cem":       {"nom": "Labo CEM", "rect": (476, 68, 156, 156), "local": "cem", "carte": "batiment"},
+    "openspace": {"nom": "Open space", "rect": (476, 236, 156, 248), "local": "openspace", "carte": "batiment"},
+    "pause":     {"nom": "Salle de pause", "rect": (476, 496, 156, 156), "local": "pause", "carte": "batiment"},
+    "cms":       {"nom": "Ligne CMS", "rect": (688, 128, 136, 364), "local": "cms", "carte": "batiment"},
 }
-INTERIEUR = list(PIECES)
-TRAVAIL = ["garage", "bureau", "openspace", "plateau"]
-# Établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
-ETABLIS = [(24, 31, 342, 26), (23, 266, 44, 348)]
+# Pièces dessinées mais sans placement libre (mobilier fixe) : accueil, réunion, sanitaires, serveurs
+PIECES_FIXES = {
+    "accueil": (216, 496, 248, 156), "reunion": (256, 276, 96, 168), "wc": (364, 276, 60, 80), "serveur": (364, 364, 60, 80),
+}
+# Ordre de placement automatique de la déco : salle de pause et pièces de travail avant le bureau d'études (gardé pour les postes)
+INTERIEUR = ["garage", "pause", "openspace", "plateau", "labo", "atelier", "cem", "cms", "etudes"]
+TRAVAIL = ["garage", "etudes", "openspace", "plateau"]
+# Par carte (les deux cartes partagent les coordonnées) :
+# établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
+ETABLIS = {"garage": [(440, 408, 232, 44)], "batiment": [(48, 236, 36, 248)]}
+# mobilier fixe : rien ne peut y être posé (étagère du garage ; cuisine, convoyeur et rayonnages du hangar)
+OBSTACLES = {"garage": [(636, 468, 32, 112)], "batiment": [(476, 496, 156, 30), (752, 128, 72, 364)]}
 GRILLE = 4
 
-# Poste de travail : l'emprise inclut la chaise et la place de l'employé au-dessus du meuble
+# Poste de travail : l'emprise inclut la chaise et la place de l'employé devant le meuble
 POSTE = {"nom": "Bureau de travail", "prix": 400, "w": 76, "h": 64, "pieces": TRAVAIL}
-POSTES_DEPART = [(34, 66), (147, 66)]
+POSTES_DEPART = [(452, 468), (540, 560)]
 
 # Matériel : bonus de production (6 % par point), debug (détection des défauts), cem (chance aux tests)
 # w, h : taille sur le plan ; pos : emplacement par défaut (achat automatique, anciennes sauvegardes)
-_FW = ["garage", "bureau", "labo", "openspace", "plateau"]
+_FW = ["garage", "labo", "etudes", "openspace", "plateau"]  # le labo d'abord : outils firmware sur l'établi
 MATERIEL = {
     # Labo électronique
-    "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (30, 278)},
-    "station":  {"nom": "Station de soudage", "dom": "e", "prix": 300, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (30, 326)},
+    "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (448, 412)},
+    "station":  {"nom": "Station de soudage", "dom": "e", "prix": 300, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (484, 412)},
     "alim":     {"nom": "Alimentation de labo", "dom": "e", "prix": 450, "bonus": 1, "piece": "labo", "w": 32, "h": 32, "pos": (28, 374)},
     "micro":    {"nom": "Microscope de soudure", "dom": "e", "prix": 1800, "bonus": 1, "debug": 1, "piece": "labo", "w": 32, "h": 36, "pos": (28, 476)},
     "oscillo":  {"nom": "Oscilloscope 4 voies", "dom": "e", "prix": 2800, "bonus": 2, "debug": 1, "piece": "labo", "w": 36, "h": 44, "pos": (26, 420)},
@@ -41,24 +52,26 @@ MATERIEL = {
     # Atelier méca / 3D
     "fdm":      {"nom": "Imprimante 3D FDM", "dom": "m", "prix": 650, "bonus": 2, "piece": "atelier", "w": 46, "h": 46, "pos": (214, 274)},
     "resine":   {"nom": "Imprimante résine", "dom": "m", "prix": 2400, "bonus": 2, "piece": "atelier", "w": 38, "h": 42, "pos": (270, 276)},
-    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier", "w": 100, "h": 36, "pos": (214, 344)},
-    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier", "w": 140, "h": 100, "pos": (216, 430)},
+    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier", "w": 84, "h": 32, "pos": (214, 344)},
+    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier", "w": 92, "h": 72, "pos": (216, 430)},
     # Firmware (établi du bureau, ou labo)
-    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "bureau", "pieces": _FW, "w": 20, "h": 20, "pos": (30, 34)},
-    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "bureau", "pieces": _FW, "w": 34, "h": 20, "pos": (58, 34)},
-    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "bureau", "pieces": _FW, "w": 28, "h": 20, "pos": (100, 34)},
-    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "bureau", "pieces": _FW, "w": 40, "h": 24, "pos": (136, 32)},
-    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "bureau", "pieces": _FW, "w": 90, "h": 24, "pos": (184, 32)},
+    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "etudes", "pieces": _FW, "w": 20, "h": 20, "pos": (520, 420)},
+    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 34, "h": 20, "pos": (58, 34)},
+    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 28, "h": 20, "pos": (100, 34)},
+    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 40, "h": 24, "pos": (136, 32)},
+    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "etudes", "pieces": _FW, "w": 90, "h": 24, "pos": (184, 32)},
     # Labo CEM
     "esd":      {"nom": "Générateur ESD", "dom": "c", "prix": 3500, "bonus": 0, "cem": 0.08, "piece": "cem", "w": 40, "h": 40, "pos": (220, 816)},
-    "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem", "w": 144, "h": 130, "pos": (214, 648)},
-    # Ligne de production CMS (bâtiment B)
-    "pickplace": {"nom": "Machine pick-and-place", "dom": "e", "prix": 30000, "bonus": 3, "piece": "cms", "w": 120, "h": 56, "pos": (30, 1350)},
-    "rayonx":   {"nom": "Inspection par rayons X", "dom": "e", "prix": 24000, "bonus": 1, "debug": 3, "piece": "cms", "w": 64, "h": 56, "pos": (170, 1350)},
-    "aoi":      {"nom": "Inspection optique automatique", "dom": "e", "prix": 12000, "bonus": 1, "debug": 1, "cem": 0.05, "piece": "cms", "w": 56, "h": 44, "pos": (250, 1350)},
+    "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem", "w": 104, "h": 104, "pos": (214, 648)},
+    # Ligne de production CMS (hangar voisin)
+    "pickplace": {"nom": "Machine pick-and-place", "dom": "e", "prix": 30000, "bonus": 3, "piece": "cms", "w": 56, "h": 96, "pos": (688, 136)},
+    "rayonx":   {"nom": "Inspection par rayons X", "dom": "e", "prix": 24000, "bonus": 1, "debug": 3, "piece": "cms", "w": 56, "h": 80, "pos": (688, 248)},
+    "aoi":      {"nom": "Inspection optique automatique", "dom": "e", "prix": 12000, "bonus": 1, "debug": 1, "cem": 0.05, "piece": "cms", "w": 56, "h": 60, "pos": (688, 344)},
 }
 for _m in MATERIEL.values():
     _m.setdefault("pieces", [_m["piece"]])
+    if _m["piece"] == "labo" and "garage" not in _m["pieces"]:
+        _m["pieces"] = ["garage"] + _m["pieces"]  # avant le déménagement, le labo tient dans le garage
 MATERIEL_DEPART = ["multi", "station", "stlink"]
 
 # Aménagement. Effet (moral, prod) compté une fois par type, même avec plusieurs exemplaires.
@@ -91,13 +104,13 @@ for _d in DECO.values():
 
 # Locaux : prix d'achat, loyer mensuel ajouté, renommée requise
 LOCAUX = {
-    "bureau":    {"nom": "Agrandir le bureau d'études", "desc": "Place pour 2 à 3 bureaux de plus", "prix": 6000, "loyer": 500, "rep": 0},
+    "bureau":    {"nom": "Emménager dans le bâtiment", "desc": "Accueil, bureau d'études (4 postes), labo élec, salle de réunion : tout le garage déménage", "prix": 6000, "loyer": 500, "rep": 0},
     "atelier":   {"nom": "Atelier méca / 3D", "desc": "Débloque impression 3D et usinage", "prix": 8000, "loyer": 400, "rep": 0},
-    "openspace": {"nom": "Open space", "desc": "Place pour 4 à 6 bureaux, coin détente possible", "prix": 20000, "loyer": 700, "rep": 3},
+    "openspace": {"nom": "Open space", "desc": "Place pour 6 bureaux, coin détente possible", "prix": 20000, "loyer": 700, "rep": 3},
     "pause":     {"nom": "Salle de pause", "desc": "Pauses plus reposantes (fatigue −5 par jour au lieu de −3), moral +5", "prix": 5000, "loyer": 300, "rep": 1},
     "cem":       {"nom": "Labo CEM", "desc": "Tests CEM gratuits et équipements dédiés", "prix": 15000, "loyer": 600, "rep": 4},
-    "plateau":   {"nom": "Plateau R&D (bâtiment B)", "desc": "Place pour 8 bureaux, un projet de plus en parallèle", "prix": 45000, "loyer": 1500, "rep": 7},
-    "cms":       {"nom": "Ligne de production CMS", "desc": "Prototypes assemblés en 1 jour, séries +50 %, machines de production", "prix": 80000, "loyer": 2200, "rep": 10},
+    "plateau":   {"nom": "Plateau R&D", "desc": "Place pour 6 bureaux, un projet de plus en parallèle", "prix": 45000, "loyer": 1500, "rep": 7},
+    "cms":       {"nom": "Hangar de production CMS", "desc": "Prototypes assemblés en 1 jour, séries +50 %, machines de production", "prix": 80000, "loyer": 2200, "rep": 10},
 }
 LOYER_BASE = 400
 # Anciennes positions des postes (sauvegardes v2) : coin haut-gauche de l'emprise

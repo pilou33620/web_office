@@ -4,7 +4,7 @@ import random
 from .extensions import ErreurJeu, Extensions, borne, requis_liste
 
 from .donnees import (ANCIENS_POSTES, CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
-                      ETABLIS, GRILLE, HORAIRES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
+                      ETABLIS, GRILLE, HORAIRES, OBSTACLES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
                       PHASES, PIECES, POSTE, POSTES, POSTES_DEPART, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
                       DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS)
 
@@ -59,7 +59,7 @@ class Jeu(Extensions):
             "employes": [], "candidats": [], "offres": [], "projets": [], "produits": [],
             "evenement": None, "journal": [], "historique": [], "faillite": False,
             "stats": {"livres": 0, "ca": 0, "produits_lances": 0},
-            "trophees": [], "bilans": [], "combos_vus": [], "objets": [],
+            "trophees": [], "bilans": [], "combos_vus": [], "objets": [], "version_plan": 2,
         })
         self.etat["exercice"] = self._exercice_vide()
         bureaux = [self._ajouter_objet("poste", x, y)["id"] for x, y in POSTES_DEPART]
@@ -96,6 +96,9 @@ class Jeu(Extensions):
             x.setdefault("projet", None)
         if "objets" not in e:
             self._migrer_v3()
+        if e.get("version_plan") != 2:  # plan garage + bâtiment carré : tout est replacé automatiquement
+            self._replacer_objets()
+            e["version_plan"] = 2
         e["version"] = 3
 
     def _migrer_v3(self):
@@ -211,8 +214,13 @@ class Jeu(Extensions):
             raise ErreurJeu("Objet inconnu.")
         return fiche
 
+    def carte(self):
+        """Le garage du fondateur, puis le bâtiment une fois le local « bureau » loué (déménagement)."""
+        return "batiment" if "bureau" in self.etat["locaux"] else "garage"
+
     def pieces_dispo(self):
-        return [k for k, p in PIECES.items() if p["local"] is None or p["local"] in self.etat["locaux"]]
+        c = self.carte()
+        return [k for k, p in PIECES.items() if p["carte"] == c and (p["local"] is None or p["local"] in self.etat["locaux"])]
 
     def _verifier_place(self, genre, x, y, ignorer=None):
         """Renvoie la pièce où l'objet tient entièrement ; refuse les chevauchements."""
@@ -220,21 +228,21 @@ class Jeu(Extensions):
             raise ErreurJeu("Paramètres invalides.")
         f = self.fiche(genre)
         w, h = f["w"], f["h"]
-        dispo = self.pieces_dispo()
-        piece = None
-        for k in f["pieces"]:
-            px, py, pw, ph = PIECES[k]["rect"]
-            if px <= x and py <= y and x + w <= px + pw and y + h <= py + ph:
-                piece = k
-                break
+        dispo, carte = self.pieces_dispo(), self.carte()
+        dedans = [k for k in f["pieces"] if PIECES[k]["rect"][0] <= x and PIECES[k]["rect"][1] <= y
+                  and x + w <= PIECES[k]["rect"][0] + PIECES[k]["rect"][2] and y + h <= PIECES[k]["rect"][1] + PIECES[k]["rect"][3]]
+        piece = next((k for k in dedans if k in dispo), None)
         if piece is None:
-            noms = ", ".join(PIECES[k]["nom"] for k in f["pieces"])
-            raise ErreurJeu(f"{f['nom']} : à placer entièrement dans {noms}.")
-        if piece not in dispo:
-            raise ErreurJeu(f"Il faut d'abord louer : {LOCAUX[PIECES[piece]['local']]['nom']}.")
+            fermee = next((k for k in dedans if PIECES[k]["carte"] == carte and PIECES[k]["local"]), None)
+            if fermee:
+                raise ErreurJeu(f"Il faut d'abord louer : {LOCAUX[PIECES[fermee]['local']]['nom']}.")
+            noms = ", ".join(PIECES[k]["nom"] for k in f["pieces"] if PIECES[k]["carte"] == carte)
+            raise ErreurJeu(f"{f['nom']} : à placer entièrement dans {noms}." if noms else f"{f['nom']} : il faut d'abord emménager dans le bâtiment.")
         if f.get("libre"):
             return piece
-        if genre not in MATERIEL and any(x < ex + ew and ex < x + w and y < ey + eh and ey < y + h for ex, ey, ew, eh in ETABLIS):
+        if any(x < ex + ew and ex < x + w and y < ey + eh and ey < y + h for ex, ey, ew, eh in OBSTACLES[carte]):
+            raise ErreurJeu("La place est prise par du mobilier fixe.")
+        if genre not in MATERIEL and any(x < ex + ew and ex < x + w and y < ey + eh and ey < y + h for ex, ey, ew, eh in ETABLIS[carte]):
             raise ErreurJeu("Pas sur l'établi : seul le petit matériel peut y être posé.")
         for o in self.etat["objets"]:
             if o["id"] == ignorer:
@@ -252,14 +260,35 @@ class Jeu(Extensions):
             if k not in self.pieces_dispo():
                 continue
             px, py, pw, ph = PIECES[k]["rect"]
-            for y in range(py + 4, py + ph - f["h"] + 1, 8):
-                for x in range(px + 4, px + pw - f["w"] + 1, 8):
+            ys, xs = range(py, py + ph - f["h"] + 1, 8), range(px, px + pw - f["w"] + 1, 8)
+            if 10 * f["w"] * f["h"] < pw * ph:  # petit objet : depuis le coin opposé, pour laisser la place aux gros
+                ys, xs = reversed(ys), list(reversed(xs))
+            for y in ys:
+                for x in xs:
                     try:
                         self._verifier_place(genre, x, y)
                         return x, y
                     except ErreurJeu:
                         pass
         raise ErreurJeu(f"Plus de place libre pour : {f['nom']}.")
+
+    def _replacer_objets(self):
+        """Replace tous les objets dans les pièces disponibles (déménagement, nouveau plan) ; les bureaux d'abord, les plus gros
+        objets ensuite. Ce qui ne tient plus est retiré du plan (l'effet d'une déco reste acquis, un employé sans bureau en retrouve un)."""
+        e = self.etat
+        anciens, e["objets"] = e["objets"], []
+        connus = [o for o in anciens if o["type"] == "poste" or o["type"] in MATERIEL or (o["type"] in DECO and not DECO[o["type"]].get("global"))]
+        for o in sorted(connus, key=lambda o: (o["type"] != "poste", o["type"] not in MATERIEL, -self.fiche(o["type"])["w"] * self.fiche(o["type"])["h"])):
+            try:
+                x, y = self._place_auto(o["type"])
+            except ErreurJeu:
+                continue
+            e["objets"].append({**o, "x": x, "y": y})
+        postes = {o["id"] for o in e["objets"] if o["type"] == "poste"}
+        for emp in e["employes"]:
+            if emp["bureau"] not in postes:
+                libres = self.bureaux_libres()
+                emp["bureau"] = libres[0] if libres else None
 
     def _ajouter_objet(self, genre, x, y):
         o = {"id": self._id(), "type": genre, "x": x, "y": y}
@@ -1150,8 +1179,12 @@ class Jeu(Extensions):
                 raise ErreurJeu("Local indisponible.")
             if e["renommee"] < l["rep"]:
                 raise ErreurJeu(f"Renommée {l['rep']} requise.")
+            if lid != "bureau" and "bureau" not in e["locaux"]:
+                raise ErreurJeu("Emménagez d'abord dans le bâtiment.")
             self._payer(l["prix"])
             e["locaux"].append(lid)
+            if lid == "bureau":
+                self._replacer_objets()  # déménagement : tout le garage part dans le bâtiment
             self._log(f"{l['nom']} : c'est fait ! Loyer +{l['loyer']} €/mois.", "bon")
         else:
             raise ErreurJeu(f"Action inconnue : {genre}")

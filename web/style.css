@@ -25,33 +25,28 @@ button:focus-visible { outline: 3px solid var(--vert); outline-offset: 2px; }
 main { position: relative; overflow: hidden; background: #7cc46a; }
 #cadre { position: absolute; inset: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 #echelle { position: relative; margin: 66px auto 200px; }
-#monde { position: absolute; left: 0; top: 0; width: 390px; height: 1530px; transform-origin: 0 0; background-color: #7cc46a; background-image: radial-gradient(#68b357 2px, transparent 2.5px); background-size: 18px 18px; }
+#cadre { touch-action: pan-x pan-y; }
+#monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; background-color: #7cc46a; }
 #monde > div { position: absolute; inset: 0; }
+#statique > svg, #dyn > svg.couche { position: absolute; left: 0; top: 0; display: block; }
+#dyn g.cliquable { cursor: pointer; }
+#dyn g.cliquable:hover { filter: brightness(1.08); }
 #persos { pointer-events: none; }
-.a { position: absolute; }
-.ol { border: 2.5px solid var(--trait); }
-.piece { position: absolute; border: 2.5px solid var(--trait); border-radius: 8px; box-shadow: inset 0 7px 0 rgba(0,0,0,.13); }
-.etiq-piece { position: absolute; padding: 1px 8px; border-radius: 10px; background: #fff7e6; color: var(--trait); border: 2px solid var(--trait); font-family: var(--titre); font-size: 11px; font-weight: 600; white-space: nowrap; }
-.objet { position: absolute; border: 2.5px solid var(--trait); box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), 0 4px 0 rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; }
-.objet > i { display: block; border: 1.5px solid var(--trait); }
-.objet.panne { filter: grayscale(1) brightness(.8); }
-.objet.panne::after { content: "!"; position: absolute; right: -8px; top: -10px; width: 18px; height: 18px; border-radius: 50%; background: var(--rouge); border: 2px solid var(--trait); color: var(--trait); font: 800 12px/14px Nunito, sans-serif; text-align: center; }
-.plante { border-radius: 50%; background: #5cb84c; box-shadow: inset -5px -5px 0 #3e8f33, 0 4px 0 rgba(0,0,0,.25); }
-.plante > i { width: 40%; height: 40%; border-radius: 50%; background: #8ad66f; border: 0; margin: -20% 0 0 -20%; }
-.verrou { position: absolute; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 40px !important; gap: 6px; text-align: center; background: rgba(30, 26, 22, .82); border: 2.5px solid var(--trait); border-radius: 8px; padding: 8px; }
+/* Lumière : soleil le jour, éclairage chaud le soir ou la nuit, ni l'un ni l'autre par mauvais temps */
+#monde .lum-soir { display: none; }
+#monde[data-soir="soir"] .lum-soir, #monde[data-soir="nuit"] .lum-soir { display: inline; }
+#monde[data-soir="soir"] .soleil, #monde[data-soir="nuit"] .soleil,
+#monde[data-meteo="pluie"] .soleil, #monde[data-meteo="orage"] .soleil, #monde[data-meteo="neige"] .soleil, #monde[data-meteo="brouillard"] .soleil { display: none; }
+.verrou { position: absolute; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 30px !important; gap: 6px; text-align: center; background: rgba(30, 26, 22, .78); border: 2.5px solid var(--trait); border-radius: 8px; padding: 8px; }
 .verrou b { font-family: var(--titre); font-weight: 600; font-size: 15px; }
 .verrou small { font-size: 12px; color: #d6dccb; }
-.poste-libre { position: absolute; z-index: 3; width: 76px; height: 58px; border: 2.5px dashed rgba(43,29,20,.55); border-radius: 8px; background: rgba(255,255,255,.18); }
+.zoom { position: absolute; right: 12px; top: 72px; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; border: 2.5px solid var(--bord); box-shadow: 0 4px 0 rgba(0,0,0,.35); }
+.zoom button { width: 42px; height: 40px; border: 0; background: var(--fond); color: var(--txt); font: 800 20px Nunito, system-ui, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.zoom button + button { border-top: 2.5px solid var(--bord); }
+#zone.amenage .zoom { top: 12px; }
 
-/* Personnages */
-.perso { position: absolute; width: 34px; height: 48px; }
-.perso .corps { position: absolute; left: 3px; top: 24px; width: 28px; height: 24px; border: 2.5px solid var(--trait); border-radius: 12px 12px 5px 5px; }
-.perso .tete { position: absolute; left: 4px; top: 4px; width: 26px; height: 24px; border: 2.5px solid var(--trait); border-radius: 50%; }
-.perso .cheveux { position: absolute; left: 3px; top: 1px; width: 28px; height: 12px; border: 2.5px solid var(--trait); border-bottom: 0; border-radius: 14px 14px 4px 4px; }
-.oeil { position: absolute; top: 9px; width: 4px; height: 5px; border-radius: 50%; background: var(--trait); }
-.oeil.g { left: 5px; } .oeil.d { left: 13px; }
-.bouche { position: absolute; left: 7px; top: 13px; width: 8px; height: 4px; border-bottom: 2px solid var(--trait); border-radius: 0 0 6px 6px; }
-.bouche.triste { top: 15px; border-bottom: 0; border-top: 2px solid var(--trait); border-radius: 6px 6px 0 0; }
+/* Personnages (dessin SVG vu de dessus, centré dans une boîte de 34 px) */
+.perso { position: absolute; width: 34px; height: 34px; }
 .perso > .anim { position: absolute; inset: 0; }
 .perso.bob > .anim { animation: bob .45s ease-in-out infinite; }
 .perso.bob2 > .anim { animation: bob .45s ease-in-out .2s infinite; }
@@ -60,11 +55,6 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #persos .bulle { left: -10px; top: -24px; }
 @keyframes marche { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-4px) rotate(5deg); } }
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-.bureau-meuble { position: absolute; z-index: 3; width: 76px; height: 34px; border: 2.5px solid var(--trait); border-radius: 7px; background: #d0955a; box-shadow: inset 0 -7px 0 #a86c38, 0 4px 0 rgba(0,0,0,.25); display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 3px; }
-.bureau-meuble .ecran { position: absolute; left: 2px; top: -18px; width: 26px; height: 22px; border: 2.5px solid var(--trait); border-radius: 5px; background: #3a4a5e; padding: 2px; }
-.bureau-meuble .ecran > i { display: block; width: 100%; height: 100%; border-radius: 2px; }
-.bureau-meuble .clavier { width: 24px; height: 6px; border: 1.5px solid var(--trait); border-radius: 2px; background: #f4f1e8; }
-.bureau-meuble .nom { font-family: var(--titre); font-size: 10px; font-weight: 600; color: var(--trait); line-height: 1; white-space: nowrap; }
 .bulle { position: absolute; z-index: 5; padding: 1px 8px; border-radius: 10px; border: 2px solid var(--trait); font-family: var(--titre); font-size: 12px; font-weight: 600; color: var(--trait); white-space: nowrap; box-shadow: 0 3px 0 rgba(0,0,0,.3); }
 .puce-prod { position: absolute; z-index: 6 !important; padding: 2px 10px; border-radius: 12px; border: 2px solid var(--trait); color: var(--trait); font-size: 12px; font-weight: 800; z-index: 2; }
 @media (prefers-reduced-motion: reduce) { .perso > .anim { animation: none !important; } #persos .perso { transition: none !important; } }
@@ -178,7 +168,6 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 .placement .btn.secondaire { background: #efe3c8; color: var(--trait); }
 .fantome { position: absolute; z-index: 9; border: 3px dashed #2f8a3a; border-radius: 6px; background: rgba(123, 224, 138, .45); pointer-events: none; }
 .fantome.invalide { border-color: #b8322a; background: rgba(255, 138, 122, .5); }
-.zone-ok { position: absolute; z-index: 1; border: 2.5px dashed rgba(47, 138, 58, .9); border-radius: 8px; background: rgba(123, 224, 138, .12); pointer-events: none; }
 .cliquable { cursor: pointer; }
 .choisi { outline: 3px solid var(--or); outline-offset: 2px; z-index: 6 !important; }
 #zone.amenage .hud-bas { display: none; }

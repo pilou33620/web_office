@@ -97,7 +97,7 @@ class TestJeu(unittest.TestCase):
 
     def test_conditions_de_travail(self):
         j = Jeu(graine=11)
-        j.etat["mois"] = 6  # juillet : canicule
+        j.etat["meteo"] = "canicule"
         _, f = j.conditions()
         self.assertAlmostEqual(f, 0.85)
         j.etat["deco"] += ["clim", "sieges"]

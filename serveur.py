@@ -16,32 +16,59 @@ from moteur import donnees
 
 RACINE = Path(__file__).resolve().parent
 WEB = RACINE / "web"
-SAUVEGARDE = RACINE / "sauvegardes" / "partie.json"
+DOSSIER = RACINE / "sauvegardes"
+EMPLACEMENTS = (1, 2, 3)
 VERROU = threading.Lock()
 
 
-def charger():
+def fichier_partie(n):
+    return DOSSIER / f"partie_{n}.json"
+
+
+def lire_partie(n):
     try:
-        jeu = Jeu(json.loads(SAUVEGARDE.read_text(encoding="utf-8")))
-        jeu.vue()  # sauvegarde abîmée ou d'une ancienne version : on repart d'une partie neuve
+        jeu = Jeu(json.loads(fichier_partie(n).read_text(encoding="utf-8")))
+        jeu.vue()  # sauvegarde abîmée ou d'une ancienne version : on la considère absente
         return jeu
     except Exception:
-        return Jeu()
+        return None
 
 
 def sauver(jeu):
-    SAUVEGARDE.parent.mkdir(exist_ok=True)
-    tmp = SAUVEGARDE.with_suffix(".tmp")
+    DOSSIER.mkdir(exist_ok=True)
+    tmp = fichier_partie(EMPLACEMENT).with_suffix(".tmp")
     tmp.write_text(json.dumps(jeu.etat, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, SAUVEGARDE)  # écriture atomique : pas de sauvegarde corrompue si coupure
+    os.replace(tmp, fichier_partie(EMPLACEMENT))  # écriture atomique : pas de sauvegarde corrompue si coupure
+    (DOSSIER / "emplacement.txt").write_text(str(EMPLACEMENT), encoding="utf-8")
 
 
-JEU = charger()
+def resume_partie(n):
+    jeu = lire_partie(n)
+    if not jeu:
+        return {"emplacement": n, "existe": False}
+    v = jeu.vue()
+    return {"emplacement": n, "existe": True, "date": v["date"], "argent": v["argent"], "annee": v["annee_jeu"],
+            "renommee": v["renommee"], "scenario": donnees.SCENARIOS[v["scenario"]]["nom"],
+            "difficulte": donnees.DIFFICULTES[v["difficulte"]]["nom"], "faillite": v["faillite"]}
+
+
+# Ancienne sauvegarde unique -> emplacement 1
+if (DOSSIER / "partie.json").exists() and not fichier_partie(1).exists():
+    os.replace(DOSSIER / "partie.json", fichier_partie(1))
+try:
+    EMPLACEMENT = int((DOSSIER / "emplacement.txt").read_text(encoding="utf-8"))
+    assert EMPLACEMENT in EMPLACEMENTS
+except (OSError, ValueError, AssertionError):
+    EMPLACEMENT = 1
+JEU = lire_partie(EMPLACEMENT) or Jeu()
 CATALOGUE = {
     "materiel": donnees.MATERIEL, "deco": donnees.DECO, "locaux": donnees.LOCAUX, "traits": donnees.TRAITS,
     "produits": donnees.PRODUITS, "domaines": donnees.NOM_DOMAINE,
     "horaires": donnees.HORAIRES, "combos": donnees.COMBOS, "trophees": donnees.TROPHEES,
     "pieces": donnees.PIECES, "etablis": donnees.ETABLIS, "poste": donnees.POSTE, "grille": donnees.GRILLE,
+    "choix_tech": donnees.CHOIX_TECH, "prix_proposes": donnees.PRIX_PROPOSES, "delais_proposes": donnees.DELAIS_PROPOSES,
+    "technos": donnees.TECHNOS, "certifs": donnees.CERTIFS, "fournisseurs": donnees.FOURNISSEURS, "prets": donnees.PRETS,
+    "scenarios": donnees.SCENARIOS, "difficultes": donnees.DIFFICULTES,
 }
 
 
@@ -65,6 +92,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
                     return self._json(500, {"ok": False, "erreur": f"Erreur interne : {ex}"})
         if chemin == "/api/catalogue":
             return self._json(200, CATALOGUE)
+        if chemin == "/api/parties":
+            with VERROU:
+                return self._json(200, {"actuelle": EMPLACEMENT, "parties": [resume_partie(n) for n in EMPLACEMENTS]})
         fichier = (WEB / (chemin.lstrip("/") or "index.html")).resolve()
         if WEB not in fichier.parents or not fichier.is_file():
             self.send_error(404)
@@ -77,7 +107,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
         self.wfile.write(corps)
 
     def do_POST(self):
-        global JEU
+        global JEU, EMPLACEMENT
         try:
             taille = int(self.headers.get("Content-Length", 0))
             if taille > 10_000:
@@ -89,8 +119,21 @@ class Gestionnaire(BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "erreur": "JSON invalide."})
         chemin = self.path.split("?")[0]
         with VERROU:
-            if chemin == "/api/nouvelle":
-                JEU = Jeu()
+            if chemin in ("/api/nouvelle", "/api/charger"):
+                n = data.get("emplacement", EMPLACEMENT)
+                if n not in EMPLACEMENTS:
+                    return self._json(200, {"ok": False, "erreur": "Emplacement inconnu.", "etat": JEU.vue()})
+                if chemin == "/api/charger":
+                    jeu = lire_partie(n)
+                    if not jeu:
+                        return self._json(200, {"ok": False, "erreur": "Emplacement vide.", "etat": JEU.vue()})
+                else:
+                    try:
+                        jeu = Jeu(scenario=data.get("scenario", "garage"), difficulte=data.get("difficulte", "normal"))
+                    except (ErreurJeu, TypeError) as ex:
+                        return self._json(200, {"ok": False, "erreur": str(ex) if isinstance(ex, ErreurJeu) else "Paramètres invalides.", "etat": JEU.vue()})
+                sauver(JEU)
+                JEU, EMPLACEMENT = jeu, n
                 sauver(JEU)
                 return self._json(200, {"ok": True, "etat": JEU.vue()})
             if chemin != "/api/action":

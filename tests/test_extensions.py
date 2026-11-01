@@ -1,0 +1,195 @@
+import json
+import unittest
+
+from moteur import ErreurJeu, Jeu
+from moteur.donnees import CONTRATS, SCENARIOS
+
+
+def jour(j, n=1):
+    for _ in range(n):
+        j.etat["evenement"] = None
+        j.etat.pop("dernier_livre", None)
+        j.etat.pop("bilan", None)
+        j._jour()
+
+
+class TestExtensions(unittest.TestCase):
+    def test_choix_techniques(self):
+        j = Jeu(graine=1)
+        o = dict(j.etat["offres"][0], total={"e": 40, "m": 20, "f": 40}, taille=100)
+        j.etat["offres"][0] = o
+        argent = j.etat["argent"]
+        j.action("signer", id=o["id"], tech={"couches": "6", "mcu": "esp32", "boitier": "injection"})
+        p = j.etat["projets"][0]
+        self.assertEqual(p["total"], {"e": 40, "m": 25, "f": 34})
+        self.assertEqual(j.etat["argent"], argent - 3000 + p["acompte"])
+        self.assertAlmostEqual(j._note_bonus(p), 0.7)
+        with self.assertRaises(ErreurJeu):
+            j.action("signer", id=j.etat["offres"][0]["id"], tech={"mcu": "nrf"})  # BLE requis
+
+    def test_negociation(self):
+        j = Jeu(graine=2)
+        self.assertEqual(j.chance_negociation(1.0, 1.0), 1.0)
+        self.assertLess(j.chance_negociation(1.3, 1.2), 0.5)
+        j.etat["argent"] = 100000
+        j.action("local", id="bureau")
+        perdus = gagnes = 0
+        for _ in range(30):
+            if not j.etat["offres"]:
+                j.etat["offres"].append(j._offre())
+            n = len(j.etat["projets"])
+            j.etat["projets"].clear()
+            j.action("signer", id=j.etat["offres"][0]["id"], prix="1.3")
+            if j.etat["projets"]:
+                gagnes += 1
+                self.assertEqual(j.etat["projets"][0]["paie"] % 10, 0)
+            else:
+                perdus += 1
+        self.assertGreater(perdus, 0)
+        self.assertGreater(gagnes, 0)
+
+    def test_recherche_et_certifications(self):
+        j = Jeu(graine=3)
+        j.etat["argent"] = 200000
+        with self.assertRaises(ErreurJeu):
+            j.action("recherche", id="ia")  # BLE d'abord
+        j.action("recherche", id="ble")
+        with self.assertRaises(ErreurJeu):
+            j.action("recherche", id="rf")  # une à la fois
+        j.action("certifier", id="ce")
+        jour(j, 30)
+        self.assertIn("ble", j.etat["technos"])
+        self.assertIn("ce", j.etat["certifs"])
+        self.assertEqual(j.bonus()["f"], 2)  # ST-Link + BLE
+        j.etat["renommee"] = 20
+        requis = {j._offre()["requis"] for _ in range(300)}
+        self.assertIn("ble", requis)
+        self.assertNotIn("rf", requis)
+
+    def test_sav_et_series(self):
+        j = Jeu(graine=4)
+        p = j._creer_projet({"nom": "Carte", "client": "DomoSud", "taille": 100, "total": {"e": 60, "m": 0, "f": 40}, "paie": 9000}, "contrat")
+        p["defauts"] = 50.0
+        j.etat["argent"] = 100000
+        j.rng.random = lambda: 0.0  # tout arrive
+        j._apres_livraison(p, 8.0, 5000)
+        self.assertEqual(len(j.etat["garanties"]), 1)
+        self.assertIsNotNone(j.etat["offre_serie"])
+        j._fin_jour_extensions()
+        self.assertEqual(j.etat["evenement"]["type"], "sav")
+        argent = j.etat["argent"]
+        j.action("evenement", choix=0)
+        self.assertLess(j.etat["argent"], argent)
+        j._fin_jour_extensions()
+        self.assertEqual(j.etat["evenement"]["type"], "serie")
+        j.action("evenement", choix=0)
+        self.assertEqual(len(j.etat["series"]), 1)
+        del j.rng.random
+
+    def test_series_rapportent(self):
+        j = Jeu(graine=5)
+        j.etat["series"].append({"nom": "X", "client": "Y", "mois": 2, "marge": 1000})
+        rec, _, _ = j._mois_extensions()
+        self.assertEqual(rec, 1000)
+        j._mois_extensions()
+        self.assertEqual(j.etat["series"], [])
+
+    def test_fournisseur_et_proto(self):
+        j = Jeu(graine=6)
+        p = j._creer_projet({"nom": "x", "taille": 100, "total": {"e": 50, "m": 20, "f": 30}}, "contrat")
+        j.etat["projets"].append(p)
+        j.action("fournisseur", id="asie")
+        p["phase"] = 2
+        j._entrer_phase(p)
+        self.assertEqual(p["phases"][2]["attente"], 6)
+        self.assertEqual(p["phases"][2]["cout"], 240)
+
+    def test_prets_et_levee(self):
+        j = Jeu(graine=7)
+        argent = j.etat["argent"]
+        j.action("emprunter", montant=10000)
+        self.assertEqual(j.etat["argent"], argent + 10000)
+        self.assertEqual(j.mensualites(), 467)
+        with self.assertRaises(ErreurJeu):
+            j.action("emprunter", montant=25000)  # plafond 20 000 € à renommée 0
+        with self.assertRaises(ErreurJeu):
+            j.action("lever")
+        j.etat["renommee"] = 6
+        j.action("lever")
+        self.assertEqual(j.etat["parts"], 0.8)
+        j.etat["prets"][0]["mois"] = 1
+        j._mois_extensions()
+        self.assertEqual(j.etat["prets"], [])
+
+    def test_chef_seminaire_stage(self):
+        j = Jeu(graine=8)
+        j.etat["argent"] = 100000
+        fondateur = j.etat["employes"][0]
+        with self.assertRaises(ErreurJeu):
+            j.action("promouvoir", id=fondateur["id"])  # 11 points seulement
+        fondateur["e"] = 8
+        j.action("promouvoir", id=fondateur["id"])
+        self.assertTrue(fondateur["chef"])
+        self.assertEqual(j._mult_chef([fondateur]), 1.08)
+        j.action("seminaire")
+        self.assertEqual(fondateur["absence"], "seminaire")
+        with self.assertRaises(ErreurJeu):
+            j.action("seminaire")
+        jour(j, 2)
+        self.assertIsNone(fondateur["absence"])
+        j.etat["evenement"] = {"type": "stage", "titre": "x", "texte": "x", "options": ["a", "b"]}
+        j.action("evenement", choix=0)
+        stagiaire = j.etat["employes"][-1]
+        self.assertEqual((stagiaire["salaire"], stagiaire["stage"]), (0, 90))
+        stagiaire["stage"] = 1
+        j.etat["evenement"] = None
+        j._fin_jour_extensions()
+        self.assertEqual(j.etat["evenement"]["type"], "fin_stage")
+        j.action("evenement", choix=0)
+        self.assertGreater(stagiaire["salaire"], 0)
+
+    def test_anniversaire_et_meteo(self):
+        j = Jeu(graine=9)
+        f = j.etat["employes"][0]
+        f["anniv"] = [j.etat["mois"], j.etat["jour"] + 1]
+        jour(j)
+        self.assertEqual(j.etat["fete"]["type"], "anniv")
+        self.assertEqual(f["lieu"], "fete")
+        meteos = set()
+        for _ in range(400):
+            jour(j)
+            meteos.add(j.etat["meteo"])
+        self.assertTrue({"soleil", "pluie", "neige"} <= meteos)
+
+    def test_scenarios_et_difficulte(self):
+        for sc in SCENARIOS:
+            for diff in ("facile", "normal", "difficile"):
+                j = Jeu(graine=10, scenario=sc, difficulte=diff)
+                jour(j, 5)
+                json.dumps(j.vue())
+        j = Jeu(graine=11, scenario="reprise", difficulte="normal")
+        self.assertEqual(len(j.etat["employes"]), 4)
+        self.assertEqual(len(j.etat["prets"]), 1)
+        j = Jeu(graine=12, scenario="iot")
+        j.etat["stats"]["produits_lances"] = 3
+        j._verifier_objectif()
+        self.assertTrue(j.etat["victoire"]["ok"])
+        self.assertTrue(j.en_pause())
+        j.action("fermer_victoire")
+        self.assertFalse(j.en_pause())
+        with self.assertRaises(ErreurJeu):
+            Jeu(scenario="inconnu")
+        j = Jeu(graine=13, difficulte="difficile")
+        j.etat["exercice"]["ca"] = 30000
+        j.etat["jours_total"] = 359
+        jour(j)
+        self.assertEqual(j.etat["bilans"][-1]["impot"], round((30000 - j.etat["bilans"][-1]["charges"]) * 0.33, -1))
+
+    def test_contrats_requis_existent(self):
+        from moteur.donnees import CERTIFS, TECHNOS
+        for c in CONTRATS:
+            self.assertTrue(c[4] is None or c[4] in TECHNOS or c[4] in CERTIFS)
+
+
+if __name__ == "__main__":
+    unittest.main()

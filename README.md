@@ -15,7 +15,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 
 ## Comment on joue
 
-- **Projets** : signez un contrat (un acompte de 30 % est versé), puis lancez le temps. Chaque projet passe par trois phases (schéma, routage PCB et pièces 3D, firmware et bring-up), un debug facultatif puis des **tests CEM** qui peuvent échouer et obliger à corriger le routage.
+- **Projets** : signez un contrat (un acompte de 30 % est versé), puis lancez le temps. Chaque projet passe par le schéma, le routage PCB et les pièces 3D, la fabrication du prototype (4 jours, 2 avec un four de refusion, payante), puis le firmware et le bring-up, un debug facultatif puis des **tests CEM** qui peuvent échouer et obliger à corriger le routage.
 - **Qualité** : le travail génère des défauts. Le matériel de debug et les « chasseurs de bugs » les éliminent. À la livraison, le client donne une **note sur 10** qui fixe le solde payé et la renommée gagnée. Le retard fait baisser la note.
 - **Produits maison** : développez votre propre produit, il se vend ensuite chaque mois selon sa note et votre renommée.
 - **Équipe** : chaque employé a des compétences (Élec, Méca 3D, Firmware), un trait (perfectionniste, rapide, créatif, sociable, râleur, chasseur de bugs, endurant), un moral et une fatigue. Ils progressent en travaillant ; on peut les former (+2 dans un domaine) ou les envoyer en congés.
@@ -28,7 +28,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Évènements** : pénuries de composants, salons pros, clients pressés, pannes, subventions, menaces de démission, ras-le-bol face aux horaires.
 - **Bilans annuels** avec impôt de 25 % sur le bénéfice, **16 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
 
-Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, et se retrouvent sur la terrasse pour les réunions de phase. Ils vont aussi demander de l'aide au collègue le plus fort de leur domaine. Leurs pauses se passent sur la terrasse, ou dans la **salle de pause** une fois louée (moral +5, meilleure récupération), avec canapé et baby-foot.
+Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, et se retrouvent sur la terrasse pour les réunions de phase. Ils vont aussi demander de l'aide au collègue le plus fort de leur domaine, et progressent grâce à lui. Leurs pauses se passent sur la terrasse, ou dans la **salle de pause** une fois louée (moral +5, meilleure récupération), avec canapé et baby-foot.
 
 Sous −5 000 € de trésorerie, c'est la faillite.
 

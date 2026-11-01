@@ -192,7 +192,11 @@ function rendreMonde() {
   const e = ETAT, h = [];
   const p = e.projets.length > 0;
   for (const id of e.materiel) if (POS[id]) h.push(objet(POS[id], id in e.pannes ? 'panne' : ''));
-  for (const id of e.deco) for (const part of DECO_POS[id] || []) h.push(objet(part));
+  for (const id of e.deco) {
+    const piece = CAT.deco[id].piece;
+    if (piece && !e.locaux.includes(piece)) continue;  // ancienne partie : déco achetée avant la salle de pause
+    for (const part of DECO_POS[id] || []) h.push(objet(part));
+  }
   for (const [lid, [x, y, w, hh]] of Object.entries(PIECES_VERROU)) {
     if (e.locaux.includes(lid)) continue;
     const l = CAT.locaux[lid];
@@ -246,7 +250,8 @@ const couleurNote = (n) => (n >= 7.5 ? '#7be08a' : n >= 5.5 ? '#ffc94d' : '#ff8a
 function etapeProjet(p) {
   if (p.etape === 'debug') return `Debug · ${dec(p.defauts)} défauts`;
   if (p.etape === 'cem') return `Tests CEM (${p.cem_jours} j)`;
-  return p.phases[p.phase].nom;
+  const ph = p.phases[p.phase];
+  return ph.attente ? `Fabrication du proto (${ph.attente} j)` : ph.nom;
 }
 
 function avancement(p) {
@@ -270,6 +275,7 @@ function encartProjet(p) {
     ${p.etape === 'travail' ? `<div class="barres">${Object.keys(ph.besoin).map((d) => barre(DN[d], ph.fait[d], ph.besoin[d], DC[d])).join('')}</div>` : ''}
     <div class="t2" style="font-size:13px;color:#b3bca5">Équipe du jour : ${equipe}</div>
     <div class="t2" style="font-size:13px;color:#b3bca5">Tests CEM : ${Math.round(p.proba_cem * 100)} % de réussite${p.frais_cem ? ` · labo externe ${eur(p.frais_cem)}` : ' · labo interne gratuit'}</div>
+    ${p.etape === 'travail' && ph.attente ? `<div class="t2" style="font-size:13px;color:#b3bca5">Les PCB sont en fabrication : retour dans ${ph.attente} j. L'équipe en profite pour chasser les défauts.</div>` : ''}
     <div class="btns">${p.etape === 'debug' ? bouton('tests_cem', p.id, 'Passer aux tests CEM') : ''}${bouton('abandonner', p.id, 'Abandonner', true, 'secondaire petit')}</div></div>`;
 }
 

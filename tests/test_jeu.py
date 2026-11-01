@@ -185,6 +185,22 @@ class TestJeu(unittest.TestCase):
                     self.assertNotEqual(x["visite"], x["id"])
         self.assertGreater(visites, 0)
 
+    def test_fabrication_prototype(self):
+        j = Jeu(graine=22)
+        p = j._creer_projet({"nom": "x", "taille": 100, "total": {"e": 50, "m": 20, "f": 30}}, "contrat")
+        noms = [ph["nom"] for ph in p["phases"]]
+        self.assertEqual(noms.index("Fabrication du prototype"), 2)
+        j.etat["projets"].append(p)
+        p["phase"] = 2
+        argent = j.etat["argent"]
+        j._entrer_phase(p)
+        self.assertEqual(p["phases"][2]["attente"], 4)
+        self.assertEqual(j.etat["argent"], argent - 400)
+        for _ in range(4):
+            self.assertEqual(p["phase"], 2)
+            j._travailler(p, j.etat["employes"], j.bonus())
+        self.assertEqual(p["phase"], 3)
+
     def test_horaires(self):
         j = Jeu(graine=17)
         base = j.efficacite(j.etat["employes"][0])

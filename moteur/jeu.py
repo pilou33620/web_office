@@ -276,6 +276,9 @@ class Jeu:
             besoin = {d: round(base["total"][d] * parts[d]) for d in DOMAINES if round(base["total"][d] * parts[d]) > 0}
             if besoin:
                 phases.append({"nom": nom, "besoin": besoin, "fait": {d: 0.0 for d in besoin}})
+            if nom == PHASES[1][0]:
+                # les PCB partent en fabrication : on attend le retour du fournisseur (durée fixée à l'entrée)
+                phases.append({"nom": "Fabrication du prototype", "besoin": {}, "fait": {}, "attente": None})
         return {
             "id": self._id(), "type": genre, "nom": base["nom"], "client": base.get("client", ""),
             "taille": base["taille"], "total": base["total"], "paie": base.get("paie", 0), "delai": base.get("delai", 0),
@@ -287,6 +290,18 @@ class Jeu:
     def _verifier_capacite(self):
         if len(self.etat["projets"]) >= self.capacite_projets():
             raise ErreurJeu(f"Vous menez déjà {self.capacite_projets()} projet(s) : agrandissez les locaux pour en mener plus.")
+
+    def _entrer_phase(self, p):
+        ph = p["phases"][p["phase"]]
+        if "attente" in ph and ph["attente"] is None:
+            maison = "four" in self.materiel_actif()  # avec un four de refusion, on assemble soi-même : plus rapide et moins cher
+            ph["attente"] = 2 if maison else 4
+            ph["cout"] = int(round((200 + p["taille"] * 2) * (0.5 if maison else 1), -1))
+            self._depenser(ph["cout"])
+            ou = "assemblé au labo" if maison else "chez le fabricant"
+            self._log(f"« {p['nom']} » : prototype {ou} (−{ph['cout']:,} €, {ph['attente']} jours).".replace(",", " "), "info")
+        else:
+            self._log(f"« {p['nom']} » : phase « {ph['nom']} ».", "info")
 
     def _lancer_cem(self, p):
         frais = self.frais_cem(p)
@@ -355,6 +370,8 @@ class Jeu:
             emp["projet_jour"] = p["id"]
         if p["etape"] == "travail":
             ph = p["phases"][p["phase"]]
+            if ph.get("attente"):
+                ph["attente"] -= 1
             for emp in actifs:
                 reste = {d: ph["besoin"][d] - ph["fait"][d] for d in ph["besoin"]}
                 doms = [d for d, r in reste.items() if r > 1e-6 and emp[d] > 0]
@@ -373,11 +390,11 @@ class Jeu:
                     p["defauts"] -= retire
                     emp["tache"], emp["gain"] = "debug", round(retire, 1)
             p["defauts"] *= 1 - min(0.3, 0.015 * (1 + 0.5 * bon["debug"]))
-            if all(ph["fait"][d] >= ph["besoin"][d] - 1e-6 for d in ph["besoin"]):
+            if not ph.get("attente") and all(ph["fait"][d] >= ph["besoin"][d] - 1e-6 for d in ph["besoin"]):
                 if p["phase"] + 1 < len(p["phases"]):
                     p["phase"] += 1
                     e["reunion"] = True
-                    self._log(f"« {p['nom']} » : phase « {p['phases'][p['phase']]['nom']} ».", "info")
+                    self._entrer_phase(p)
                 elif p["defauts"] >= 0.5:
                     p["etape"] = "debug"
                     self._log(f"« {p['nom']} » : place au debug. Passez aux tests CEM quand vous voulez.", "info")
@@ -617,7 +634,10 @@ class Jeu:
             dom = "f" if t == "debug" else t
             collegues = [x for x in e["employes"] if x is not emp and not x["absent"] and x.get("projet_jour") == emp.get("projet_jour")]
             if collegues:
-                emp["visite"] = max(collegues, key=lambda x: x[dom])["id"]
+                expert = max(collegues, key=lambda x: x[dom])
+                emp["visite"] = expert["id"]
+                if expert[dom] > emp[dom]:
+                    self._experience(emp, dom, expert[dom] - emp[dom])  # on apprend en demandant conseil
                 emp["lieu"], emp["tache_prec"] = "visite", t
                 return
         # inertie : même tâche, on reste souvent au même endroit (déplacements moins frénétiques)

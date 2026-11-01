@@ -28,7 +28,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Évènements** : pénuries de composants, salons pros, clients pressés, pannes, subventions, menaces de démission, ras-le-bol face aux horaires.
 - **Bilans annuels** avec impôt de 25 % sur le bénéfice, **16 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
 
-Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, se retrouvent sur la terrasse pour les réunions de phase et les pauses.
+Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, et se retrouvent sur la terrasse pour les réunions de phase. Ils vont aussi demander de l'aide au collègue le plus fort de leur domaine. Leurs pauses se passent sur la terrasse, ou dans la **salle de pause** une fois louée (moral +5, meilleure récupération), avec canapé et baby-foot.
 
 Sous −5 000 € de trésorerie, c'est la faillite.
 

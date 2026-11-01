@@ -48,8 +48,8 @@ const DECO_POS = {
   tableau: [[294, 32, 68, 24, '#ffffff', 4, 44, 4, '#4a8ad8', 2]],
   cafe: [[346, 64, 20, 28, '#3d3d3d', 5, 6, 6, '#ff6b5a', 3]],
   clim: [[60, 19, 44, 12, '#f4f4f4', 4, 34, 3, '#b8d8e8', 2], [250, 19, 44, 12, '#f4f4f4', 4, 34, 3, '#b8d8e8', 2]],
-  canape: [[24, 852, 84, 38, '#6aa8f0', 10, 70, 16, '#8cc0ff', 6]],
-  babyfoot: [[120, 846, 62, 48, '#7a5236', 6, 48, 34, '#5cb84c', 3]],
+  canape: [[26, 1028, 90, 36, '#6aa8f0', 10, 76, 14, '#8cc0ff', 6]],
+  babyfoot: [[100, 960, 54, 44, '#7a5236', 6, 42, 32, '#5cb84c', 3]],
   eclairage: [[96, 142, 14, 14, 'lampe'], [210, 142, 14, 14, 'lampe'], [322, 142, 14, 14, 'lampe'], [120, 470, 14, 14, 'lampe'], [280, 400, 14, 14, 'lampe'], [96, 760, 14, 14, 'lampe']],
   isolation: [[19, 66, 7, 150, '#8a6bd1', 3, 3, 130, '#a88cf0', 2], [364, 66, 7, 150, '#8a6bd1', 3, 3, 130, '#a88cf0', 2], [19, 660, 7, 200, '#8a6bd1', 3, 3, 180, '#a88cf0', 2]],
 };
@@ -58,13 +58,17 @@ const SPOTS = {
   labo: [[72, 284], [72, 352], [72, 424], [116, 440], [146, 500], [72, 500]],
   atelier: [[262, 322], [318, 326], [232, 386], [300, 390], [240, 540], [300, 540]],
   cem: [[228, 782], [290, 786], [322, 830], [250, 836]],
-  pause: [[236, 926], [276, 932], [316, 926], [256, 960], [300, 958], [196, 944]],
-  reunion: [[56, 918], [152, 918], [56, 954], [152, 954], [104, 900], [104, 972], [196, 934], [18, 936], [196, 966], [18, 966]],
+  terrasse: [[216, 932], [256, 936], [296, 932], [216, 1040], [256, 1046], [330, 1040]],
+  salle: [[28, 960], [28, 996], [128, 1010], [150, 950], [40, 1046], [130, 1048]],
+  babyfoot: [[66, 964], [154, 964]],
+  reunion: [[226, 976], [324, 976], [226, 1020], [324, 1020], [274, 946], [274, 1040], [214, 1060], [334, 1060], [174, 990], [174, 1030]],
 };
-const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?'];
+const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
+const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
 const PIECES_VERROU = {
   atelier: [197, 258, 175, 364],
   openspace: [18, 628, 175, 274],
+  pause: [18, 912, 174, 184],
   cem: [197, 628, 175, 274],
 };
 
@@ -72,13 +76,19 @@ function construireStatique() {
   const haie = Array.from({ length: 28 }, (_, i) =>
     `<div class="a" style="left:${i * 14 - 2}px;top:${i % 2 ? 1 : 3}px;width:17px;height:17px;border-radius:50%;border:2px solid #24401f;background:${i % 3 ? '#4fa043' : '#5cb84c'}"></div>`).join('');
   $('#statique').innerHTML = haie + `
-    <div class="a" style="left:-4px;top:1010px;width:398px;height:30px;background:#5d6266;border-top:3px solid #2b1d14;border-bottom:3px solid #2b1d14"></div>
-    <div class="a" style="left:0;top:1023px;width:390px;height:3px;background:repeating-linear-gradient(90deg,#ffe08a 0 18px,transparent 18px 30px)"></div>
-    <div class="a ol" style="left:14px;top:914px;width:362px;height:90px;border-radius:10px;background:repeating-linear-gradient(0deg,#c99a63 0 13px,#b8884f 13px 15px);box-shadow:0 4px 0 rgba(0,0,0,.2)"></div>
-    <div class="a ol" style="left:92px;top:938px;width:56px;height:40px;border-radius:50%;background:#f4f1e8;box-shadow:0 4px 0 rgba(0,0,0,.25)"></div>
-    <div class="a ol" style="left:226px;top:984px;width:120px;height:14px;border-radius:6px;background:#7a5236"></div>
-    <div class="a ol" style="left:340px;top:924px;width:26px;height:26px;border-radius:50%;background:#5cb84c;box-shadow:inset -4px -4px 0 #3e8f33"></div>
-    <div class="etiq-piece" style="left:24px;top:984px">Terrasse</div>
+    <div class="a" style="left:-4px;top:1118px;width:398px;height:30px;background:#5d6266;border-top:3px solid #2b1d14;border-bottom:3px solid #2b1d14"></div>
+    <div class="a" style="left:0;top:1131px;width:390px;height:3px;background:repeating-linear-gradient(90deg,#ffe08a 0 18px,transparent 18px 30px)"></div>
+    <div class="a" style="left:10px;top:906px;width:190px;height:198px;border:3px solid #2b1d14;border-radius:0 0 12px 12px;background:#7a5236;box-shadow:0 8px 0 rgba(0,0,0,.22)"></div>
+    <div class="piece" style="left:18px;top:912px;width:174px;height:184px;background-color:#f3c9a8;background-image:linear-gradient(45deg,#e8b48e 25%,transparent 25%,transparent 75%,#e8b48e 75%),linear-gradient(45deg,#e8b48e 25%,transparent 25%,transparent 75%,#e8b48e 75%);background-size:24px 24px;background-position:0 0,12px 12px"></div>
+    <div class="a ol" style="left:24px;top:918px;width:162px;height:20px;border-radius:6px;background:#a8703f;box-shadow:inset 0 -4px 0 #8a5a30"></div>
+    <div class="a ol" style="left:34px;top:921px;width:22px;height:13px;border-radius:4px;background:#d8dde3"></div>
+    <div class="a ol" style="left:150px;top:920px;width:16px;height:16px;border-radius:50%;background:#ff6b5a"></div>
+    <div class="a ol" style="left:206px;top:916px;width:170px;height:186px;border-radius:10px;background:repeating-linear-gradient(0deg,#c99a63 0 13px,#b8884f 13px 15px);box-shadow:0 4px 0 rgba(0,0,0,.2)"></div>
+    <div class="a ol" style="left:262px;top:990px;width:60px;height:42px;border-radius:50%;background:#f4f1e8;box-shadow:0 4px 0 rgba(0,0,0,.25)"></div>
+    <div class="a ol" style="left:340px;top:926px;width:26px;height:26px;border-radius:50%;background:#5cb84c;box-shadow:inset -4px -4px 0 #3e8f33"></div>
+    <div class="a ol" style="left:76px;top:1100px;width:36px;height:20px;border-top:0;background:#e6d3a8"></div>
+    <div class="etiq-piece" style="left:24px;top:1072px">Salle de pause</div>
+    <div class="etiq-piece" style="left:214px;top:1074px">Terrasse</div>
     <div class="a" style="left:10px;top:18px;width:370px;height:892px;border:3px solid #2b1d14;border-radius:12px;background:#7a5236;box-shadow:0 8px 0 rgba(0,0,0,.22)"></div>
     <div class="piece" style="left:18px;top:26px;width:354px;height:226px;background:repeating-linear-gradient(90deg,#efc488 0 16px,#e2b277 16px 18px)"></div>
     <div class="piece" style="left:18px;top:258px;width:175px;height:364px;background-color:#d3ebe2;background-image:linear-gradient(#b8d8cc 2px,transparent 2px),linear-gradient(90deg,#b8d8cc 2px,transparent 2px);background-size:24px 24px"></div>
@@ -119,21 +129,38 @@ const PERSOS = {};
 function rendrePersos() {
   const e = ETAT, p = e.projets.length > 0, cont = $('#persos'), vus = new Set(), groupes = {};
   const duree = Math.min(0.9, 0.7 / vitesse);
-  for (const emp of e.employes) {
-    if (emp.absent) continue;
-    const lieu = SPOTS[emp.lieu] ? emp.lieu : 'bureau';
+  const salle = e.locaux.includes('pause');
+  const pos = {};
+  const placer = (emp) => {
+    let lieu = emp.lieu === 'pause' ? (salle ? 'salle' : 'terrasse') : emp.lieu;
+    if (lieu === 'salle' && e.deco.includes('babyfoot') && (groupes.babyfoot || 0) < 2) lieu = 'babyfoot';
+    if (!SPOTS[lieu]) lieu = 'bureau';
     let x, y;
     if (lieu === 'bureau') { const [dx, dy] = POSTES[emp.bureau]; x = dx + 21; y = dy - 34; }
     else { const g = groupes[lieu] = (groupes[lieu] || 0) + 1; [x, y] = SPOTS[lieu][(g - 1) % SPOTS[lieu].length]; }
+    return { lieu, x, y };
+  };
+  const presents = e.employes.filter((x) => !x.absent);
+  for (const emp of presents) if (emp.lieu !== 'visite') pos[emp.id] = placer(emp);
+  for (const emp of presents) {
+    if (emp.lieu !== 'visite') continue;
+    const cible = pos[emp.visite];
+    // à côté du collègue qu'il vient voir, sinon à son propre bureau
+    pos[emp.id] = cible ? { lieu: 'visite', x: cible.x + 30, y: cible.y + (cible.lieu === 'bureau' ? 6 : 2) } : placer({ ...emp, lieu: 'bureau' });
+  }
+  for (const emp of presents) {
+    const { lieu, x, y } = pos[emp.id];
     let t = '', c = '';
     if (vue === 'moral') { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
     else if (joue && lieu === 'reunion') { t = 'Réunion'; c = '#fff7e6'; }
+    else if (joue && lieu === 'visite') { t = DEMANDES[(emp.id + e.jours_total) % DEMANDES.length]; c = '#fff7e6'; }
+    else if (joue && lieu === 'babyfoot') { t = (emp.id + e.jours_total) % 2 ? 'But !' : 'Allez !'; c = '#7be08a'; }
     else if (joue && p && 'emf'.includes(emp.tache || '_')) { t = `+${dec(emp.gain)} ${COURT[emp.tache]}`; c = DC[emp.tache]; }
     else if (joue && p && emp.tache === 'debug') { t = `−${dec(emp.gain)} bug`; c = '#ffb3a8'; }
     else if (joue && p && emp.tache === 'cem') { t = 'CEM…'; c = DC.c; }
-    else if (joue && lieu === 'pause') { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
+    else if (joue && (lieu === 'salle' || lieu === 'terrasse')) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
     else if (joue && !p) { t = 'zzz'; c = '#e8e8e8'; }
-    const html = corps(emp) + (t ? `<div class="bulle" style="background:${c}">${esc(t)}</div>` : '');
+    const html = corps(emp) + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
     let el = PERSOS[emp.id];
     if (!el) {
       el = PERSOS[emp.id] = document.createElement('div');
@@ -153,7 +180,7 @@ function rendrePersos() {
     }
     const assis = lieu === 'bureau';
     el.style.zIndex = assis ? 2 : 4;
-    const travaille = joue && p && (assis || lieu === 'labo' || lieu === 'atelier' || lieu === 'cem') && emp.tache;
+    const travaille = joue && (lieu === 'babyfoot' || (p && (assis || lieu === 'labo' || lieu === 'atelier' || lieu === 'cem' || lieu === 'visite') && emp.tache));
     el.classList.toggle('bob', !!travaille && emp.id % 2 === 0);
     el.classList.toggle('bob2', !!travaille && emp.id % 2 === 1);
     vus.add(String(emp.id));
@@ -346,8 +373,8 @@ function panneauLocaux() {
   h += Object.entries(CAT.deco).map(([id, d]) => {
     const fait = e.deco.includes(id), local = d.piece && !e.locaux.includes(d.piece);
     return ligne({
-      couleur: '#7be08a', t1: esc(d.nom), t2: `Moral +${d.moral} · ${eur(d.prix)}`, t3: [d.effet, d.piece && "Dans l'open space"].filter(Boolean).join(' · '),
-      btn: bouton('deco', id, fait ? 'Installé' : local ? 'Open space requis' : 'Acheter', !fait && !local && e.argent >= d.prix),
+      couleur: '#7be08a', t1: esc(d.nom), t2: `Moral +${d.moral} · ${eur(d.prix)}`, t3: [d.effet, d.piece && `Dans : ${CAT.locaux[d.piece].nom}`].filter(Boolean).join(' · '),
+      btn: bouton('deco', id, fait ? 'Installé' : local ? 'Local requis' : 'Acheter', !fait && !local && e.argent >= d.prix),
     });
   }).join('');
   h += `<div class="section">Conditions de travail · productivité ×${dec(e.facteur_conditions)}</div>` + (e.conditions.length
@@ -571,7 +598,7 @@ function ajusterEchelle() {
   const w = $('#cadre').clientWidth;
   const s = Math.min(2, w / 390);
   $('#echelle').style.width = 390 * s + 'px';
-  $('#echelle').style.height = 1046 * s + 'px';
+  $('#echelle').style.height = 1160 * s + 'px';
   $('#monde').style.transform = `scale(${s})`;
 }
 

@@ -11,7 +11,7 @@ python3 serveur.py            # http://localhost:8095
 python3 serveur.py --port 8080 --hote 0.0.0.0
 ```
 
-Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La partie est sauvegardée automatiquement dans `sauvegardes/partie.json`.
+Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements).
 
 ## Comment on joue
 
@@ -29,6 +29,15 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Évènements** : pénuries de composants, salons pros, clients pressés, pannes, subventions, menaces de démission, ras-le-bol face aux horaires.
 - **Bilans annuels** avec impôt de 25 % sur le bénéfice, **16 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
 
+- **Choix techniques à la signature** : nombre de couches du PCB, microcontrôleur (STM32, ESP32, nRF52), type de boîtier (impression 3D, usiné, moule d'injection). Chaque choix modifie les points à produire, le coût du proto, les chances aux tests CEM et la note.
+- **Négociation et concurrence** : au prix et au délai affichés, le client signe ; demander plus est un pari. Trois bureaux concurrents remportent aussi des appels d'offres et figurent au classement (onglet Société).
+- **Recherche et technologies** (BLE, radiofréquence, puissance, contrôle moteur, conception pour la fabrication, IA embarquée) et **certifications** (CE, ISO 9001, ISO 13485 médical, EN 9100 aéro) : elles débloquent de nouveaux contrats mieux payés et donnent des bonus.
+- **SAV et garanties** : un projet livré avec des défauts peut revenir pendant 120 jours. **Production en série** : un client satisfait peut commander une série qui rapporte chaque mois.
+- **Fournisseurs de composants** (européen, asiatique, local premium), **prêts bancaires** sur 24 mois et **levée de fonds**.
+- **Carrières** : promotion en chef de projet (+8 % de production pour son équipe), tentatives de débauchage par la concurrence, stagiaires d'école gratuits pendant 3 mois. **Vie d'équipe** : anniversaires, pots de livraison, séminaires.
+- **Météo et saisons** sur le plan (pluie, neige, orage, brouillard, canicule), ambiance du soir et de nuit quand les horaires s'allongent.
+- **Scénarios** (Le garage, Startup IoT, Sous-traitant aéro, Reprise d'entreprise), **3 niveaux de difficulté** et **3 emplacements de sauvegarde** (Journal › Parties et sauvegardes).
+
 Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, et se retrouvent sur la terrasse pour les réunions de phase. Ils vont aussi demander de l'aide au collègue le plus fort de leur domaine, et progressent grâce à lui. Leurs pauses se passent sur la terrasse, ou dans la **salle de pause** une fois louée (moral +5, meilleure récupération), avec canapé et baby-foot.
 
 Sous −5 000 € de trésorerie, c'est la faillite.
@@ -38,12 +47,13 @@ Sous −5 000 € de trésorerie, c'est la faillite.
 ```
 moteur/donnees.py   catalogues (matériel, déco, locaux, traits, contrats, produits)
 moteur/jeu.py       simulation jour par jour et actions du joueur
+moteur/extensions.py  R&D, certifications, SAV, séries, finances, carrières, météo, scénarios
 serveur.py          serveur HTTP + API JSON
 web/                interface (index.html, style.css, jeu.js)
 tests/              tests unitaires du moteur
 ```
 
-API : `GET /api/etat`, `GET /api/catalogue`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle`.
+API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle {emplacement, scenario, difficulte}`, `POST /api/charger {emplacement}`.
 
 ## Tests
 

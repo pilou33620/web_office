@@ -1,0 +1,97 @@
+"""Banc du serveur : ce qu'il sert, ce qu'il refuse, sans réseau.
+
+    python tests/banc-serveur.py
+
+Démarre le serveur en mémoire sur un port libre de 127.0.0.1, sauvegardes dans un dossier temporaire.
+"""
+import http.client
+import json
+import os
+import sys
+import tempfile
+import threading
+from pathlib import Path
+
+RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, RACINE)
+import serveur  # noqa: E402
+
+serveur.Gestionnaire.log_message = lambda *a: None      # bilan court seulement
+tmp = tempfile.TemporaryDirectory()
+serveur.DOSSIER = Path(tmp.name)
+serveur.JEU = serveur.Jeu()
+
+srv = serveur.Serveur(("127.0.0.1", 0), serveur.Gestionnaire)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+PORT = srv.server_address[1]
+
+
+def requete(chemin, hote=None, methode="GET", corps=None, entetes=None):
+    c = http.client.HTTPConnection("127.0.0.1", PORT, timeout=10)
+    c.putrequest(methode, chemin, skip_host=True)
+    c.putheader("Host", hote or "127.0.0.1:%d" % PORT)
+    for k, v in (entetes or {}).items():
+        c.putheader(k, v)
+    if corps is not None and "Content-Length" not in (entetes or {}):
+        c.putheader("Content-Length", str(len(corps)))
+    c.endheaders()
+    if corps:
+        c.send(corps)
+    r = c.getresponse()
+    lu = r.read()
+    c.close()
+    return r.status, lu, r
+
+
+def action(corps, entetes=None):
+    return requete("/api/action", methode="POST", corps=corps, entetes={"X-WEB_OFFICE": "1", **(entetes or {})})
+
+
+essais = echecs = 0
+
+
+def verifier(nom, obtenu, attendu):
+    global essais, echecs
+    essais += 1
+    if obtenu != attendu:
+        echecs += 1
+        print("ECHEC %s : attendu %r, obtenu %r" % (nom, attendu, obtenu))
+
+
+# --- Fichiers servis et refusés ---------------------------------------------
+for chemin, attendu in [
+    ("/", 200), ("/index.html", 200), ("/jeu.js", 200), ("/style.css", 200),
+    ("/api/etat", 200), ("/api/catalogue", 200), ("/api/parties", 200),
+    ("/.git/config", 404), ("/.gitignore", 404), ("/serveur.py", 404), ("/appairage.py", 404),
+    ("/../serveur.py", 404), ("/%2e%2e/serveur.py", 404), ("/.env", 404), ("/README.md", 404),
+    ("/moteur/jeu.py", 404), ("/sauvegardes/partie_1.json", 404), ("/tests/banc-serveur.py", 404),
+    ("/web/index.html", 404), ("/api/inconnue", 404),
+]:
+    verifier("GET " + chemin, requete(chemin)[0], attendu)
+verifier("HEAD /.git/config", requete("/.git/config", methode="HEAD")[0], 404)
+verifier("Host étranger", requete("/", "piege.example:8793")[0], 403)
+verifier("Host étranger sur l'API", requete("/api/etat", "piege.example:8793")[0], 403)
+verifier("Host IP locale", requete("/", "192.168.1.20:8793")[0], 200)
+_, _, r = requete("/")
+verifier("en-têtes", (r.getheader("X-Frame-Options"), r.getheader("X-Content-Type-Options"), r.getheader("Cache-Control"),
+                      "frame-ancestors 'self'" in (r.getheader("Content-Security-Policy") or "")),
+         ("SAMEORIGIN", "nosniff", "no-store, max-age=0", True))
+verifier("type de jeu.js", requete("/jeu.js")[2].getheader("Content-Type"), "text/javascript; charset=utf-8")
+
+# --- POST : en-tête maison, taille, JSON ------------------------------------
+verifier("POST sans X-WEB_OFFICE", requete("/api/action", methode="POST", corps=b"{}")[0], 403)
+verifier("POST trop grand", action(b"{}", {"Content-Length": "999999"})[0], 413)
+verifier("POST Content-Length invalide", action(b"{}", {"Content-Length": "abc"})[0], 413)
+verifier("POST JSON invalide", action(b"{pas du json")[0], 400)
+verifier("POST JSON non objet", action(b"[1, 2]")[0], 400)
+statut, corps, _ = action(json.dumps({"genre": "inconnu"}).encode())
+verifier("action inconnue : refus propre", (statut, json.loads(corps)["ok"]), (200, False))
+statut, corps, _ = requete("/api/nouvelle", methode="POST", corps=b'{"emplacement": 2}', entetes={"X-WEB_OFFICE": "1"})
+verifier("nouvelle partie", (statut, json.loads(corps)["ok"]), (200, True))
+verifier("sauvegarde dans le dossier des données", (Path(tmp.name) / "partie_2.json").is_file(), True)
+statut, corps, _ = requete("/api/charger", methode="POST", corps=b'{"emplacement": 9}', entetes={"X-WEB_OFFICE": "1"})
+verifier("emplacement inconnu", json.loads(corps)["ok"], False)
+
+srv.shutdown()
+print("OK (%d vérifications)" % essais if not echecs else "%d ECHEC(S) sur %d" % (echecs, essais))
+sys.exit(1 if echecs else 0)

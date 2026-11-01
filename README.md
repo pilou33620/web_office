@@ -7,9 +7,17 @@ Moteur en Python (bibliothèque standard uniquement), interface web cartoon en v
 ## Lancer le jeu
 
 ```bash
-python3 serveur.py            # http://localhost:8095
-python3 serveur.py --port 8080 --hote 0.0.0.0
+python3 serveur.py            # http://127.0.0.1:8793 et réseau local avec code d'appairage
+python3 serveur.py --local    # ce poste seulement, sans code
 ```
+
+Options : `--port N` (8793 par défaut ; le premier port libre au-delà si pris), `--local`, `--sans-navigateur`, `--sans-pause`, `--sans-maj` (pas de vérification GitHub au démarrage). Sans `--sans-maj`, le jeu fait un `git pull --ff-only` au démarrage s'il y a du nouveau, puis redémarre.
+
+Le jeu figure aussi dans **web_launcher** (port 8793) ; c'est alors le launcher qui le met à jour.
+
+### Utiliser depuis un autre appareil
+
+Ouvrir l'adresse « réseau » affichée dans le terminal (IP du poste, en HTTPS). La première fois, l'appareil demande le **code d'appairage** à 6 chiffres affiché dans le terminal (ou sur la carte du launcher) ; il est ensuite reconnu par tous les web tools du poste. Pour éviter l'alerte de certificat, installer la CA du poste depuis `/appairage/ca.pem` (instructions dans le terminal). Une IP publique est toujours refusée : à distance, passer par Tailscale.
 
 Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements).
 
@@ -50,13 +58,16 @@ moteur/jeu.py       simulation jour par jour et actions du joueur
 moteur/extensions.py  R&D, certifications, SAV, séries, finances, carrières, météo, scénarios
 serveur.py          serveur HTTP + API JSON
 web/                interface (index.html, style.css, jeu.js)
-tests/              tests unitaires du moteur
+tests/              tests unitaires du moteur, banc du serveur
+appairage.py        sécurité réseau, copie identique de web_suite/lanceur/appairage.py
 ```
 
-API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle {emplacement, scenario, difficulte}`, `POST /api/charger {emplacement}`.
+API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle {emplacement, scenario, difficulte}`, `POST /api/charger {emplacement}`. Les POST exigent l'en-tête `X-WEB_OFFICE: 1`.
 
 ## Tests
 
 ```bash
-python3 -m unittest -q
+python3 -m unittest -q          # moteur
+python3 tests/banc-serveur.py   # serveur : fichiers servis, Host, en-tête, tailles
+python3 appairage.py            # code, jeton, cookie
 ```

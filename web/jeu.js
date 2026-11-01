@@ -665,7 +665,7 @@ let signature = null, parties = null;
 
 // ---------------------------------------------------------------- échanges serveur
 async function api(chemin, corps) {
-  const r = await fetch(chemin, corps ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) } : {});
+  const r = await fetch(chemin, corps ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WEB_OFFICE': '1' }, body: JSON.stringify(corps) } : {});
   if (!r.ok) throw new Error('Serveur injoignable');
   return r.json();
 }

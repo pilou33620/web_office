@@ -39,8 +39,8 @@ DECO = {
     "sieges":  {"nom": "Sièges ergonomiques", "prix": 1500, "moral": 3, "prod": 8, "effet": "+8 % de productivité"},
     "eclairage": {"nom": "Éclairage LED", "prix": 800, "moral": 2, "prod": 4, "effet": "+4 % de productivité"},
     "isolation": {"nom": "Isolation phonique", "prix": 3000, "moral": 2, "effet": "Supprime le malus de bruit"},
-    "canape":  {"nom": "Coin détente", "prix": 900, "moral": 6, "piece": "openspace"},
-    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "piece": "openspace"},
+    "canape":  {"nom": "Canapé", "prix": 900, "moral": 6, "piece": "pause"},
+    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "piece": "pause"},
 }
 
 # Locaux : prix d'achat, loyer mensuel ajouté, renommée requise
@@ -48,6 +48,7 @@ LOCAUX = {
     "bureau":    {"nom": "Agrandir le bureau d'études", "desc": "4 postes de travail de plus", "prix": 6000, "loyer": 500, "rep": 0},
     "atelier":   {"nom": "Atelier méca / 3D", "desc": "Débloque impression 3D et usinage", "prix": 8000, "loyer": 400, "rep": 0},
     "openspace": {"nom": "Open space", "desc": "4 postes de plus et un coin détente", "prix": 20000, "loyer": 700, "rep": 3},
+    "pause":     {"nom": "Salle de pause", "desc": "Pauses plus reposantes (fatigue −5 par jour au lieu de −3), moral +5", "prix": 5000, "loyer": 300, "rep": 1},
     "cem":       {"nom": "Labo CEM", "desc": "Tests CEM gratuits et équipements dédiés", "prix": 15000, "loyer": 600, "rep": 4},
 }
 LOYER_BASE = 400

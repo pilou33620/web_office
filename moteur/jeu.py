@@ -172,7 +172,7 @@ class Jeu:
 
     def moral_global(self):
         e = self.etat
-        m = 60 + sum(DECO[d]["moral"] for d in e["deco"]) + self.horaires()["moral"]
+        m = 60 + sum(DECO[d]["moral"] for d in e["deco"]) + self.horaires()["moral"] + 5 * ("pause" in e["locaux"])
         m += sum(TRAITS[x["trait"]].get("moral", 0) for x in e["employes"])
         m -= max(0, len(e["employes"]) - 4) * 1.5
         return borne(m, 20, 95)
@@ -570,7 +570,7 @@ class Jeu:
             elif emp["tache"]:
                 emp["fatigue"] = min(50, emp["fatigue"] + 1.2 * trait.get("fatigue", 1.0) * h["fatigue"])
             else:
-                emp["fatigue"] = max(0, emp["fatigue"] - 3)
+                emp["fatigue"] = max(0, emp["fatigue"] - (5 if "pause" in e["locaux"] else 3))
         for pid in list(e["pannes"]):
             e["pannes"][pid] -= 1
             if e["pannes"][pid] <= 0:
@@ -610,9 +610,18 @@ class Jeu:
         elif t == "cem":
             lieu = "cem" if "cem" in e["locaux"] and r.random() < 0.35 else ("pause" if r.random() < 0.3 else "bureau")
         else:
-            lieu = "pause" if r.random() < 0.6 else "bureau"
+            lieu = "pause" if r.random() < 0.75 else "bureau"
+        emp["visite"] = None
+        if t in ("e", "m", "f", "debug") and lieu != "reunion" and r.random() < 0.12:
+            # va demander conseil au collègue le plus fort du domaine, sur le même projet
+            dom = "f" if t == "debug" else t
+            collegues = [x for x in e["employes"] if x is not emp and not x["absent"] and x.get("projet_jour") == emp.get("projet_jour")]
+            if collegues:
+                emp["visite"] = max(collegues, key=lambda x: x[dom])["id"]
+                emp["lieu"], emp["tache_prec"] = "visite", t
+                return
         # inertie : même tâche, on reste souvent au même endroit (déplacements moins frénétiques)
-        if emp.get("lieu") not in (None, "reunion") and lieu != "reunion" and emp.get("tache_prec") == t and r.random() < 0.6:
+        if emp.get("lieu") not in (None, "reunion", "visite") and lieu != "reunion" and emp.get("tache_prec") == t and r.random() < 0.6:
             lieu = emp["lieu"]
         emp["lieu"], emp["tache_prec"] = lieu, t
 
@@ -881,7 +890,7 @@ class Jeu:
             if not d or did in e["deco"]:
                 raise ErreurJeu("Aménagement indisponible.")
             if d.get("piece") and d["piece"] not in e["locaux"]:
-                raise ErreurJeu("Il faut d'abord louer l'open space.")
+                raise ErreurJeu(f"Il faut d'abord louer : {LOCAUX[d['piece']]['nom']}.")
             self._payer(d["prix"])
             e["deco"].append(did)
             self._log(f"{d['nom']} installé : le moral remonte.", "bon")

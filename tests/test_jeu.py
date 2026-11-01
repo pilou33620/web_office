@@ -115,7 +115,7 @@ class TestJeu(unittest.TestCase):
             j._jour()
             lieux.add(j.etat["employes"][0]["lieu"])
         self.assertIn("reunion", lieux)
-        self.assertTrue(lieux <= {"bureau", "labo", "atelier", "cem", "pause", "reunion"})
+        self.assertTrue(lieux <= {"bureau", "labo", "atelier", "cem", "pause", "reunion", "visite"})
         self.assertGreater(len(lieux), 2)
 
     def test_abandon_rend_acompte(self):
@@ -164,6 +164,26 @@ class TestJeu(unittest.TestCase):
         j.action("affecter", id=j.etat["employes"][1]["id"], projet=None)
         with self.assertRaises(ErreurJeu):
             j.action("affecter", id=j.etat["employes"][1]["id"], projet=99999)
+
+    def test_salle_de_pause_et_visites(self):
+        j = Jeu(graine=21)
+        j.etat["argent"], j.etat["renommee"] = 100000, 1
+        moral = j.moral_global()
+        j.action("local", id="pause")
+        self.assertEqual(j.moral_global(), moral + 5)
+        j.action("deco", id="babyfoot")
+        j.action("embaucher", id=j.etat["candidats"][0]["id"])
+        j.action("signer", id=j.etat["offres"][0]["id"])
+        visites = 0
+        for _ in range(80):
+            j.etat["evenement"] = None
+            j.etat.pop("dernier_livre", None)
+            j._jour()
+            for x in j.etat["employes"]:
+                if x["lieu"] == "visite":
+                    visites += 1
+                    self.assertNotEqual(x["visite"], x["id"])
+        self.assertGreater(visites, 0)
 
     def test_horaires(self):
         j = Jeu(graine=17)

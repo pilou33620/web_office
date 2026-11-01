@@ -438,13 +438,13 @@ function panneauSociete() {
   const obj = e.progres_objectif;
   if (obj) h += `<div class="encart"><h3>${esc(obj.scenario)}</h3><div class="t2" style="font-size:14px">${esc(obj.texte)}</div><div class="t2" style="font-size:13px;color:#b3bca5">${e.victoire ? esc(e.victoire.texte) : `Encore ${obj.mois_restants} mois`}</div></div>`;
   h += `<div class="section">Recherche et technologies</div>` + Object.entries(CAT.technos).map(([id, f]) => rechercheLigne('tech', id, f, e.technos)).join('');
-  h += `<div class="section">Certifications · entretien ${eur(150)} / mois chacune</div>` + Object.entries(CAT.certifs).map(([id, f]) => rechercheLigne('certif', id, f, e.certifs)).join('');
+  h += `<div class="section">Certifications · entretien ${eur(CAT.entretien_certif)} / mois chacune</div>` + Object.entries(CAT.certifs).map(([id, f]) => rechercheLigne('certif', id, f, e.certifs)).join('');
   h += `<div class="section">Fournisseur de composants</div>` + Object.entries(CAT.fournisseurs).map(([id, f]) => ligne({
     couleur: e.fournisseur === id ? '#ffc94d' : '#3a4535', t1: esc(f.nom), t2: esc(f.desc),
     btn: bouton('fournisseur', id, e.fournisseur === id ? 'Actuel' : 'Choisir', e.fournisseur !== id, 'petit'),
   })).join('');
   h += `<div class="section">Finances</div><div class="stat" style="margin-top:8px"><span>Dette restante</span><b>${eur(e.dette)}</b><span>Mensualités</span><b>${eur(e.mensualites)}</b><span>Plafond bancaire</span><b>${eur(e.plafond_pret)}</b><span>Capital détenu</span><b>${Math.round(e.parts * 100)} %</b></div>
-    <div class="btns">${CAT.prets.map((m) => bouton('emprunter', '', `Emprunter ${eur(m)}`, true, 'petit secondaire', `data-montant="${m}"`)).join('')}</div>
+    <div class="btns">${CAT.prets.map((m) => bouton('emprunter', '', `Emprunter ${eur(m)}`, e.dette + m * 1.12 <= e.plafond_pret * 1.12, 'petit secondaire', `data-montant="${m}"`)).join('')}${e.prets.length ? bouton('rembourser', '', 'Rembourser par anticipation', true, 'petit') : ''}</div>
     <div class="t2" style="font-size:12px;color:#b3bca5;margin-top:4px">Remboursement sur 24 mois, taux 6 % par an.</div>`;
   h += ligne({ couleur: '#b08af0', t1: 'Levée de fonds', t2: e.parts < 1 ? 'Déjà réalisée' : `+${eur(e.levee_possible)} contre 20 % du capital (score final ×0,8)`, t3: e.renommee < 5 ? 'Renommée 5 requise' : '',
     btn: bouton('lever', '', 'Lever', e.parts >= 1 && e.renommee >= 5, 'petit') });
@@ -626,7 +626,7 @@ function rendreModale() {
   if (h && etaitCachee) $('#modale-contenu button')?.focus();
 }
 
-const chanceNego = (prix, delai) => Math.max(0.05, Math.min(1, 1 - 1.8 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * ETAT.renommee));
+const chanceNego = (prix, delai) => Math.max(0.05, Math.min(1, 1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * ETAT.renommee));
 function modaleSignature() {
   const e = ETAT, sg = signature;
   const cible = sg.genre === 'signer' ? e.offres.find((o) => o.id === sg.id) : CAT.produits.find((x) => x.id === sg.id);
@@ -636,7 +636,11 @@ function modaleSignature() {
     return `<button type="button" data-act="sig-opt" data-cle="${cle}" data-id="${k}" class="${val === k ? 'actif' : ''}" style="${val === k ? 'background:#ffc94d' : ''}" ${bloque ? 'disabled' : ''}>${esc(o.nom || o)}</button>`;
   }).join('')}</div>${desc ? `<p style="font-size:13px">${esc(desc)}</p>` : ''}`;
   let h = `<h2 id="modale-titre">${esc(cible.nom)}</h2><p>${sg.genre === 'signer' ? `${esc(cible.client)} · ${eur(cible.paie)} · ${cible.delai} j` : `Produit maison · prototype ${eur(cible.cout)}`}</p>`;
-  for (const [cle, cat] of Object.entries(CAT.choix_tech)) h += groupe(cat.nom, cle, sg.tech[cle], cat.options, cat.options[sg.tech[cle]].desc);
+  const sansMeca = sg.genre === 'signer' ? cible.total.m === 0 : cible.rep[1] === 0;
+  for (const [cle, cat] of Object.entries(CAT.choix_tech)) {
+    if (cle === 'boitier' && sansMeca) { h += `<div class="section" style="margin-top:6px">${esc(cat.nom)}</div><p style="font-size:13px">Pas de partie mécanique sur ce projet.</p>`; continue; }
+    h += groupe(cat.nom, cle, sg.tech[cle], cat.options, cat.options[sg.tech[cle]].desc);
+  }
   if (sg.genre === 'signer') {
     const ch = chanceNego(Number(sg.prix), Number(sg.delai));
     h += groupe('Prix demandé', 'prix', sg.prix, CAT.prix_proposes) + groupe('Délai proposé', 'delai', sg.delai, CAT.delais_proposes);
@@ -703,7 +707,7 @@ function boucle() {
         toast(err.message);
       }
       envoi = false;
-      if (ETAT.evenement || ETAT.faillite || ETAT.dernier_livre || ETAT.bilan || (ETAT.fin && !ETAT.fin.vue) || (ETAT.victoire && !ETAT.victoire.vue)) joue = false;
+      if (ETAT.evenement || ETAT.faillite || ETAT.dernier_livre || ETAT.bilan || (ETAT.fin && !ETAT.fin.vue) || (ETAT.victoire && !ETAT.victoire.vue) || signature || parties) joue = false;
       rendre();
     }
     boucle();
@@ -759,6 +763,7 @@ document.addEventListener('click', async (ev) => {
       return rendre();
     }
     case 'sig-ouvrir': {
+      joue = false;
       const tech = Object.fromEntries(Object.entries(CAT.choix_tech).map(([k, c]) => [k, c.defaut]));
       signature = { genre: b.dataset.genre, id, tech, prix: '1.0', delai: '1.0' };
       return rendre();

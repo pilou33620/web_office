@@ -64,7 +64,7 @@ DECO = {
     "cafe":     {"nom": "Machine à café", "prix": 600, "moral": 7, "w": 20, "h": 28, "pos": (346, 64)},
     "fontaine": {"nom": "Fontaine à eau", "prix": 300, "moral": 2, "w": 18, "h": 22, "multiple": True},
     "distrib":  {"nom": "Distributeur de snacks", "prix": 700, "moral": 3, "w": 30, "h": 24},
-    "clim":     {"nom": "Climatisation", "prix": 2500, "moral": 4, "w": 44, "h": 12, "libre": True, "effet": "Supprime le malus de canicule (juin à août)", "pos": (60, 20)},
+    "clim":     {"nom": "Climatisation", "prix": 2500, "moral": 4, "w": 44, "h": 12, "libre": True, "effet": "Supprime le malus en cas de canicule", "pos": (60, 20)},
     "biblio":   {"nom": "Bibliothèque de datasheets", "prix": 800, "moral": 1, "prod": 2, "w": 64, "h": 16, "effet": "+2 % de productivité"},
     "armoire":  {"nom": "Armoire à composants", "prix": 1200, "moral": 0, "prod": 3, "w": 44, "h": 22, "effet": "+3 % de productivité"},
     "imprimante": {"nom": "Imprimante de bureau", "prix": 400, "moral": 0, "prod": 1, "w": 28, "h": 22, "effet": "+1 % de productivité"},
@@ -149,9 +149,9 @@ PRIMES = {"medical": 1.3, "aero": 1.4}
 # Choix techniques faits à la signature d'un projet
 CHOIX_TECH = {
     "couches": {"nom": "Couches du PCB", "defaut": "4", "options": {
-        "2": {"nom": "2 couches", "desc": "Proto moins cher, CEM plus difficile", "proto": 0.8, "cem": -0.08},
+        "2": {"nom": "2 couches", "desc": "Proto −40 % et 1 jour de moins, CEM plus difficile", "proto": 0.6, "jours": -1, "cem": -0.08},
         "4": {"nom": "4 couches", "desc": "Le bon compromis"},
-        "6": {"nom": "6 couches", "desc": "Proto cher, CEM facile, note +0,2", "proto": 1.6, "cem": 0.10, "note": 0.2},
+        "6": {"nom": "6 couches", "desc": "Proto ×2,5 et 2 jours de plus, CEM facile, note +0,2", "proto": 2.5, "jours": 2, "cem": 0.10, "note": 0.2},
     }},
     "mcu": {"nom": "Microcontrôleur", "defaut": "stm32", "options": {
         "stm32": {"nom": "STM32", "desc": "Polyvalent et bien connu"},
@@ -187,7 +187,7 @@ ENTRETIEN_CERTIF = 150  # € par mois et par certification (audits de suivi)
 
 FOURNISSEURS = {
     "europe": {"nom": "Distributeur européen", "desc": "Fiable, prix standard", "proto": 1.0, "jours": 0, "defauts": 1.0, "serie": 1.0, "risque": 0.0},
-    "asie":   {"nom": "Grossiste asiatique", "desc": "Protos −40 %, +2 jours, risque de contrefaçons et de ruptures", "proto": 0.6, "jours": 2, "defauts": 1.15, "serie": 1.1, "risque": 0.12},
+    "asie":   {"nom": "Grossiste asiatique", "desc": "Protos −40 %, +2 jours, risque de contrefaçons et de ruptures", "proto": 0.6, "jours": 2, "defauts": 1.08, "serie": 1.1, "risque": 0.05},
     "local":  {"nom": "Fabricant local premium", "desc": "Protos +30 %, 1 jour de moins, moins de défauts", "proto": 1.3, "jours": -1, "defauts": 0.9, "serie": 0.95, "risque": 0.0},
 }
 PRETS = [10000, 25000, 50000]
@@ -195,17 +195,17 @@ TAUX_PRET = 0.06  # par an, sur 24 mois
 
 SCENARIOS = {
     "garage":  {"nom": "Le garage", "desc": "Partir de zéro, seul avec 15 000 €. Objectif libre : 20 ans pour devenir une légende."},
-    "iot":     {"nom": "Startup IoT", "desc": "Vous maîtrisez déjà le BLE. Objectif : lancer 3 produits maison en 5 ans.",
-                "argent": 25000, "technos": ["ble"], "renommee": 1, "objectif": {"type": "produits", "n": 3, "ans": 5}},
-    "aero":    {"nom": "Sous-traitant aéro", "desc": "Certifié ISO 9001 dès le départ. Objectif : obtenir l'EN 9100 et 25 de renommée en 8 ans.",
-                "argent": 40000, "certifs": ["iso"], "renommee": 3, "objectif": {"type": "aero", "n": 25, "ans": 8}},
-    "reprise": {"nom": "Reprise d'entreprise", "desc": "Vous rachetez un bureau de 4 personnes… et son prêt de 60 000 €. Objectif : 200 000 € de trésorerie en 6 ans, prêt remboursé.",
-                "argent": 20000, "employes": 3, "locaux": ["bureau"], "pret": 60000, "objectif": {"type": "tresorerie", "n": 200000, "ans": 6}},
+    "iot":     {"nom": "Startup IoT", "desc": "Vous maîtrisez déjà le BLE. Objectif : lancer 4 produits maison en 2 ans.",
+                "argent": 25000, "technos": ["ble"], "renommee": 1, "objectif": {"type": "produits", "n": 4, "ans": 2}},
+    "aero":    {"nom": "Sous-traitant aéro", "desc": "Certifié ISO 9001 dès le départ. Objectif : obtenir l'EN 9100 et 30 de renommée en 4 ans.",
+                "argent": 40000, "certifs": ["iso"], "renommee": 3, "objectif": {"type": "aero", "n": 30, "ans": 4}},
+    "reprise": {"nom": "Reprise d'entreprise", "desc": "Vous rachetez un bureau de 4 personnes… et son prêt de 60 000 €. Objectif : 300 000 € de trésorerie en 4 ans, prêt remboursé.",
+                "argent": 20000, "employes": 3, "locaux": ["bureau"], "pret": 60000, "objectif": {"type": "tresorerie", "n": 300000, "ans": 4}},
 }
 DIFFICULTES = {
     "facile":    {"nom": "Détente", "argent": 1.6, "impot": 0.15, "attente": -0.5, "paie": 1.1},
     "normal":    {"nom": "Normal", "argent": 1.0, "impot": 0.25, "attente": 0.0, "paie": 1.0},
-    "difficile": {"nom": "Expert", "argent": 0.6, "impot": 0.33, "attente": 0.5, "paie": 0.92},
+    "difficile": {"nom": "Expert", "argent": 0.6, "impot": 0.33, "attente": 1.0, "paie": 0.82},
 }
 SAISONS = ["hiver", "hiver", "printemps", "printemps", "printemps", "ete", "ete", "ete", "automne", "automne", "automne", "hiver"]
 METEO = {  # probabilités par saison

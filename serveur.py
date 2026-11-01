@@ -68,7 +68,7 @@ CATALOGUE = {
     "pieces": donnees.PIECES, "etablis": donnees.ETABLIS, "poste": donnees.POSTE, "grille": donnees.GRILLE,
     "choix_tech": donnees.CHOIX_TECH, "prix_proposes": donnees.PRIX_PROPOSES, "delais_proposes": donnees.DELAIS_PROPOSES,
     "technos": donnees.TECHNOS, "certifs": donnees.CERTIFS, "fournisseurs": donnees.FOURNISSEURS, "prets": donnees.PRETS,
-    "scenarios": donnees.SCENARIOS, "difficultes": donnees.DIFFICULTES,
+    "scenarios": donnees.SCENARIOS, "difficultes": donnees.DIFFICULTES, "entretien_certif": donnees.ENTRETIEN_CERTIF,
 }
 
 
@@ -121,7 +121,7 @@ class Gestionnaire(BaseHTTPRequestHandler):
         with VERROU:
             if chemin in ("/api/nouvelle", "/api/charger"):
                 n = data.get("emplacement", EMPLACEMENT)
-                if n not in EMPLACEMENTS:
+                if type(n) is not int or n not in EMPLACEMENTS:
                     return self._json(200, {"ok": False, "erreur": "Emplacement inconnu.", "etat": JEU.vue()})
                 if chemin == "/api/charger":
                     jeu = lire_partie(n)

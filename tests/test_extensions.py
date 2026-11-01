@@ -89,7 +89,7 @@ class TestExtensions(unittest.TestCase):
     def test_series_rapportent(self):
         j = Jeu(graine=5)
         j.etat["series"].append({"nom": "X", "client": "Y", "mois": 2, "marge": 1000})
-        rec, _, _ = j._mois_extensions()
+        rec, _, _, _ = j._mois_extensions()
         self.assertEqual(rec, 1000)
         j._mois_extensions()
         self.assertEqual(j.etat["series"], [])
@@ -103,6 +103,13 @@ class TestExtensions(unittest.TestCase):
         j._entrer_phase(p)
         self.assertEqual(p["phases"][2]["attente"], 6)
         self.assertEqual(p["phases"][2]["cout"], 240)
+        j.etat["argent"] = 100000
+        j.etat["prets"].append({"montant": 24000, "mensualite": 1120, "mois": 24})
+        argent, charges = j.etat["argent"], j.etat["exercice"]["charges"]
+        _, dep, _, capital = j._mois_extensions()
+        self.assertEqual((capital, dep), (1000, 120))  # seuls les intérêts sont des charges
+        j.action("rembourser")
+        self.assertEqual(j.etat["argent"], argent - 23000)
 
     def test_prets_et_levee(self):
         j = Jeu(graine=7)
@@ -171,7 +178,7 @@ class TestExtensions(unittest.TestCase):
         self.assertEqual(len(j.etat["employes"]), 4)
         self.assertEqual(len(j.etat["prets"]), 1)
         j = Jeu(graine=12, scenario="iot")
-        j.etat["stats"]["produits_lances"] = 3
+        j.etat["stats"]["produits_lances"] = 4
         j._verifier_objectif()
         self.assertTrue(j.etat["victoire"]["ok"])
         self.assertTrue(j.en_pause())

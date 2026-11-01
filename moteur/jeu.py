@@ -324,7 +324,7 @@ class Jeu(Extensions):
 
     def frais_structure(self):
         """Comptable, assurances, licences logicielles… : croît plus vite que l'effectif (coordination)."""
-        n = len([x for x in self.etat["employes"] if not x.get("fondateur")])
+        n = len([x for x in self.etat["employes"] if not x.get("fondateur") and not x.get("stage")])
         return 400 * n + 50 * n * n
 
     def salaires(self):
@@ -413,7 +413,7 @@ class Jeu(Extensions):
         ph = p["phases"][p["phase"]]
         if "attente" in ph and ph["attente"] is None:
             maison = "four" in self.materiel_actif()  # avec un four de refusion, on assemble soi-même : plus rapide et moins cher
-            ph["attente"] = max(1, (2 if maison else 4) + FOURNISSEURS[self.etat["fournisseur"]]["jours"])
+            ph["attente"] = max(1, (2 if maison else 4) + FOURNISSEURS[self.etat["fournisseur"]]["jours"] + sum(self._choix_effets(p, "jours")))
             ph["cout"] = int(round((200 + p["taille"] * 2) * (0.5 if maison else 1) * self._facteur_proto(p), -1))
             self._depenser(ph["cout"])
             ou = "assemblé au labo" if maison else "chez le fabricant"
@@ -597,7 +597,7 @@ class Jeu(Extensions):
         if emp["xp"][dom] >= seuil and emp[dom] < 15:
             emp["xp"][dom] -= seuil
             emp[dom] += 1
-            if not emp.get("fondateur"):
+            if not emp.get("fondateur") and not emp.get("stage"):
                 emp["salaire"] = int(round(emp["salaire"] * 1.08 + 50, -1))  # chaque progrès se négocie
             self._log(f"{emp['nom']} progresse en {NOM_DOMAINE[dom]} ({emp[dom]}).", "bon")
 
@@ -783,9 +783,10 @@ class Jeu(Extensions):
             prod["mois"] += 1
             prod["ventes"] = int(prod["ventes"] * 0.9)
         e["produits"] = [x for x in e["produits"] if x["ventes"] >= 100]
-        rec, dep, autres = self._mois_extensions()
+        rec, dep, autres, capital = self._mois_extensions()
         self._encaisser(ventes + rec)
         self._depenser(loyer + sal + frais + dep)
+        e["argent"] -= capital  # remboursement du capital : sortie de trésorerie, pas une charge
         texte = f"Fin de mois : loyer −{loyer:,} €, salaires −{sal:,} €".replace(",", " ")
         if frais:
             texte += f", frais de structure −{frais:,} €".replace(",", " ")
@@ -957,7 +958,8 @@ class Jeu(Extensions):
             e["offres"].remove(o)
             if self.rng.random() >= self.chance_negociation(float(prix), float(delai)):
                 c = self.rng.choice(e["concurrents"])
-                self._log(f"Négociation perdue : {c['nom']} remporte « {o['nom']} » avec une offre plus attractive.", "mauvais")
+                e["renommee"] = max(0, e["renommee"] - 1)
+                self._log(f"Négociation perdue : {c['nom']} remporte « {o['nom']} ». Le client a mal pris vos exigences (renommée −1).", "mauvais")
                 self._verifier_trophees()
                 return
             base = {**base, "paie": int(round(o["paie"] * float(prix), -1)), "delai": max(8, round(o["delai"] * float(delai)))}

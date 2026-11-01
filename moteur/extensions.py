@@ -129,12 +129,15 @@ class Extensions:
                 if d in opt:
                     total[d] = round(total[d] * opt[d])
             cout += opt.get("cout", 0)
+        if base["total"]["m"] == 0 and choix.get("boitier") != CHOIX_TECH["boitier"]["defaut"]:
+            choix["boitier"] = CHOIX_TECH["boitier"]["defaut"]  # pas de méca : le choix du boîtier ne s'applique pas
+            return self._appliquer_choix(base, choix)
         base = {**base, "total": total, "taille": sum(total.values())}
         return base, cout
 
     def chance_negociation(self, prix, delai):
         """Au prix et au délai affichés, le client signe à coup sûr ; demander plus est un pari."""
-        return round(_borne(1 - 1.8 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"], 0.05, 1.0), 2)
+        return round(_borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"], 0.05, 1.0), 2)
 
     # ------------------------------------------------------------------ R&D, certifications, prêts
     def _lancer_recherche(self, genre, rid):
@@ -181,6 +184,15 @@ class Extensions:
                 raise ErreurJeu(f"La banque refuse : plafond d'endettement {self.plafond_pret():,} € (selon la renommée).".replace(",", " "))
             self._ajouter_pret(m)
             self._log(f"Prêt de {m:,} € accordé sur 24 mois.".replace(",", " "), "info")
+        elif genre == "rembourser":
+            if not e["prets"]:
+                raise ErreurJeu("Aucun prêt en cours.")
+            reste = sum(x["montant"] // 24 * x["mois"] for x in e["prets"])  # capital restant, sans les intérêts futurs
+            if e["argent"] < reste:
+                raise ErreurJeu("Trésorerie insuffisante pour rembourser.")
+            e["argent"] -= reste
+            e["prets"] = []
+            self._log(f"Prêts remboursés par anticipation (−{reste:,} €).".replace(",", " "), "bon")
         elif genre == "lever":
             if e["parts"] < 1:
                 raise ErreurJeu("Vous avez déjà ouvert votre capital.")
@@ -265,9 +277,10 @@ class Extensions:
                                   "texte": f"{g['client']} signale des pannes sur « {g['nom']} », encore sous garantie.",
                                   "options": [f"Corriger gratuitement (−{cout:,} €)".replace(",", " "), "Refuser la prise en charge (renommée −2)"],
                                   "cout": cout}
+        fort = max(c["renommee"] for c in e["concurrents"])
         for o in list(e["offres"]):
-            if r.random() < 0.012:
-                c = r.choice(e["concurrents"])
+            if r.random() < 0.004 + 0.0008 * fort:  # plus la concurrence est connue, plus elle rafle de marchés
+                c = r.choices(e["concurrents"], weights=[1 + c["renommee"] for c in e["concurrents"]])[0]
                 e["offres"].remove(o)
                 self._log(f"{c['nom']} remporte l'appel d'offres « {o['nom']} ».", "info")
         for x in list(e["employes"]):
@@ -304,21 +317,24 @@ class Extensions:
                 self._log(f"Fin de la production en série de « {s['nom']} ».", "info")
         if recettes:
             morceaux.append(f"séries +{recettes:,} €".replace(",", " "))
+        capital = 0
         for pret in list(e["prets"]):
-            depenses += pret["mensualite"]
+            part_capital = pret["montant"] // 24
+            capital += part_capital
+            depenses += pret["mensualite"] - part_capital  # seuls les intérêts sont des charges déductibles
             pret["mois"] -= 1
             if pret["mois"] <= 0:
                 e["prets"].remove(pret)
                 self._log(f"Prêt de {pret['montant']:,} € entièrement remboursé.".replace(",", " "), "bon")
-        if self.mensualites() or depenses:
-            morceaux.append(f"prêts −{depenses:,} €".replace(",", " "))
+        if capital:
+            morceaux.append(f"prêts −{capital + depenses:,} €".replace(",", " "))
         certifs = ENTRETIEN_CERTIF * len(e["certifs"])
         if certifs:
             depenses += certifs
             morceaux.append(f"audits −{certifs:,} €".replace(",", " "))
         for c in e["concurrents"]:
             c["renommee"] += r.choice([0, 0, 0, 1])
-        return recettes, depenses, morceaux
+        return recettes, depenses, morceaux, capital
 
     # ------------------------------------------------------------------ livraisons et évènements
     def _apres_livraison(self, p, note, montant):
@@ -327,7 +343,7 @@ class Extensions:
             e["garanties"].append({"nom": p["nom"], "client": p["client"], "defauts": round(p["defauts"], 1), "jours": DUREE_GARANTIE})
         if note >= 7:
             e["pot"] = True
-        if p["type"] == "contrat" and note >= 7 and r.random() < 0.35:
+        if p["type"] == "contrat" and note >= 7 and len(e["series"]) < 4 and r.random() < 0.35:
             e["offre_serie"] = {"nom": p["nom"], "client": p["client"], "mois": r.randint(6, 18),
                                 "marge": int(round(p["paie"] * 0.06 * note / 8, -1))}
 

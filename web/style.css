@@ -192,8 +192,9 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #monde[data-meteo="neige"] #ambiance { background-image: radial-gradient(#fff 2px, transparent 2.6px), radial-gradient(#fff 1.5px, transparent 2px); background-size: 46px 46px, 31px 31px; animation: neige 3s linear infinite; }
 #monde[data-meteo="brouillard"] #ambiance { background: rgba(240, 244, 246, .45); }
 #monde[data-meteo="canicule"] #ambiance { background: rgba(255, 170, 60, .12); }
-#monde[data-soir="soir"] #ambiance { box-shadow: inset 0 0 0 2000px rgba(255, 120, 60, .12); }
-#monde[data-soir="nuit"] #ambiance { box-shadow: inset 0 0 0 2000px rgba(30, 30, 90, .32); }
+#ambiance::after { content: ""; position: absolute; inset: 0; }
+#monde[data-soir="soir"] #ambiance::after { background-color: rgba(255, 120, 60, .12); }
+#monde[data-soir="nuit"] #ambiance::after { background-color: rgba(30, 30, 90, .25); }
 @keyframes pluie { to { background-position: -12px 40px; } }
 @keyframes neige { to { background-position: 10px 46px, -8px 31px; } }
 @keyframes eclair { 0%, 96% { filter: none; } 97% { background-color: rgba(255, 255, 255, .55); } }

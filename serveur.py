@@ -41,6 +41,7 @@ CATALOGUE = {
     "materiel": donnees.MATERIEL, "deco": donnees.DECO, "locaux": donnees.LOCAUX, "traits": donnees.TRAITS,
     "produits": donnees.PRODUITS, "domaines": donnees.NOM_DOMAINE,
     "horaires": donnees.HORAIRES, "combos": donnees.COMBOS, "trophees": donnees.TROPHEES,
+    "pieces": donnees.PIECES, "etablis": donnees.ETABLIS, "poste": donnees.POSTE, "grille": donnees.GRILLE,
 }
 
 

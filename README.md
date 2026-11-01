@@ -21,7 +21,8 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Équipe** : chaque employé a des compétences (Élec, Méca 3D, Firmware), un trait (perfectionniste, rapide, créatif, sociable, râleur, chasseur de bugs, endurant), un moral et une fatigue. Ils progressent en travaillant ; on peut les former (+2 dans un domaine) ou les envoyer en congés.
 - **Conditions de travail** : sièges ergonomiques, éclairage, pauses café, climatisation l'été, isolation phonique quand l'équipe grandit… La vue *Productivité* affiche le multiplicateur obtenu.
 - **Matériel** : multimètre, oscilloscope, four de refusion, analyseur de spectre, imprimantes 3D, CNC, sondes J-Link, banc de test, chambre CEM… Chaque appareil apparaît sur le plan.
-- **Locaux** : garage (2 postes) → bureau agrandi (6) → open space (10), atelier méca / 3D, labo CEM. Loyer mensuel en conséquence.
+- **Locaux** : garage → bureau agrandi → open space, atelier méca / 3D, labo CEM, salle de pause. Loyer mensuel en conséquence.
+- **Aménagement libre** : les bureaux s'achètent à l'unité (un par employé) et se placent où l'on veut, sur une grille aimantée, comme le matériel et une vingtaine d'objets (plantes, ficus, fontaine, distributeur, bibliothèque de datasheets, armoire à composants, table de réunion, aquarium, tapis, affiches, borne d'arcade…). Le mode aménagement (bouton en haut à gauche) permet de déplacer ou revendre (à moitié prix) n'importe quel objet.
 - **Projets en parallèle** : 1 projet au garage, 2 avec le bureau agrandi, 3 avec l'open space. Chaque employé peut être affecté à un projet ou laissé en automatique (il va là où il est le plus utile).
 - **Combos d'équipe** : équipe complète (un spécialiste par domaine), duo qualité (perfectionniste + chasseur de bugs), mentorat (expert + junior), équipe soudée.
 - **Horaires** : de 6 h à 12 h par jour. Plus d'heures = plus de production, mais moral en baisse, fatigue, défauts et heures sup à payer.

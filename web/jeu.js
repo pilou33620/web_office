@@ -11,6 +11,7 @@ const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', equipe: 'Équip
 let ETAT = null, CAT = null;
 let onglet = 'accueil', vue = 'bureau', catMat = 'e';
 let joue = false, vitesse = 1, minuteur = null, envoi = false, nbTrophees = null;
+let amenage = false, selection = null, placement = null;  // mode aménagement, objet choisi, objet en cours de placement
 const cache = {};
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -19,40 +20,30 @@ const dec = (n) => (Math.round(n * 10) / 10).toLocaleString('fr-FR');
 const tablette = () => window.matchMedia('(min-width: 900px)').matches;
 
 // ---------------------------------------------------------------- plan du bâtiment
-// Postes : 0-1 garage, 2-5 bureau agrandi, 6-9 open space
-const POSTES = [[34, 96], [147, 96], [260, 96], [34, 182], [147, 182], [260, 182], [26, 690], [108, 690], [26, 790], [108, 790]];
-// x, y, l, h, fond, rayon, l. intérieur, h. intérieur, couleur intérieur, rayon intérieur
-const POS = {
-  multi: [30, 278, 28, 36, '#ffc94d', 6, 16, 9, '#bfe3a8', 2],
-  station: [30, 326, 28, 36, '#3d3d3d', 6, 12, 12, '#ff6b5a', 6],
-  alim: [28, 374, 32, 32, '#4a4a4a', 6, 20, 7, '#7be08a', 2],
-  oscillo: [26, 420, 36, 44, '#e8e8e0', 6, 24, 18, '#1f4a6e', 3],
-  micro: [28, 476, 32, 36, '#d8dde3', 16, 14, 14, '#3a4a5e', 7],
-  sonde: [30, 526, 28, 30, '#b08af0', 6, 8, 14, '#ffc94d', 3],
-  four: [110, 284, 74, 56, '#9aa1a8', 8, 54, 22, '#ff9a4a', 4],
-  spectre: [110, 372, 74, 44, '#dfe3e8', 8, 40, 22, '#215a3a', 3],
-  fdm: [214, 274, 46, 46, '#3d3d3d', 8, 22, 22, '#ffc94d', 4],
-  resine: [270, 276, 38, 42, '#f4f4f4', 9, 24, 24, '#ff9a4a', 6],
-  cao: [214, 344, 100, 36, '#d0955a', 6, 58, 10, '#2a3a56', 3],
-  cnc: [216, 430, 140, 100, '#8d96a1', 10, 98, 60, '#c9ced4', 5],
-  stlink: [30, 34, 20, 20, '#4a8ad8', 5, 6, 6, '#ffc94d', 3],
-  logique: [58, 34, 34, 20, '#3d3d3d', 5, 22, 4, '#7be08a', 2],
-  jlink: [100, 34, 28, 20, '#2b2b2b', 5, 6, 6, '#ff9a4a', 3],
-  ci: [136, 32, 40, 24, '#2b3442', 4, 30, 4, '#7be08a', 2],
-  banc: [184, 32, 90, 24, '#6a7d92', 5, 58, 10, '#1f4a6e', 3],
-  esd: [220, 816, 40, 40, '#ffc94d', 8, 16, 16, '#3d3d3d', 8],
-  chambre: [214, 648, 144, 130, '#5a6a7a', 10, 120, 104, 'repeating-conic-gradient(#2f3a46 0 25%, #46566a 0 50%) 0 0/16px 16px', 6],
+// Style par type d'objet : fond, rayon, largeur et hauteur du détail, couleur du détail, rayon du détail
+const STYLE = {
+  multi: ['#ffc94d', 6, 16, 9, '#bfe3a8', 2], station: ['#3d3d3d', 6, 12, 12, '#ff6b5a', 6], alim: ['#4a4a4a', 6, 20, 7, '#7be08a', 2],
+  oscillo: ['#e8e8e0', 6, 24, 18, '#1f4a6e', 3], micro: ['#d8dde3', 16, 14, 14, '#3a4a5e', 7], sonde: ['#b08af0', 6, 8, 14, '#ffc94d', 3],
+  four: ['#9aa1a8', 8, 54, 22, '#ff9a4a', 4], spectre: ['#dfe3e8', 8, 40, 22, '#215a3a', 3],
+  fdm: ['#3d3d3d', 8, 22, 22, '#ffc94d', 4], resine: ['#f4f4f4', 9, 24, 24, '#ff9a4a', 6], cao: ['#d0955a', 6, 58, 10, '#2a3a56', 3], cnc: ['#8d96a1', 10, 98, 60, '#c9ced4', 5],
+  stlink: ['#4a8ad8', 5, 6, 6, '#ffc94d', 3], logique: ['#3d3d3d', 5, 22, 4, '#7be08a', 2], jlink: ['#2b2b2b', 5, 6, 6, '#ff9a4a', 3],
+  ci: ['#2b3442', 4, 30, 4, '#7be08a', 2], banc: ['#6a7d92', 5, 58, 10, '#1f4a6e', 3],
+  esd: ['#ffc94d', 8, 16, 16, '#3d3d3d', 8], chambre: ['#5a6a7a', 10, 120, 104, 'repeating-conic-gradient(#2f3a46 0 25%, #46566a 0 50%) 0 0/16px 16px', 6],
+  plantes: 'plante', ficus: 'plante', lampe: 'lampe',
+  tableau: ['#ffffff', 3, 48, 3, '#4a8ad8', 1], cafe: ['#3d3d3d', 5, 6, 6, '#ff6b5a', 3], clim: ['#f4f4f4', 4, 34, 3, '#b8d8e8', 2],
+  fontaine: ['#bfe6ff', 8, 10, 10, '#4a8ad8', 5], distrib: ['#d9534f', 4, 20, 14, '#ffe08a', 2],
+  biblio: ['#8a5a36', 3, 58, 8, 'repeating-linear-gradient(90deg,#ef6f9a 0 6px,#6aa8f0 6px 12px,#ffc94d 12px 18px)', 1],
+  armoire: ['#9aa1a8', 4, 36, 14, 'repeating-linear-gradient(0deg,#5a6a7a 0 3px,#c9ced4 3px 6px)', 2],
+  imprimante: ['#e8e8e0', 4, 18, 6, '#3d3d3d', 2], table: ['#c48a52', 22, 60, 32, '#d8a46a', 18], aquarium: ['#5ccfc4', 6, 32, 16, '#8fe0ff', 4],
+  poster: ['#fff7e6', 2, 24, 6, '#ef6f9a', 1], tapis: ['#b08af0', 10, 50, 30, '#c8a8f8', 8], arcade: ['#3a2a5a', 6, 18, 14, '#7be08a', 3],
+  canape: ['#6aa8f0', 10, 76, 14, '#8cc0ff', 6], babyfoot: ['#7a5236', 6, 42, 32, '#5cb84c', 3],
 };
+// Améliorations globales, dessinées à des emplacements fixes
 const DECO_POS = {
-  plantes: [[340, 196, 30, 30, 'plante'], [156, 586, 28, 28, 'plante'], [336, 586, 30, 30, 'plante']],
-  tableau: [[294, 32, 68, 24, '#ffffff', 4, 44, 4, '#4a8ad8', 2]],
-  cafe: [[346, 64, 20, 28, '#3d3d3d', 5, 6, 6, '#ff6b5a', 3]],
-  clim: [[60, 19, 44, 12, '#f4f4f4', 4, 34, 3, '#b8d8e8', 2], [250, 19, 44, 12, '#f4f4f4', 4, 34, 3, '#b8d8e8', 2]],
-  canape: [[26, 1028, 90, 36, '#6aa8f0', 10, 76, 14, '#8cc0ff', 6]],
-  babyfoot: [[100, 960, 54, 44, '#7a5236', 6, 42, 32, '#5cb84c', 3]],
   eclairage: [[96, 142, 14, 14, 'lampe'], [210, 142, 14, 14, 'lampe'], [322, 142, 14, 14, 'lampe'], [120, 470, 14, 14, 'lampe'], [280, 400, 14, 14, 'lampe'], [96, 760, 14, 14, 'lampe']],
   isolation: [[19, 66, 7, 150, '#8a6bd1', 3, 3, 130, '#a88cf0', 2], [364, 66, 7, 150, '#8a6bd1', 3, 3, 130, '#a88cf0', 2], [19, 660, 7, 200, '#8a6bd1', 3, 3, 180, '#a88cf0', 2]],
 };
+const fiche = (type) => (type === 'poste' ? CAT.poste : CAT.materiel[type] || CAT.deco[type]);
 // Emplacements debout (coin haut-gauche du personnage) par pièce
 const SPOTS = {
   labo: [[72, 284], [72, 352], [72, 424], [116, 440], [146, 500], [72, 500]],
@@ -66,6 +57,7 @@ const SPOTS = {
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
 const PIECES_VERROU = {
+  bureau: [246, 26, 126, 226],
   atelier: [197, 258, 175, 364],
   openspace: [18, 628, 175, 274],
   pause: [18, 912, 174, 184],
@@ -110,10 +102,10 @@ function construireStatique() {
     <div class="etiq-piece" style="left:204px;top:878px">Labo CEM</div>`;
 }
 
-function objet(p, cls = '') {
-  if (p[4] === 'lampe') return `<div class="a" style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px;border-radius:50%;border:2px solid #2b1d14;background:#fff3a0;box-shadow:0 0 0 8px rgba(255,240,150,.35),0 0 0 18px rgba(255,240,150,.15);z-index:5"></div>`;
-  if (p[4] === 'plante') return `<div class="objet plante ${cls}" style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px"><i></i></div>`;
-  return `<div class="objet ${cls}" style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px;background:${p[4]};border-radius:${p[5]}px"><i style="width:${p[6]}px;height:${p[7]}px;background:${p[8]};border-radius:${p[9]}px"></i></div>`;
+function objet(p, cls = '', attr = '') {
+  if (p[4] === 'lampe') return `<div class="a ${cls}"${attr} style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px;border-radius:50%;border:2px solid #2b1d14;background:#fff3a0;box-shadow:0 0 0 8px rgba(255,240,150,.35),0 0 0 18px rgba(255,240,150,.15);z-index:5"></div>`;
+  if (p[4] === 'plante') return `<div class="objet plante ${cls}"${attr} style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px"><i></i></div>`;
+  return `<div class="objet ${cls}"${attr} style="left:${p[0]}px;top:${p[1]}px;width:${p[2]}px;height:${p[3]}px;background:${p[4]};border-radius:${p[5]}px"><i style="width:${p[6]}px;height:${p[7]}px;background:${p[8]};border-radius:${p[9]}px"></i></div>`;
 }
 
 function corps(x) {
@@ -131,13 +123,26 @@ function rendrePersos() {
   const duree = Math.min(0.9, 0.7 / vitesse);
   const salle = e.locaux.includes('pause');
   const pos = {};
+  const objs = Object.fromEntries(e.objets.map((o) => [o.id, o]));
+  const spots = { labo: [], atelier: [], cem: [] };
+  for (const o of e.objets) {
+    const m = CAT.materiel[o.type];
+    if (!m) continue;
+    const salleObj = Object.entries(CAT.pieces).find(([, pc]) => { const [x, y, w, hh] = pc.rect; return o.x >= x && o.y >= y && o.x < x + w && o.y < y + hh; });
+    const k = salleObj && salleObj[0];
+    if (k in spots) {
+      const [x, y, w] = CAT.pieces[k].rect;
+      spots[k].push([Math.min(o.x + m.w + 2, x + w - 34), Math.max(y + 2, o.y - 6)]);
+    }
+  }
+  const SP = (lieu) => (spots[lieu] && spots[lieu].length ? spots[lieu].concat(SPOTS[lieu]) : SPOTS[lieu]);
   const placer = (emp) => {
     let lieu = emp.lieu === 'pause' ? (salle ? 'salle' : 'terrasse') : emp.lieu;
     if (lieu === 'salle' && e.deco.includes('babyfoot') && (groupes.babyfoot || 0) < 2) lieu = 'babyfoot';
     if (!SPOTS[lieu]) lieu = 'bureau';
     let x, y;
-    if (lieu === 'bureau') { const [dx, dy] = POSTES[emp.bureau]; x = dx + 21; y = dy - 34; }
-    else { const g = groupes[lieu] = (groupes[lieu] || 0) + 1; [x, y] = SPOTS[lieu][(g - 1) % SPOTS[lieu].length]; }
+    if (lieu === 'bureau') { const o = objs[emp.bureau] || { x: 30, y: 60 }; x = o.x + 21; y = o.y - 4; }
+    else { const liste = SP(lieu), g = groupes[lieu] = (groupes[lieu] || 0) + 1; [x, y] = liste[(g - 1) % liste.length]; }
     return { lieu, x, y };
   };
   const presents = e.employes.filter((x) => !x.absent);
@@ -191,11 +196,35 @@ function rendrePersos() {
 function rendreMonde() {
   const e = ETAT, h = [];
   const p = e.projets.length > 0;
-  for (const id of e.materiel) if (POS[id]) h.push(objet(POS[id], id in e.pannes ? 'panne' : ''));
-  for (const id of e.deco) {
-    const piece = CAT.deco[id].piece;
-    if (piece && !e.locaux.includes(piece)) continue;  // ancienne partie : déco achetée avant la salle de pause
-    for (const part of DECO_POS[id] || []) h.push(objet(part));
+  for (const id of e.deco) for (const part of DECO_POS[id] || []) h.push(objet(part));
+  const occupes = {};
+  for (const x of e.employes) occupes[x.bureau] = x;
+  const tries = [...e.objets].sort((a, b) => (b.type === 'tapis') - (a.type === 'tapis'));  // les tapis dessous
+  for (const o of tries) {
+    const choisi = amenage && selection === o.id ? ' choisi' : '';
+    const attr = amenage ? ` data-obj="${o.id}"` : '';
+    if (o.type === 'poste') {
+      if (e.deco.includes('sieges')) h.push(`<div class="a" style="left:${o.x + 18}px;top:${o.y + 8}px;width:40px;height:30px;border:2.5px solid #2b1d14;border-radius:12px 12px 4px 4px;background:#3a5a8a;z-index:1"></div>`);
+      const emp = occupes[o.id];
+      const travaille = emp && !emp.absent && (emp.lieu || 'bureau') === 'bureau' && joue && p;
+      const ecran = !emp ? '#2b3442' : travaille ? '#8fe0ff' : '#5a7a9a';
+      const nom = !emp ? 'Libre' : emp.absent ? (emp.formation ? 'En formation' : 'En congés') : emp.nom;
+      h.push(`<div class="bureau-meuble${amenage ? ' cliquable' : ''}${choisi}"${attr} style="left:${o.x}px;top:${o.y + 30}px"><div class="ecran"><i style="background:${ecran}"></i></div><div class="clavier"></div><div class="nom">${esc(nom)}</div></div>`);
+      continue;
+    }
+    const f = fiche(o.type), st = STYLE[o.type] || ['#cccccc', 4, 8, 8, '#888888', 2];
+    const parts = typeof st === 'string' ? [o.x, o.y, f.w, f.h, st] : [o.x, o.y, f.w, f.h, ...st];
+    h.push(objet(parts, `${o.type in e.pannes ? 'panne' : ''}${amenage ? ' cliquable' : ''}${choisi}`, attr));
+  }
+  if (placement) {
+    // zones autorisées pour l'objet en cours de placement
+    const f = fiche(placement.type);
+    for (const k of f.pieces) {
+      const pc = CAT.pieces[k];
+      if (pc.local && !e.locaux.includes(pc.local)) continue;
+      const [x, y, w, hh] = pc.rect;
+      h.push(`<div class="zone-ok" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px"></div>`);
+    }
   }
   for (const [lid, [x, y, w, hh]] of Object.entries(PIECES_VERROU)) {
     if (e.locaux.includes(lid)) continue;
@@ -206,24 +235,6 @@ function rendreMonde() {
       <b>${esc(l.nom)}</b><small>${bloque ? `Renommée ${l.rep} requise` : 'Local à louer'}</small>
       <button type="button" class="btn petit" data-act="local" data-id="${lid}" ${bloque || e.argent < l.prix ? 'disabled' : ''}>Louer · ${eur(l.prix)}</button></div>`);
   }
-  const occupes = {};
-  for (const x of e.employes) occupes[x.bureau] = x;
-  POSTES.forEach(([x, y], i) => {
-    if (!e.postes_ouverts.includes(i)) {
-      if (i < 6) h.push(`<button type="button" class="poste-libre" style="left:${x}px;top:${y - 22}px" data-act="onglet" data-id="locaux" aria-label="Poste verrouillé : agrandir le bureau"></button>`);
-      return;
-    }
-    if (e.deco.includes('sieges')) h.push(`<div class="a" style="left:${x + 18}px;top:${y - 22}px;width:40px;height:30px;border:2.5px solid #2b1d14;border-radius:12px 12px 4px 4px;background:#3a5a8a;z-index:1"></div>`);
-  });
-  POSTES.forEach(([x, y], i) => {
-    if (!e.postes_ouverts.includes(i)) return;
-    const emp = occupes[i];
-    const travaille = emp && !emp.absent && (emp.lieu || 'bureau') === 'bureau' && joue && p;
-    const ecran = !emp ? '#2b3442' : travaille ? '#8fe0ff' : '#5a7a9a';
-    const nom = !emp ? 'Libre' : emp.absent ? (emp.formation ? 'En formation' : 'En congés') : emp.nom;
-    if (emp && !emp.absent) emp.lieu = emp.lieu || 'bureau';
-    h.push(`<div class="bureau-meuble" style="left:${x}px;top:${y}px"><div class="ecran"><i style="background:${ecran}"></i></div><div class="clavier"></div><div class="nom">${esc(nom)}</div></div>`);
-  });
   if (vue === 'prod') {
     const b = e.bonus;
     h.push(`<div class="puce-prod" style="left:186px;top:226px;background:${DC.f}">Firmware +${b.f * 10} %</div>`);
@@ -333,13 +344,13 @@ function panneauEquipe() {
       extra: `<div class="chips" style="margin-top:4px"><span class="chip" title="${esc(t.desc)}">${esc(t.nom)}</span><span class="chip" style="background:${x.moral >= 70 ? '#7be08a' : x.moral >= 50 ? '#ffc94d' : '#ff8a7a'};color:#2b1d14">Moral ${x.moral} %</span><span class="chip">Fatigue ${Math.round(x.fatigue)}</span><span class="chip" title="Moral × conditions de travail × trait">Efficacité ${x.efficacite} %</span></div>${btns}`,
     });
   }).join('');
-  h += `<div class="section">Candidats${libres ? '' : ' · agrandissez les locaux pour recruter'}</div>`;
+  h += `<div class="section">Candidats${libres ? '' : ' · placez un bureau de plus (Locaux) pour recruter'}</div>`;
   h += e.candidats.map((c) => {
     const t = CAT.traits[c.trait];
     return ligne({
       avatar: sprite(c), t1: `${esc(c.nom)} — ${esc(c.poste)}`, t2: repartition(c), t3: `${eur(c.salaire)} / mois`,
       extra: `<div class="chips" style="margin-top:4px"><span class="chip" title="${esc(t.desc)}">${esc(t.nom)} · ${esc(t.desc)}</span></div>`,
-      btn: bouton('embaucher', c.id, libres ? 'Embaucher' : 'Pas de poste', libres > 0),
+      btn: bouton('embaucher', c.id, libres ? 'Embaucher' : 'Pas de bureau', libres > 0),
     });
   }).join('') || '<div class="vide">Nouveaux candidats le mois prochain.</div>';
   h += `<div class="section">Combos d'équipe</div>` + Object.entries(CAT.combos).map(([id, c]) => ligne({
@@ -352,14 +363,14 @@ function panneauMateriel() {
   const e = ETAT, b = e.bonus;
   let h = `<div class="onglets">${['e', 'm', 'f', 'c'].map((k) => `<button type="button" data-act="catmat" data-id="${k}" class="${catMat === k ? 'actif' : ''}" style="${catMat === k ? 'background:' + DC[k] : ''}">${DN[k]}</button>`).join('')}</div>`;
   const resume = catMat === 'c' ? `chance aux tests +${Math.round(b.cem * 100)} %` : `production +${b[catMat] * 10} % · debug +${b.debug}`;
-  h += `<div class="section">${DN[catMat]} · ${resume}</div>`;
+  h += `<div class="section">${DN[catMat]} · ${resume}</div><div class="t2" style="font-size:13px;color:#b3bca5;margin-top:4px">Choisissez « Placer », puis touchez le plan à l'endroit voulu.</div>`;
   h += Object.entries(CAT.materiel).filter(([, m]) => m.dom === catMat).map(([id, m]) => {
     const effets = [m.bonus && `+${m.bonus * 10} % ${DN[m.dom]}`, m.debug && `debug +${m.debug}`, m.cem && `CEM +${Math.round(m.cem * 100)} %`].filter(Boolean).join(' · ');
     const possede = e.materiel.includes(id);
-    const local = (m.piece === 'atelier' || m.piece === 'cem') && !e.locaux.includes(m.piece);
+    const local = !m.pieces.some((k) => !CAT.pieces[k].local || e.locaux.includes(CAT.pieces[k].local));
     return ligne({
       couleur: DC[m.dom], t1: esc(m.nom), t2: `${effets} · ${eur(m.prix)}`, t3: `${PIECE[m.piece]}${id in e.pannes ? ` · en panne (${e.pannes[id]} j)` : ''}`,
-      btn: bouton('acheter', id, possede ? 'Installé' : local ? 'Local requis' : 'Acheter', !possede && !local && e.argent >= m.prix),
+      btn: bouton('placer', id, possede ? 'Installé' : local ? 'Local requis' : 'Placer', !possede && !local && e.argent >= m.prix),
     });
   }).join('');
   return h;
@@ -367,7 +378,14 @@ function panneauMateriel() {
 
 function panneauLocaux() {
   const e = ETAT;
-  let h = `<div class="section">Agrandissements</div>`;
+  const libres = e.postes_ouverts.length - e.employes.length;
+  let h = `<div class="btns" style="margin-top:6px">${bouton('amenage', '', amenage ? "Quitter le mode aménagement" : 'Déplacer ou revendre des objets', true, 'secondaire')}</div>`;
+  h += `<div class="section">Mobilier</div>` + ligne({
+    couleur: '#d0955a', t1: 'Bureau de travail', t2: `${eur(CAT.poste.prix)} · un poste par employé`,
+    t3: `${e.postes_ouverts.length} bureau${e.postes_ouverts.length > 1 ? 'x' : ''}, ${libres} libre${libres > 1 ? 's' : ''}`,
+    btn: bouton('placer', 'poste', 'Placer', e.argent >= CAT.poste.prix),
+  });
+  h += `<div class="section">Agrandissements</div>`;
   h += Object.entries(CAT.locaux).map(([id, l]) => {
     const fait = e.locaux.includes(id), bloque = e.renommee < l.rep;
     return ligne({
@@ -377,10 +395,13 @@ function panneauLocaux() {
   }).join('');
   h += `<div class="section">Aménagement · moral ${e.moral} %</div>`;
   h += Object.entries(CAT.deco).map(([id, d]) => {
-    const fait = e.deco.includes(id), local = d.piece && !e.locaux.includes(d.piece);
+    const fait = e.deco.includes(id) && !d.multiple;
+    const local = !d.global && !d.pieces.some((k) => !CAT.pieces[k].local || e.locaux.includes(CAT.pieces[k].local));
+    const ou = d.global ? 'Amélioration de tous les locaux' : d.pieces.length < Object.keys(CAT.pieces).length ? 'Pièces : ' + d.pieces.map((k) => CAT.pieces[k].nom).join(', ') : '';
+    const n = e.objets.filter((o) => o.type === id).length;
     return ligne({
-      couleur: '#7be08a', t1: esc(d.nom), t2: `Moral +${d.moral} · ${eur(d.prix)}`, t3: [d.effet, d.piece && `Dans : ${CAT.locaux[d.piece].nom}`].filter(Boolean).join(' · '),
-      btn: bouton('deco', id, fait ? 'Installé' : local ? 'Local requis' : 'Acheter', !fait && !local && e.argent >= d.prix),
+      couleur: '#7be08a', t1: esc(d.nom) + (n > 1 ? ` ×${n}` : ''), t2: `Moral +${d.moral} · ${eur(d.prix)}`, t3: [d.effet, ou].filter(Boolean).join(' · '),
+      btn: bouton(d.global ? 'deco' : 'placer', id, fait ? 'Installé' : local ? 'Local requis' : d.global ? 'Acheter' : 'Placer', !fait && !local && e.argent >= d.prix),
     });
   }).join('');
   h += `<div class="section">Conditions de travail · productivité ×${dec(e.facteur_conditions)}</div>` + (e.conditions.length
@@ -460,6 +481,56 @@ function rendre() {
   majHtml('#contenu-panneau', contenu);
   rendreMonde();
   rendreModale();
+  rendreAmenagement();
+}
+
+function rendreAmenagement() {
+  const ban = $('#placement');
+  const o = selection && ETAT.objets.find((x) => x.id === selection);
+  if (selection && !o) selection = null;
+  let h = '';
+  if (placement) {
+    const f = fiche(placement.type);
+    h = `<b>${placement.id ? 'Déplacer' : 'Placer'} : ${esc(f.nom)}</b><p>Touchez le plan à l'endroit voulu (zones en pointillés).${placement.id ? '' : ' Prix : ' + eur(f.prix) + '.'}</p>
+      <div class="btns">${bouton('placer-fin', '', 'Terminer', true, 'petit secondaire')}</div>`;
+  } else if (amenage && o) {
+    const f = fiche(o.type);
+    h = `<b>${esc(f.nom)}</b><p>Revente : ${eur(Math.floor(f.prix / 2))}</p>
+      <div class="btns">${bouton('deplacer-sel', '', 'Déplacer', true, 'petit')}${bouton('vendre', o.id, 'Revendre', true, 'petit secondaire')}${bouton('amenage', '', 'Terminer', true, 'petit secondaire')}</div>`;
+  } else if (amenage) {
+    h = `<b>Mode aménagement</b><p>Touchez un bureau, un appareil ou un objet pour le déplacer ou le revendre.</p>
+      <div class="btns">${bouton('onglet', 'locaux', 'Acheter des objets', true, 'petit')}${bouton('amenage', '', 'Terminer', true, 'petit secondaire')}</div>`;
+  }
+  ban.hidden = !h;
+  $('#zone').classList.toggle('amenage', !!h);
+  majHtml('#placement', h);
+  $('.outils .outil').classList.toggle('actif', amenage);
+  $('#fantome').hidden = !placement;
+}
+
+// Validation locale (le serveur revalide) : même règles que le moteur
+function validePlace(type, x, y, ignorer) {
+  const f = fiche(type);
+  const piece = f.pieces.find((k) => { const [px, py, pw, ph] = CAT.pieces[k].rect; return px <= x && py <= y && x + f.w <= px + pw && y + f.h <= py + ph; });
+  if (!piece) return false;
+  const loc = CAT.pieces[piece].local;
+  if (loc && !ETAT.locaux.includes(loc)) return false;
+  if (f.libre) return true;
+  const chevauche = (ax, ay, aw, ah) => x < ax + aw && ax < x + f.w && y < ay + ah && ay < y + f.h;
+  if (!CAT.materiel[type] && CAT.etablis.some(([ex, ey, ew, eh]) => chevauche(ex, ey, ew, eh))) return false;
+  return !ETAT.objets.some((o) => { const g = fiche(o.type); return o.id !== ignorer && !g.libre && chevauche(o.x, o.y, g.w, g.h); });
+}
+
+function pointMonde(ev) {
+  const r = $('#monde').getBoundingClientRect(), s = r.width / 390, f = fiche(placement.type), g = CAT.grille;
+  return [Math.round(((ev.clientX - r.left) / s - f.w / 2) / g) * g, Math.round(((ev.clientY - r.top) / s - f.h / 2) / g) * g];
+}
+
+function majFantome(ev) {
+  if (!placement) return;
+  const [x, y] = pointMonde(ev), f = fiche(placement.type), el = $('#fantome');
+  Object.assign(el.style, { left: x + 'px', top: y + 'px', width: f.w + 'px', height: f.h + 'px' });
+  el.classList.toggle('invalide', !validePlace(placement.type, x, y, placement.id));
 }
 
 function rendreModale() {
@@ -562,6 +633,14 @@ document.addEventListener('click', async (ev) => {
       if (onglet === 'accueil' && !tablette()) onglet = 'accueil';
       return rendre();
     case 'vue': vue = id; return rendre();
+    case 'amenage': joue = false; amenage = !amenage; selection = null; placement = null; if (!tablette()) onglet = 'accueil'; return rendre();
+    case 'placer': joue = false; placement = { type: id }; amenage = true; selection = null; if (!tablette()) onglet = 'accueil'; return rendre();
+    case 'placer-fin': placement = null; return rendre();
+    case 'deplacer-sel': { const o = ETAT.objets.find((x) => x.id === selection); if (o) placement = { type: o.type, id: o.id }; return rendre(); }
+    case 'vendre':
+      if (!confirm('Revendre cet objet à moitié prix ?')) return;
+      selection = null;
+      break;
     case 'catmat': catMat = id; return rendre();
     case 'vitesse': vitesse = vitesse === 1 ? 2 : vitesse === 2 ? 4 : 1; rendre(); return boucle();
     case 'lecture': joue = !joue; rendre(); return boucle();
@@ -595,6 +674,26 @@ document.addEventListener('click', async (ev) => {
   await agir(act, params);
 });
 
+// Plan : placer, déplacer, choisir un objet
+$('#cadre').addEventListener('pointermove', majFantome);
+$('#cadre').addEventListener('click', async (ev) => {
+  if (ev.target.closest('[data-act]')) return;
+  if (placement) {
+    const [x, y] = pointMonde(ev);
+    const pl = placement;
+    const r = await api('/api/action', pl.id ? { genre: 'deplacer', id: pl.id, x, y } : { genre: 'poser', id: pl.type, x, y }).catch((err) => ({ ok: false, erreur: err.message }));
+    if (r.etat) ETAT = r.etat;
+    if (!r.ok) toast(r.erreur);
+    else if (pl.id || !(pl.type === 'poste' || fiche(pl.type).multiple)) placement = null;  // on peut enchaîner bureaux et objets multiples
+    return rendre();
+  }
+  if (amenage) {
+    const cible = ev.target.closest('[data-obj]');
+    selection = cible ? Number(cible.dataset.obj) : null;
+    rendre();
+  }
+});
+
 document.addEventListener('change', (ev) => {
   const sel = ev.target.closest('[data-affecter]');
   if (sel) agir('affecter', { id: Number(sel.dataset.affecter), projet: sel.value ? Number(sel.value) : null });
@@ -610,6 +709,7 @@ function ajusterEchelle() {
 
 async function demarrer() {
   construireStatique();
+  $('#monde').insertAdjacentHTML('beforeend', '<div id="fantome" class="fantome" hidden></div>');
   ajusterEchelle();
   window.addEventListener('resize', ajusterEchelle);
   if (tablette()) onglet = 'projets';

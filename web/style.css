@@ -171,3 +171,13 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 .bulle.parle { animation: parle 1s ease-in-out infinite; }
 @keyframes parle { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
 @media (prefers-reduced-motion: reduce) { .bulle.parle { animation: none; } }
+.placement { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 7; max-width: 420px; padding: 12px 14px; border-radius: 18px; background: #fff7e6; color: var(--trait); border: 3px solid var(--bord); box-shadow: 0 5px 0 rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 4px; }
+.placement b { font-family: var(--titre); font-size: 17px; }
+.placement p { margin: 0; font-size: 13px; font-weight: 700; }
+.placement .btn.secondaire { background: #efe3c8; color: var(--trait); }
+.fantome { position: absolute; z-index: 9; border: 3px dashed #2f8a3a; border-radius: 6px; background: rgba(123, 224, 138, .45); pointer-events: none; }
+.fantome.invalide { border-color: #b8322a; background: rgba(255, 138, 122, .5); }
+.zone-ok { position: absolute; z-index: 1; border: 2.5px dashed rgba(47, 138, 58, .9); border-radius: 8px; background: rgba(123, 224, 138, .12); pointer-events: none; }
+.cliquable { cursor: pointer; }
+.choisi { outline: 3px solid var(--or); outline-offset: 2px; z-index: 6 !important; }
+#zone.amenage .hud-bas { display: none; }

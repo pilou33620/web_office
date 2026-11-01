@@ -35,7 +35,10 @@ DECO = {
     "plantes": {"nom": "Plantes vertes", "prix": 180, "moral": 5},
     "tableau": {"nom": "Tableau blanc", "prix": 250, "moral": 3},
     "cafe":    {"nom": "Machine à café", "prix": 600, "moral": 7},
-    "clim":    {"nom": "Climatisation", "prix": 2500, "moral": 6},
+    "clim":    {"nom": "Climatisation", "prix": 2500, "moral": 4, "effet": "Supprime le malus de canicule (juin à août)"},
+    "sieges":  {"nom": "Sièges ergonomiques", "prix": 1500, "moral": 3, "prod": 8, "effet": "+8 % de productivité"},
+    "eclairage": {"nom": "Éclairage LED", "prix": 800, "moral": 2, "prod": 4, "effet": "+4 % de productivité"},
+    "isolation": {"nom": "Isolation phonique", "prix": 3000, "moral": 2, "effet": "Supprime le malus de bruit"},
     "canape":  {"nom": "Coin détente", "prix": 900, "moral": 6, "piece": "openspace"},
     "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "piece": "openspace"},
 }

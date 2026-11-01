@@ -134,6 +134,26 @@ class Jeu:
     def moral(self, emp):
         return borne(self.moral_global() - emp["fatigue"] / 2 + emp["humeur"], 5, 100)
 
+    def conditions(self):
+        """Conditions de travail : facteurs (libellé, %) et multiplicateur appliqué à toute la production."""
+        e = self.etat
+        n = len([x for x in e["employes"] if not x["absent"]])
+        f = [(DECO[d]["nom"], DECO[d]["prod"]) for d in e["deco"] if DECO[d].get("prod")]
+        if "cafe" in e["deco"]:
+            f.append(("Pauses café", 3))
+        if e["mois"] in (5, 6, 7):
+            f.append(("Canicule, mais climatisé", 0) if "clim" in e["deco"] else ("Canicule sans climatisation", -15))
+        if n > 4 and "isolation" not in e["deco"]:
+            f.append(("Bruit, pas d'isolation phonique", -2 * (n - 4)))
+        if n >= 2 and "bureau" not in e["locaux"]:
+            f.append(("Garage exigu", -5))
+        total = borne(1 + sum(x[1] for x in f) / 100, 0.6, 1.4)
+        return [{"nom": a, "pct": b} for a, b in f], total
+
+    def efficacite(self, emp):
+        trait = TRAITS[emp["trait"]]
+        return borne(self.moral(emp) / 70, 0.4, 1.4) * self.conditions()[1] * trait.get("vitesse", 1.0)
+
     def loyer(self):
         return LOYER_BASE + sum(LOCAUX[l]["loyer"] for l in self.etat["locaux"])
 
@@ -143,13 +163,11 @@ class Jeu:
     def _production(self, emp, dom, bon):
         if emp[dom] <= 0:
             return 0.0
-        trait = TRAITS[emp["trait"]]
-        fm = borne(self.moral(emp) / 70, 0.4, 1.4)
-        return emp[dom] * fm * (1 + 0.1 * bon[dom]) * trait.get("vitesse", 1.0)
+        return emp[dom] * self.efficacite(emp) * (1 + 0.1 * bon[dom])
 
     def _detection(self, emp, bon):
         trait = TRAITS[emp["trait"]]
-        fm = borne(self.moral(emp) / 70, 0.4, 1.4)
+        fm = borne(self.moral(emp) / 70, 0.4, 1.4) * self.conditions()[1]
         return (emp["e"] + emp["f"]) / 2 * fm * 0.2 * (1 + 0.15 * bon["debug"]) * trait.get("detection", 1.0)
 
     def frais_cem(self, p):
@@ -222,6 +240,7 @@ class Jeu:
             if all(ph["fait"][d] >= ph["besoin"][d] - 1e-6 for d in ph["besoin"]):
                 if p["phase"] + 1 < len(p["phases"]):
                     p["phase"] += 1
+                    self.etat["reunion"] = True
                     self._log(f"« {p['nom']} » : phase « {p['phases'][p['phase']]['nom']} ».", "info")
                 elif p["defauts"] >= 0.5:
                     p["etape"] = "debug"
@@ -327,6 +346,9 @@ class Jeu:
             if p is e["projet"] and p["type"] == "contrat" and p["jours"] == p["delai"] + 1:
                 self._log(f"Retard sur « {p['nom']} » : la note client va baisser.", "mauvais")
         for emp in e["employes"]:
+            self._placer(emp, e["projet"])
+        e.pop("reunion", None)
+        for emp in e["employes"]:
             trait = TRAITS[emp["trait"]]
             if emp["absent"] > 0:
                 emp["absent"] -= 1
@@ -355,6 +377,32 @@ class Jeu:
         if e["argent"] < SEUIL_FAILLITE:
             e["faillite"] = True
             self._log("Faillite : la banque ferme le compte.", "mauvais")
+
+    def _placer(self, emp, p):
+        """Choisit la pièce où l'employé passe la journée (pour l'animation du plan)."""
+        e, r, t = self.etat, self.rng, emp["tache"]
+        if emp["absent"]:
+            emp["lieu"] = None
+            return
+        if e.get("reunion"):
+            lieu = "reunion"
+        elif t == "e":
+            premiere = p and p["etape"] == "travail" and p["phase"] == 0
+            lieu = "labo" if not premiere and r.random() < 0.6 else "bureau"
+        elif t == "m":
+            lieu = "atelier" if "atelier" in e["locaux"] and r.random() < 0.65 else "bureau"
+        elif t == "f":
+            lieu = "labo" if r.random() < 0.25 else "bureau"
+        elif t == "debug":
+            lieu = "labo" if r.random() < 0.5 else "bureau"
+        elif t == "cem":
+            lieu = "cem" if "cem" in e["locaux"] and r.random() < 0.35 else ("pause" if r.random() < 0.3 else "bureau")
+        else:
+            lieu = "pause" if r.random() < 0.6 else "bureau"
+        # inertie : même tâche, on reste souvent au même endroit (déplacements moins frénétiques)
+        if emp.get("lieu") not in (None, "reunion") and lieu != "reunion" and emp.get("tache_prec") == t and r.random() < 0.6:
+            lieu = emp["lieu"]
+        emp["lieu"], emp["tache_prec"] = lieu, t
 
     def _debut_mois(self):
         e = self.etat
@@ -494,6 +542,7 @@ class Jeu:
                 raise ErreurJeu("Cette offre n'est plus disponible.")
             e["offres"].remove(o)
             e["projet"] = self._creer_projet(o, "contrat")
+            e["reunion"] = True
             acompte = int(round(o["paie"] * 0.3, -1))
             e["projet"]["acompte"] = acompte
             e["argent"] += acompte
@@ -510,6 +559,7 @@ class Jeu:
             base = {"nom": prod["nom"], "taille": sum(total.values()), "total": total,
                     "potentiel": prod["potentiel"], "id_produit": prod["id"]}
             e["projet"] = self._creer_projet(base, "produit")
+            e["reunion"] = True
             self._log(f"Développement de votre produit « {prod['nom']} » lancé.", "info")
         elif genre == "tests_cem":
             pr = e["projet"]
@@ -609,7 +659,9 @@ class Jeu:
         v["loyer"] = self.loyer()
         v["salaires"] = self.salaires()
         v["postes_ouverts"] = self.postes_ouverts()
-        v["employes"] = [{**x, "moral": round(self.moral(x)), "cout_formation": self.cout_formation(x)} for x in e["employes"]]
+        v["employes"] = [{**x, "moral": round(self.moral(x)), "cout_formation": self.cout_formation(x),
+                          "efficacite": round(100 * self.efficacite(x))} for x in e["employes"]]
+        v["conditions"], v["facteur_conditions"] = self.conditions()
         if e["projet"]:
             p = e["projet"]
             v["projet"] = {**p, "note_estimee": self.note(p), "proba_cem": self.proba_cem(p), "frais_cem": self.frais_cem(p)}

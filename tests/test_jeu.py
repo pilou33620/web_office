@@ -91,6 +91,29 @@ class TestJeu(unittest.TestCase):
             self.assertIsNone(j.etat["evenement"])
         self.assertTrue({"penurie", "salon", "panne", "subvention", "recommandation"} <= vus)
 
+    def test_conditions_de_travail(self):
+        j = Jeu(graine=11)
+        j.etat["mois"] = 6  # juillet : canicule
+        _, f = j.conditions()
+        self.assertAlmostEqual(f, 0.85)
+        j.etat["deco"] += ["clim", "sieges"]
+        _, f = j.conditions()
+        self.assertAlmostEqual(f, 1.08)
+
+    def test_deplacements(self):
+        j = Jeu(graine=12)
+        j.etat["argent"] = 50000
+        j.action("local", id="atelier")
+        j.action("signer", id=j.etat["offres"][0]["id"])
+        lieux = set()
+        for _ in range(40):
+            j.etat["evenement"] = None
+            j._jour()
+            lieux.add(j.etat["employes"][0]["lieu"])
+        self.assertIn("reunion", lieux)
+        self.assertTrue(lieux <= {"bureau", "labo", "atelier", "cem", "pause", "reunion"})
+        self.assertGreater(len(lieux), 2)
+
     def test_sauvegarde_json(self):
         j = Jeu(graine=8)
         j.action("signer", id=j.etat["offres"][0]["id"])

@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import socketserver
 import subprocess
@@ -30,27 +31,46 @@ WEB = RACINE / "web"
 DOSSIER = RACINE / "sauvegardes"
 EMPLACEMENTS = (1, 2, 3)
 VERROU = threading.Lock()
+JOURS_ENTRE_SAUVEGARDES = 10   # en jeu, on n'écrit pas la carte SD à chaque jour simulé
+SAUVE_JOUR = 0
 
 
 def fichier_partie(n):
     return DOSSIER / f"partie_{n}.json"
 
 
+def mettre_de_cote(n):
+    """Renomme une sauvegarde illisible au lieu de la laisser écraser par une partie neuve."""
+    i = 1
+    while (abime := DOSSIER / f"partie_{n}.abime{'' if i == 1 else f'-{i}'}.json").exists():
+        i += 1
+    os.replace(fichier_partie(n), abime)
+    return abime
+
+
 def lire_partie(n):
     try:
         jeu = Jeu(json.loads(fichier_partie(n).read_text(encoding="utf-8")))
-        jeu.vue()  # sauvegarde abîmée ou d'une ancienne version : on la considère absente
+        jeu.vue()  # vérifie aussi qu'elle s'affiche (catalogue changé par une mise à jour…)
         return jeu
-    except Exception:
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        try:
+            abime = mettre_de_cote(n)
+            print(f"[!] Sauvegarde {n} illisible ({type(exc).__name__}) : mise de côté dans {abime}", flush=True)
+        except OSError as err:
+            print(f"[!] Sauvegarde {n} illisible et impossible à mettre de côté : {err}", flush=True)
         return None
 
 
 def sauver(jeu):
+    global SAUVE_JOUR
     DOSSIER.mkdir(exist_ok=True)
     tmp = fichier_partie(EMPLACEMENT).with_suffix(".tmp")
     tmp.write_text(json.dumps(jeu.etat, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, fichier_partie(EMPLACEMENT))  # écriture atomique : pas de sauvegarde corrompue si coupure
-    (DOSSIER / "emplacement.txt").write_text(str(EMPLACEMENT), encoding="utf-8")
+    SAUVE_JOUR = jeu.etat["jours_total"]
 
 
 def resume_partie(n):
@@ -170,6 +190,7 @@ class Gestionnaire(http.server.SimpleHTTPRequestHandler):
                 sauver(JEU)
                 JEU, EMPLACEMENT = jeu, n
                 sauver(JEU)
+                (DOSSIER / "emplacement.txt").write_text(str(EMPLACEMENT), encoding="utf-8")
                 return self._json(200, {"ok": True, "etat": JEU.vue()})
             if chemin != "/api/action":
                 return self._json(404, {"ok": False, "erreur": "Route inconnue."})
@@ -181,7 +202,8 @@ class Gestionnaire(http.server.SimpleHTTPRequestHandler):
                 erreur = str(ex)
             except (TypeError, ValueError, OverflowError, KeyError):
                 erreur = "Paramètres invalides."
-            sauver(JEU)
+            if genre != "avancer" or JEU.en_pause() or JEU.etat["jours_total"] - SAUVE_JOUR >= JOURS_ENTRE_SAUVEGARDES:
+                sauver(JEU)
             return self._json(200, {"ok": erreur is None, "erreur": erreur, "etat": JEU.vue()})
 
 
@@ -481,12 +503,15 @@ def main():
 
     if not args.sans_navigateur:
         webbrowser.open(url)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))   # arrêt par web_launcher : passe par le finally
     try:
         serveur.serve_forever()
     except KeyboardInterrupt:
         print("\nArrêt du serveur.", flush=True)
     finally:
         serveur.server_close()
+        with VERROU:
+            sauver(JEU)   # les derniers jours joués depuis la dernière sauvegarde
     attendre()
     return 0
 

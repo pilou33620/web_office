@@ -92,6 +92,25 @@ verifier("sauvegarde dans le dossier des données", (Path(tmp.name) / "partie_2.
 statut, corps, _ = requete("/api/charger", methode="POST", corps=b'{"emplacement": 9}', entetes={"X-WEB_OFFICE": "1"})
 verifier("emplacement inconnu", json.loads(corps)["ok"], False)
 
+# Le temps qui passe n'écrit pas la sauvegarde à chaque jour simulé, seulement tous les 10 jours
+(Path(tmp.name) / "partie_2.json").unlink()
+action(json.dumps({"genre": "avancer"}).encode())
+verifier("1 jour joué : pas d'écriture", (Path(tmp.name) / "partie_2.json").exists(), False)
+action(json.dumps({"genre": "avancer", "jours": 9}).encode())
+verifier("10 jours joués : sauvegarde écrite", (Path(tmp.name) / "partie_2.json").is_file(), True)
+
+# Une sauvegarde illisible (ici un matériel retiré du catalogue) est mise de côté, jamais écrasée
+abimee = json.loads((Path(tmp.name) / "partie_2.json").read_text(encoding="utf-8"))
+abimee["materiel"].append("appareil_disparu")
+texte = json.dumps(abimee)
+(Path(tmp.name) / "partie_3.json").write_text(texte, encoding="utf-8")
+statut, corps, _ = requete("/api/charger", methode="POST", corps=b'{"emplacement": 3}', entetes={"X-WEB_OFFICE": "1"})
+verifier("sauvegarde illisible : refus de la charger", json.loads(corps)["ok"], False)
+verifier("sauvegarde illisible : mise de côté intacte",
+         (Path(tmp.name) / "partie_3.abime.json").read_text(encoding="utf-8") == texte, True)
+statut, corps, _ = requete("/api/nouvelle", methode="POST", corps=b'{"emplacement": 3}', entetes={"X-WEB_OFFICE": "1"})
+verifier("nouvelle partie à sa place : la copie reste", (Path(tmp.name) / "partie_3.abime.json").is_file(), True)
+
 srv.shutdown()
 print("OK (%d vérifications)" % essais if not echecs else "%d ECHEC(S) sur %d" % (echecs, essais))
 sys.exit(1 if echecs else 0)

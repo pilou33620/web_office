@@ -8,7 +8,11 @@ DUREE_STAGE = 90
 DELAI_SEMINAIRE = 180
 
 
-def _borne(x, lo, hi):
+class ErreurJeu(Exception):
+    """Action refusée ; le message est affiché au joueur."""
+
+
+def borne(x, lo, hi):
     return max(lo, min(hi, x))
 
 
@@ -17,7 +21,6 @@ class Extensions:
     def _init_extensions(self, scenario="garage", difficulte="normal"):
         e = self.etat
         if scenario not in SCENARIOS or difficulte not in DIFFICULTES:
-            from .jeu import ErreurJeu
             raise ErreurJeu("Scénario ou difficulté inconnu.")
         e.setdefault("scenario", scenario)
         e.setdefault("difficulte", difficulte)
@@ -48,11 +51,8 @@ class Extensions:
             e["locaux"].append(lid)
         for _ in range(sc.get("employes", 0)):
             c = self._candidat()
-            libres = [b for b in self.postes_ouverts() if b not in {x["bureau"] for x in e["employes"]}]
-            bureau = libres[0] if libres else self._ajouter_objet("poste", *self._place_auto("poste"))["id"]
-            e["employes"].append({**c, "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 0, "absent": 0,
-                                  "formation": None, "bureau": bureau, "fondateur": False, "tache": None, "gain": 0, "projet": None})
-            self._completer_employe(e["employes"][-1])
+            libres = self.bureaux_libres()
+            self._nouvel_employe(c, libres[0] if libres else self._ajouter_objet("poste", *self._place_auto("poste"))["id"])
         if sc.get("pret"):
             self._ajouter_pret(sc["pret"])
         e["exercice"] = self._exercice_vide()
@@ -106,7 +106,6 @@ class Extensions:
 
     # ------------------------------------------------------------------ choix techniques et négociation
     def _choix_valides(self, choix):
-        from .jeu import ErreurJeu
         choix = choix if isinstance(choix, dict) else {}
         res = {}
         for k, cat in CHOIX_TECH.items():
@@ -137,11 +136,10 @@ class Extensions:
 
     def chance_negociation(self, prix, delai):
         """Au prix et au délai affichés, le client signe à coup sûr ; demander plus est un pari."""
-        return round(_borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"], 0.05, 1.0), 2)
+        return round(borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"], 0.05, 1.0), 2)
 
     # ------------------------------------------------------------------ R&D, certifications, prêts
     def _lancer_recherche(self, genre, rid):
-        from .jeu import ErreurJeu
         e = self.etat
         cat, acquis = (TECHNOS, e["technos"]) if genre == "tech" else (CERTIFS, e["certifs"])
         f = cat.get(rid)
@@ -165,7 +163,6 @@ class Extensions:
     # ------------------------------------------------------------------ actions du joueur
     def _action_extension(self, genre, p):
         """Renvoie True si l'action a été traitée ici."""
-        from .jeu import ErreurJeu
         e = self.etat
         if genre == "recherche":
             self._lancer_recherche("tech", p.get("id"))
@@ -356,8 +353,7 @@ class Extensions:
             possibles.append({"type": "debauche", "titre": "Tentative de débauchage", "employe": x["id"],
                               "texte": f"{c['nom']} propose un pont d'or à {x['nom']}.",
                               "options": ["Contre-offre (+15 % de salaire)", "Le laisser partir"]})
-        libres = [b for b in self.postes_ouverts() if b not in {x["bureau"] for x in e["employes"]}]
-        if libres:
+        if self.bureaux_libres():
             possibles.append({"type": "stage", "titre": "Stagiaire d'école d'ingénieurs",
                               "texte": "Une école propose un stagiaire gratuit pendant 3 mois.",
                               "options": ["L'accueillir", "Pas maintenant"]})
@@ -389,14 +385,11 @@ class Extensions:
                 e["employes"].remove(x)
                 self._log(f"{x['nom']} part chez la concurrence.", "mauvais")
         elif t == "stage" and choix == 0:
-            libres = [b for b in self.postes_ouverts() if b not in {x["bureau"] for x in e["employes"]}]
+            libres = self.bureaux_libres()
             if libres:
                 c = self._candidat()
-                c.update(poste="Stagiaire d'école", salaire=0, e=max(1, c["e"] // 2), m=max(0, c["m"] // 2), f=max(1, c["f"] // 2))
-                e["employes"].append({**c, "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 2, "absent": 0, "formation": None,
-                                      "bureau": libres[0], "fondateur": False, "tache": None, "gain": 0, "projet": None})
-                self._completer_employe(e["employes"][-1])
-                e["employes"][-1]["stage"] = DUREE_STAGE
+                self._nouvel_employe(c, libres[0], poste="Stagiaire d'école", salaire=0, humeur=2, stage=DUREE_STAGE,
+                                     e=max(1, c["e"] // 2), m=max(0, c["m"] // 2), f=max(1, c["f"] // 2))
                 self._log(f"{c['nom']} arrive en stage pour 3 mois.", "bon")
         elif t == "fin_stage":
             x = next((y for y in e["employes"] if y["id"] == ev["employe"]), None)

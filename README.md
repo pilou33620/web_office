@@ -35,7 +35,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Combos d'équipe** : équipe complète (un spécialiste par domaine), duo qualité (perfectionniste + chasseur de bugs), mentorat (expert + junior), équipe soudée.
 - **Horaires** : de 6 h à 12 h par jour. Plus d'heures = plus de production, mais moral en baisse, fatigue, défauts et heures sup à payer.
 - **Évènements** : pénuries de composants, salons pros, clients pressés, pannes, subventions, menaces de démission, ras-le-bol face aux horaires.
-- **Bilans annuels** avec impôt de 25 % sur le bénéfice, **16 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
+- **Bilans annuels** avec impôt sur le bénéfice (15, 25 ou 33 % selon la difficulté), **16 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
 
 - **Choix techniques à la signature** : nombre de couches du PCB, microcontrôleur (STM32, ESP32, nRF52), type de boîtier (impression 3D, usiné, moule d'injection). Chaque choix modifie les points à produire, le coût du proto, les chances aux tests CEM et la note.
 - **Négociation et concurrence** : au prix et au délai affichés, le client signe ; demander plus est un pari. Trois bureaux concurrents remportent aussi des appels d'offres et figurent au classement (onglet Société).

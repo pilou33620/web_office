@@ -1,7 +1,7 @@
 """Moteur de Circuit Story : simulation jour par jour d'un bureau d'études électronique."""
 import random
 
-from .extensions import Extensions
+from .extensions import ErreurJeu, Extensions, borne
 
 from .donnees import (ANCIENS_POSTES, CHEVEUX, CLIENTS, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
                       ETABLIS, GRILLE, HORAIRES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
@@ -16,15 +16,6 @@ NB_CANDIDATS = 4
 DUREE_CEM = 3
 DUREE_FORMATION = 10
 DUREE_CONGES = 5
-TAUX_IMPOT = 0.25
-
-
-class ErreurJeu(Exception):
-    """Action refusée ; le message est affiché au joueur."""
-
-
-def borne(x, lo, hi):
-    return max(lo, min(hi, x))
 
 
 def entier(v):
@@ -174,6 +165,17 @@ class Jeu(Extensions):
 
     def postes_ouverts(self):
         return [o["id"] for o in self.etat["objets"] if o["type"] == "poste"]
+
+    def bureaux_libres(self):
+        pris = {x["bureau"] for x in self.etat["employes"]}
+        return [b for b in self.postes_ouverts() if b not in pris]
+
+    def _nouvel_employe(self, candidat, bureau, **modifs):
+        emp = {**candidat, "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 0, "absent": 0, "formation": None,
+               "bureau": bureau, "fondateur": False, "tache": None, "gain": 0, "projet": None, **modifs}
+        self._completer_employe(emp)
+        self.etat["employes"].append(emp)
+        return emp
 
     # ------------------------------------------------------------------ aménagement libre
     @staticmethod
@@ -1021,14 +1023,11 @@ class Jeu(Extensions):
             c = next((x for x in e["candidats"] if x["id"] == p.get("id")), None)
             if not c:
                 raise ErreurJeu("Candidat introuvable.")
-            libres = [b for b in self.postes_ouverts() if b not in {x["bureau"] for x in e["employes"]}]
+            libres = self.bureaux_libres()
             if not libres:
                 raise ErreurJeu("Plus de bureau libre : achetez-en un dans Locaux.")
             e["candidats"].remove(c)
-            e["employes"].append({**c, "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 0, "absent": 0,
-                                  "formation": None, "bureau": libres[0], "fondateur": False, "tache": None,
-                                  "gain": 0, "projet": None})
-            self._completer_employe(e["employes"][-1])
+            self._nouvel_employe(c, libres[0])
             self._log(f"{c['nom']} rejoint l'équipe ({c['poste']}).", "bon")
         elif genre == "licencier":
             emp = self.employe(p.get("id"))

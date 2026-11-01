@@ -5,7 +5,8 @@ const $ = (s) => document.querySelector(s);
 const DN = { e: 'Élec', m: 'Méca 3D', f: 'Firmware', c: 'CEM' };
 const COURT = { e: 'élec', m: '3D', f: 'fw' };
 const DC = { e: '#ffc94d', m: '#f08a6c', f: '#7cc0f2', c: '#b08af0' };
-const PIECE = { labo: 'Labo élec', atelier: 'Atelier 3D', bureau: "Bureau d'études", cem: 'Labo CEM' };
+const PIECE = { labo: 'Labo élec', atelier: 'Atelier 3D', bureau: "Bureau d'études", cem: 'Labo CEM', cms: 'Ligne CMS' };
+const PCT_BONUS = 6;  // % de production par point de matériel (moteur : _production)
 const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', equipe: 'Équipe', materiel: 'Matériel', locaux: 'Locaux', journal: 'Journal', societe: 'Société' };
 const ABSENCE = { formation: 'En formation', conges: 'En congés', seminaire: 'Séminaire' };
 const METEO_NOM = { soleil: 'soleil', pluie: 'pluie', neige: 'neige', canicule: 'canicule', orage: 'orage', brouillard: 'brouillard' };
@@ -31,6 +32,8 @@ const STYLE = {
   fdm: ['#3d3d3d', 8, 22, 22, '#ffc94d', 4], resine: ['#f4f4f4', 9, 24, 24, '#ff9a4a', 6], cao: ['#d0955a', 6, 58, 10, '#2a3a56', 3], cnc: ['#8d96a1', 10, 98, 60, '#c9ced4', 5],
   stlink: ['#4a8ad8', 5, 6, 6, '#ffc94d', 3], logique: ['#3d3d3d', 5, 22, 4, '#7be08a', 2], jlink: ['#2b2b2b', 5, 6, 6, '#ff9a4a', 3],
   ci: ['#2b3442', 4, 30, 4, '#7be08a', 2], banc: ['#6a7d92', 5, 58, 10, '#1f4a6e', 3],
+  pickplace: ['#c9ced4', 8, 100, 20, 'repeating-linear-gradient(90deg,#3d3d3d 0 8px,#ffc94d 8px 12px)', 3], rayonx: ['#5a6a7a', 8, 40, 30, '#7be08a', 4],
+  aoi: ['#e8e8e0', 8, 36, 22, '#4a8ad8', 4],
   esd: ['#ffc94d', 8, 16, 16, '#3d3d3d', 8], chambre: ['#5a6a7a', 10, 120, 104, 'repeating-conic-gradient(#2f3a46 0 25%, #46566a 0 50%) 0 0/16px 16px', 6],
   plantes: 'plante', ficus: 'plante', lampe: 'lampe',
   tableau: ['#ffffff', 3, 48, 3, '#4a8ad8', 1], cafe: ['#3d3d3d', 5, 6, 6, '#ff6b5a', 3], clim: ['#f4f4f4', 4, 34, 3, '#b8d8e8', 2],
@@ -59,20 +62,31 @@ const SPOTS = {
 };
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
+const HAUTEUR_MONDE = 1530;
 const PIECES_VERROU = {
   bureau: [246, 26, 126, 226],
   atelier: [197, 258, 175, 364],
   openspace: [18, 628, 175, 274],
   pause: [18, 912, 174, 184],
   cem: [197, 628, 175, 274],
+  plateau: [18, 1176, 354, 150],
+  cms: [18, 1332, 354, 140],
 };
 
 function construireStatique() {
   const haie = Array.from({ length: 28 }, (_, i) =>
     `<div class="a" style="left:${i * 14 - 2}px;top:${i % 2 ? 1 : 3}px;width:17px;height:17px;border-radius:50%;border:2px solid #24401f;background:${i % 3 ? '#4fa043' : '#5cb84c'}"></div>`).join('');
   $('#statique').innerHTML = haie + `
-    <div class="a" style="left:-4px;top:1118px;width:398px;height:30px;background:#5d6266;border-top:3px solid #2b1d14;border-bottom:3px solid #2b1d14"></div>
-    <div class="a" style="left:0;top:1131px;width:390px;height:3px;background:repeating-linear-gradient(90deg,#ffe08a 0 18px,transparent 18px 30px)"></div>
+    <div class="a" style="left:-4px;top:1490px;width:398px;height:30px;background:#5d6266;border-top:3px solid #2b1d14;border-bottom:3px solid #2b1d14"></div>
+    <div class="a" style="left:0;top:1503px;width:390px;height:3px;background:repeating-linear-gradient(90deg,#ffe08a 0 18px,transparent 18px 30px)"></div>
+    <div class="a" style="left:180px;top:1104px;width:30px;height:66px;background:#d8c9a8;border-left:3px solid #2b1d14;border-right:3px solid #2b1d14"></div>
+    <div class="a" style="left:10px;top:1168px;width:370px;height:312px;border:3px solid #2b1d14;border-radius:12px;background:#5a6672;box-shadow:0 8px 0 rgba(0,0,0,.22)"></div>
+    <div class="piece" style="left:18px;top:1176px;width:354px;height:150px;background:repeating-linear-gradient(90deg,#d9c3a0 0 16px,#ccb48e 16px 18px)"></div>
+    <div class="piece" style="left:18px;top:1332px;width:354px;height:140px;background-color:#dfe6ea;background-image:linear-gradient(#c7d2d9 2px,transparent 2px),linear-gradient(90deg,#c7d2d9 2px,transparent 2px);background-size:20px 20px"></div>
+    <div class="a ol" style="left:24px;top:1420px;width:342px;height:14px;border-radius:5px;background:repeating-linear-gradient(90deg,#3d3d3d 0 10px,#6a7480 10px 20px)"></div>
+    <div class="a" style="left:180px;top:1320px;width:32px;height:16px;background:#d9c3a0"></div>
+    <div class="etiq-piece" style="left:24px;top:1304px">Plateau R&amp;D</div>
+    <div class="etiq-piece" style="left:24px;top:1448px">Ligne de production CMS</div>
     <div class="a" style="left:10px;top:906px;width:190px;height:198px;border:3px solid #2b1d14;border-radius:0 0 12px 12px;background:#7a5236;box-shadow:0 8px 0 rgba(0,0,0,.22)"></div>
     <div class="piece" style="left:18px;top:912px;width:174px;height:184px;background-color:#f3c9a8;background-image:linear-gradient(45deg,#e8b48e 25%,transparent 25%,transparent 75%,#e8b48e 75%),linear-gradient(45deg,#e8b48e 25%,transparent 25%,transparent 75%,#e8b48e 75%);background-size:24px 24px;background-position:0 0,12px 12px"></div>
     <div class="a ol" style="left:24px;top:918px;width:162px;height:20px;border-radius:6px;background:#a8703f;box-shadow:inset 0 -4px 0 #8a5a30"></div>
@@ -261,6 +275,9 @@ const ligne = (o) => `<div class="ligne">${o.avatar || `<div class="pastille" st
   <div class="txt"><div class="t1">${o.t1}</div>${o.t2 ? `<div class="t2">${o.t2}</div>` : ''}${o.t3 ? `<div class="t3">${o.t3}</div>` : ''}${o.extra || ''}</div>${o.btn || ''}</div>`;
 const bouton = (act, id, texte, actif = true, cls = '', attrs = '') => `<button type="button" class="btn ${cls}" data-act="${act}" data-id="${esc(id)}" ${attrs} ${actif ? '' : 'disabled'}>${esc(texte)}</button>`;
 const repartition = (t) => `Élec ${t.e} · Méca ${t.m} · Firmware ${t.f}`;
+const requisListe = (r) => (!r ? [] : Array.isArray(r) ? r : [r]);
+const nomRequis = (r) => requisListe(r).map((x) => (CAT.technos[x] || CAT.certifs[x] || { nom: x }).nom).join(' + ');
+const etoiles = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
 const barre = (label, fait, besoin, couleur) => `<div class="barre-l"><span>${label}</span><div class="jauge"><i style="width:${Math.min(100, Math.round(100 * fait / Math.max(1, besoin)))}%;background:${couleur}"></i></div><span>${Math.floor(fait)} / ${besoin}</span></div>`;
 const couleurNote = (n) => (n >= 7.5 ? '#7be08a' : n >= 5.5 ? '#ffc94d' : '#ff8a7a');
 
@@ -297,22 +314,37 @@ function encartProjet(p) {
 }
 
 function panneauProjets() {
-  const e = ETAT, plein = e.projets.length >= e.capacite;
-  let h = `<div class="section">En cours · ${e.projets.length} / ${e.capacite} projet${e.capacite > 1 ? 's' : ''}${e.capacite < 3 ? ' · agrandissez pour en mener plus' : ''}</div>`;
+  const e = ETAT, plein = e.places >= e.capacite;
+  let h = `<div class="section">En cours · ${e.places} / ${e.capacite} place${e.capacite > 1 ? 's' : ''}${e.capacite < 4 ? ' · agrandissez pour en mener plus' : ''}</div>`;
   h += e.projets.map(encartProjet).join('') || '<div class="vide">Aucun projet : signez un contrat ci-dessous.</div>';
   h += `<div class="section">Appels d'offres · les clients attendent ${dec(e.attente_client)}/10</div>`;
-  h += e.offres.length ? e.offres.map((o) => ligne({
-    couleur: '#7be08a', t1: esc(o.nom), t2: `${esc(o.client)} · ${eur(o.paie)} · ${o.delai} j`,
-    t3: `${repartition(o.total)} · expire dans ${o.expire} j${o.requis ? ' · ' + esc((CAT.technos[o.requis] || CAT.certifs[o.requis]).nom) : ''}`, btn: bouton('sig-ouvrir', o.id, plein ? 'Complet' : 'Signer', !plein, '', 'data-genre="signer"'),
-  })).join('') : '<div class="vide">Aucune offre pour le moment, patientez quelques jours.</div>';
+  h += e.offres.length ? [...e.offres].sort((a, b) => (b.mega || 0) - (a.mega || 0) || (b.fidele || 0) - (a.fidele || 0)).map((o) => {
+    const complet = e.places + (o.mega ? 2 : 1) > e.capacite;
+    const equipe = o.equipe_min && e.employes.length < o.equipe_min;
+    const secteur = CAT.secteurs[o.secteur] ? CAT.secteurs[o.secteur].nom + ' · ' : '';
+    return ligne({
+      couleur: o.mega ? '#ff9a4a' : o.fidele ? '#ffc94d' : '#7be08a',
+      t1: (o.mega ? '<span class="badge mega">MÉGA-PROJET</span> ' : '') + esc(o.nom),
+      t2: `${esc(secteur)}${esc(o.client)}${o.fidele ? ` <span class="fid" title="Client fidèle : projet plus gros, négociation plus facile">${etoiles(o.fidele)}</span>` : ''} · ${eur(o.paie)} · ${o.delai} j`,
+      t3: `${repartition(o.total)} · expire dans ${o.expire} j${o.requis ? ' · ' + esc(nomRequis(o.requis)) : ''}${o.mega ? ` · compte pour 2 projets · équipe de ${o.equipe_min} minimum` : ''}`,
+      btn: bouton('sig-ouvrir', o.id, complet ? 'Complet' : equipe ? `${o.equipe_min} pers. requises` : 'Signer', !complet && !equipe, '', 'data-genre="signer"'),
+    });
+  }).join('') : '<div class="vide">Aucune offre pour le moment, patientez quelques jours.</div>';
   h += `<div class="section">Produits maison</div>`;
   h += CAT.produits.map((x) => {
+    const avant = x.suite && CAT.produits.find((y) => y.id === x.suite);
+    const sansV1 = avant && !(x.suite in e.gammes);
+    const sansTech = x.requis && !e.technos.includes(x.requis);
     const bloque = e.renommee < x.rep_min;
-    const occupe = e.projets.length >= e.capacite || [...e.produits, ...e.projets].some((y) => y.id_produit === x.id);
+    const occupe = e.places >= e.capacite || [...e.produits, ...e.projets].some((y) => y.id_produit === x.id);
+    const lance = x.id in e.gammes;
+    const bonus = avant && !sansV1 ? Math.round(8 * Math.max(0, e.gammes[x.suite] - 6)) : 0;
     const total = { e: Math.round(x.taille * x.rep[0]), m: Math.round(x.taille * x.rep[1]), f: Math.round(x.taille * x.rep[2]) };
+    const infos = [avant ? `Suite de « ${esc(avant.nom)} »${bonus ? ` · ventes +${bonus} %` : ''}` : '', x.requis ? esc(nomRequis(x.requis)) : '', lance ? `Déjà lancé (meilleure note ${dec(e.gammes[x.id])})` : ''].filter(Boolean).join(' · ');
     return ligne({
-      couleur: '#b08af0', t1: esc(x.nom), t2: `Prototype ${eur(x.cout)} · jusqu'à ~${eur(x.potentiel * 2)}/mois`, t3: repartition(total),
-      btn: bouton('sig-ouvrir', x.id, bloque ? `★ ${x.rep_min} requis` : occupe ? 'Indisponible' : 'Lancer', !bloque && !occupe && e.argent >= x.cout, '', 'data-genre="produit"'),
+      couleur: lance ? '#7be08a' : '#b08af0', t1: esc(x.nom), t2: `Prototype ${eur(x.cout)} · jusqu'à ~${eur(x.potentiel * 0.5)}/mois`, t3: repartition(total) + (infos ? ' · ' + infos : ''),
+      btn: bouton('sig-ouvrir', x.id, bloque ? `★ ${x.rep_min} requis` : sansV1 ? 'Après la v1' : sansTech ? 'Techno requise' : occupe ? 'Indisponible' : 'Lancer',
+        !bloque && !sansV1 && !sansTech && !occupe && e.argent >= x.cout, '', 'data-genre="produit"'),
     });
   }).join('');
   if (e.produits.length) {
@@ -371,10 +403,10 @@ function panneauEquipe() {
 function panneauMateriel() {
   const e = ETAT, b = e.bonus;
   let h = `<div class="onglets">${['e', 'm', 'f', 'c'].map((k) => `<button type="button" data-act="catmat" data-id="${k}" class="${catMat === k ? 'actif' : ''}" style="${catMat === k ? 'background:' + DC[k] : ''}">${DN[k]}</button>`).join('')}</div>`;
-  const resume = catMat === 'c' ? `chance aux tests +${Math.round(b.cem * 100)} %` : `production +${b[catMat] * 10} % · debug +${b.debug}`;
+  const resume = catMat === 'c' ? `chance aux tests +${Math.round(b.cem * 100)} %` : `production +${b[catMat] * PCT_BONUS} % · debug +${b.debug}`;
   h += `<div class="section">${DN[catMat]} · ${resume}</div><div class="t2" style="font-size:13px;color:#b3bca5;margin-top:4px">Choisissez « Placer », puis touchez le plan à l'endroit voulu.</div>`;
   h += Object.entries(CAT.materiel).filter(([, m]) => m.dom === catMat).map(([id, m]) => {
-    const effets = [m.bonus && `+${m.bonus * 10} % ${DN[m.dom]}`, m.debug && `debug +${m.debug}`, m.cem && `CEM +${Math.round(m.cem * 100)} %`].filter(Boolean).join(' · ');
+    const effets = [m.bonus && `+${m.bonus * PCT_BONUS} % ${DN[m.dom]}`, m.debug && `debug +${m.debug}`, m.cem && `CEM +${Math.round(m.cem * 100)} %`].filter(Boolean).join(' · ');
     const possede = e.materiel.includes(id);
     const local = !m.pieces.some((k) => !CAT.pieces[k].local || e.locaux.includes(CAT.pieces[k].local));
     return ligne({
@@ -452,6 +484,11 @@ function panneauSociete() {
     : '<div class="vide">Livrez de beaux projets (7/10 ou plus) : certains clients commandent ensuite une série.</div>');
   h += `<div class="section">Garanties en cours</div>` + (e.garanties.length ? e.garanties.map((g) => ligne({ couleur: '#ff8a7a', t1: esc(g.nom), t2: `${esc(g.client)} · ${dec(g.defauts)} défauts livrés`, t3: `Garantie encore ${g.jours} j` })).join('')
     : '<div class="vide">Aucun projet livré avec des défauts : pas de risque de retour SAV.</div>');
+  h += `<div class="section">Clients</div>` + (e.clients_top.length ? e.clients_top.map((c) => ligne({
+    couleur: c.fid >= 3 ? '#ffc94d' : '#3a4535', t1: `${esc(c.nom)} <span class="fid">${etoiles(c.fid)}</span>`, t2: `${esc(c.niveau)}${c.secteur ? ' · ' + esc(c.secteur) : ''}`,
+    t3: `${c.livres} projet${c.livres > 1 ? 's' : ''} livré${c.livres > 1 ? 's' : ''}`,
+  })).join('') + '<div class="t2" style="font-size:12px;color:#b3bca5;margin-top:4px">Une note au-dessus de l\'attente rend un client plus fidèle : il revient avec des projets plus gros et négocie plus facilement.</div>'
+    : '<div class="vide">Livrez vos premiers contrats : les clients satisfaits reviendront.</div>');
   h += `<div class="section">Concurrence</div>` + e.classement.map((c, i) => ligne({ couleur: c.vous ? '#ffc94d' : '#3a4535', t1: `${i + 1}. ${esc(c.nom)}`, t2: `Renommée ${c.renommee}` })).join('');
   return h;
 }
@@ -478,6 +515,11 @@ function panneauAccueil() {
     <span>Produits lancés</span><b>${e.stats.produits_lances}</b>
     <span>Équipe</span><b>${e.employes.length} personne${e.employes.length > 1 ? 's' : ''}</b>
     <span>Moral</span><b>${e.moral} %</b></div></div>
+    <div class="section">Missions · ${e.missions.length} / ${CAT.nb_missions}</div>
+    ${e.missions_actives.length ? e.missions_actives.map((m) => ligne({
+      couleur: '#ffc94d', t1: esc(m.texte), t2: `Récompense ${eur(m.argent)}${m.renommee ? ` · renommée +${m.renommee}` : ''}`,
+      extra: `<div class="jauge" style="margin-top:4px"><i style="width:${Math.round(100 * m.progres / m.seuil)}%;background:#ffc94d"></i></div><div class="t3">${dec(m.progres)} / ${m.seuil}</div>`,
+    })).join('') : '<div class="vide">Toutes les missions sont accomplies. Bravo !</div>'}
     <div class="section">Trophées · ${e.trophees.length} / ${Object.keys(CAT.trophees).length}</div>
     ${chipsTrophees(e)}
     ${e.bilans.length ? `<div class="section">Bilans annuels</div>` + e.bilans.slice(-5).reverse().map((b) => ligne({
@@ -521,7 +563,7 @@ function rendre() {
   nbTrophees = e.trophees.length;
   const j = e.journal[0] || { date: '', texte: '' };
   majHtml('#bandeau', `<span class="d">${esc(j.date)}</span><span class="t">${esc(j.texte)}</span>`);
-  $('#vitesse').textContent = vitesse + '×';
+  $('#vitesse').textContent = (vitesse === 0.5 ? '½' : vitesse) + '×';
   $('#lecture').setAttribute('aria-label', joue ? 'Pause' : 'Lecture');
   majHtml('#lecture', joue
     ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>'
@@ -629,7 +671,7 @@ function rendreModale() {
   if (h && etaitCachee) $('#modale-contenu button')?.focus();
 }
 
-const chanceNego = (prix, delai) => Math.max(0.05, Math.min(1, 1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * ETAT.renommee));
+const chanceNego = (prix, delai, fid = 0) => Math.max(0.05, Math.min(1, 1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * ETAT.renommee + 0.05 * fid));
 function modaleSignature() {
   const e = ETAT, sg = signature;
   const cible = sg.genre === 'signer' ? e.offres.find((o) => o.id === sg.id) : CAT.produits.find((x) => x.id === sg.id);
@@ -639,13 +681,15 @@ function modaleSignature() {
     return `<button type="button" data-act="sig-opt" data-cle="${cle}" data-id="${k}" class="${val === k ? 'actif' : ''}" style="${val === k ? 'background:#ffc94d' : ''}" ${bloque ? 'disabled' : ''}>${esc(o.nom || o)}</button>`;
   }).join('')}</div>${desc ? `<p style="font-size:13px">${esc(desc)}</p>` : ''}`;
   let h = `<h2 id="modale-titre">${esc(cible.nom)}</h2><p>${sg.genre === 'signer' ? `${esc(cible.client)} · ${eur(cible.paie)} · ${cible.delai} j` : `Produit maison · prototype ${eur(cible.cout)}`}</p>`;
+  if (cible.mega) h += `<p style="font-size:13px"><b>Méga-projet</b> : occupe 2 places de projet pendant ${cible.delai} jours, payé 25 % de plus.</p>`;
+  if (cible.fidele) h += `<p style="font-size:13px">Client fidèle ${etoiles(cible.fidele)} : il accepte plus facilement vos conditions.</p>`;
   const sansMeca = sg.genre === 'signer' ? cible.total.m === 0 : cible.rep[1] === 0;
   for (const [cle, cat] of Object.entries(CAT.choix_tech)) {
     if (cle === 'boitier' && sansMeca) { h += `<div class="section" style="margin-top:6px">${esc(cat.nom)}</div><p style="font-size:13px">Pas de partie mécanique sur ce projet.</p>`; continue; }
     h += groupe(cat.nom, cle, sg.tech[cle], cat.options, cat.options[sg.tech[cle]].desc);
   }
   if (sg.genre === 'signer') {
-    const ch = chanceNego(Number(sg.prix), Number(sg.delai));
+    const ch = chanceNego(Number(sg.prix), Number(sg.delai), cible.fidele || 0);
     h += groupe('Prix demandé', 'prix', sg.prix, CAT.prix_proposes) + groupe('Délai proposé', 'delai', sg.delai, CAT.delais_proposes);
     h += `<p><b>${eur(cible.paie * Number(sg.prix))}</b> en ${Math.max(8, Math.round(cible.delai * Number(sg.delai)))} jours · chance que le client accepte : <b style="color:${ch >= 0.99 ? '#7be08a' : ch >= 0.6 ? '#ffc94d' : '#ff8a7a'}">${Math.round(ch * 100)} %</b></p>`;
   }
@@ -654,9 +698,13 @@ function modaleSignature() {
 const AIDE = [
   ['Projets', "Signez un contrat (acompte de 30 %), puis lancez le temps. Schéma, routage PCB et 3D, prototype, firmware, debug puis tests CEM."],
   ['Note du client', "Les défauts et le retard font baisser la note sur 10. Elle fixe le solde payé et la renommée gagnée."],
+  ['Clients fidèles', "Une note au-dessus de l'attente fidélise le client (★). Il revient avec des projets de son secteur plus gros, et négocie plus facilement."],
+  ['Méga-projets', "Dès 10 de renommée, de rares projets géants apparaissent : ils occupent deux places, demandent une grande équipe et plusieurs technos."],
+  ['Produits maison', "Lancez vos produits, puis leurs suites : une v2 se vend d'autant mieux que la v1 a été bien notée."],
+  ['Missions', "Trois missions sont proposées à la fois sur le tableau de bord. Chacune rapporte une prime, parfois de la renommée."],
   ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware), un trait, un moral et une fatigue. Formez-les, envoyez-les en congés."],
   ['Conditions de travail', "Décoration, café, climatisation, isolation et horaires changent la production (vue Productivité)."],
-  ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Agrandir les locaux permet plus de projets en parallèle."],
+  ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Agrandir les locaux permet plus de projets en parallèle, jusqu'au bâtiment B (plateau R&D et ligne CMS)."],
   ['Aménagement', "Le bouton en haut à gauche permet de placer, déplacer ou revendre bureaux, appareils et décoration."],
   ['Société', "Recherche, certifications, fournisseurs, prêts et levée de fonds débloquent de meilleurs contrats."],
   ['Argent', "Loyer, salaires et frais tombent chaque mois, l'impôt chaque année. Sous −5 000 €, c'est la faillite."],
@@ -784,7 +832,7 @@ document.addEventListener('click', async (ev) => {
       selection = null;
       break;
     case 'catmat': catMat = id; return rendre();
-    case 'vitesse': vitesse = vitesse === 1 ? 2 : vitesse === 2 ? 4 : 1; rendre(); return boucle();
+    case 'vitesse': vitesse = { 0.5: 1, 1: 2, 2: 4, 4: 0.5 }[vitesse]; rendre(); return boucle();
     case 'lecture': joue = !joue; rendre(); return boucle();
     case 'menu': return ouvrirMenu('menu');
     case 'nouvelle-directe': return ouvrirMenu('liste', 'nouvelle');
@@ -876,7 +924,7 @@ function ajusterEchelle() {
   const w = $('#cadre').clientWidth;
   const s = Math.min(2, w / 390);
   $('#echelle').style.width = 390 * s + 'px';
-  $('#echelle').style.height = 1160 * s + 'px';
+  $('#echelle').style.height = HAUTEUR_MONDE * s + 'px';
   $('#monde').style.transform = `scale(${s})`;
 }
 

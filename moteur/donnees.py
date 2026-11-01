@@ -12,9 +12,11 @@ PIECES = {
     "openspace": {"nom": "Open space", "rect": (18, 628, 175, 274), "local": "openspace"},
     "cem":       {"nom": "Labo CEM", "rect": (197, 628, 175, 274), "local": "cem"},
     "pause":     {"nom": "Salle de pause", "rect": (18, 912, 174, 184), "local": "pause"},
+    "plateau":   {"nom": "Plateau R&D", "rect": (18, 1176, 354, 150), "local": "plateau"},
+    "cms":       {"nom": "Ligne CMS", "rect": (18, 1332, 354, 140), "local": "cms"},
 }
 INTERIEUR = list(PIECES)
-TRAVAIL = ["garage", "bureau", "openspace"]
+TRAVAIL = ["garage", "bureau", "openspace", "plateau"]
 # Établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
 ETABLIS = [(24, 31, 342, 26), (23, 266, 44, 348)]
 GRILLE = 4
@@ -23,9 +25,9 @@ GRILLE = 4
 POSTE = {"nom": "Bureau de travail", "prix": 400, "w": 76, "h": 64, "pieces": TRAVAIL}
 POSTES_DEPART = [(34, 66), (147, 66)]
 
-# Matériel : bonus de production (10 % par point), debug (détection des défauts), cem (chance aux tests)
+# Matériel : bonus de production (6 % par point), debug (détection des défauts), cem (chance aux tests)
 # w, h : taille sur le plan ; pos : emplacement par défaut (achat automatique, anciennes sauvegardes)
-_FW = ["garage", "bureau", "labo", "openspace"]
+_FW = ["garage", "bureau", "labo", "openspace", "plateau"]
 MATERIEL = {
     # Labo électronique
     "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (30, 278)},
@@ -50,6 +52,10 @@ MATERIEL = {
     # Labo CEM
     "esd":      {"nom": "Générateur ESD", "dom": "c", "prix": 3500, "bonus": 0, "cem": 0.08, "piece": "cem", "w": 40, "h": 40, "pos": (220, 816)},
     "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem", "w": 144, "h": 130, "pos": (214, 648)},
+    # Ligne de production CMS (bâtiment B)
+    "pickplace": {"nom": "Machine pick-and-place", "dom": "e", "prix": 30000, "bonus": 3, "piece": "cms", "w": 120, "h": 56, "pos": (30, 1350)},
+    "rayonx":   {"nom": "Inspection par rayons X", "dom": "e", "prix": 24000, "bonus": 1, "debug": 3, "piece": "cms", "w": 64, "h": 56, "pos": (170, 1350)},
+    "aoi":      {"nom": "Inspection optique automatique", "dom": "e", "prix": 12000, "bonus": 1, "debug": 1, "cem": 0.05, "piece": "cms", "w": 56, "h": 44, "pos": (250, 1350)},
 }
 for _m in MATERIEL.values():
     _m.setdefault("pieces", [_m["piece"]])
@@ -90,6 +96,8 @@ LOCAUX = {
     "openspace": {"nom": "Open space", "desc": "Place pour 4 à 6 bureaux, coin détente possible", "prix": 20000, "loyer": 700, "rep": 3},
     "pause":     {"nom": "Salle de pause", "desc": "Pauses plus reposantes (fatigue −5 par jour au lieu de −3), moral +5", "prix": 5000, "loyer": 300, "rep": 1},
     "cem":       {"nom": "Labo CEM", "desc": "Tests CEM gratuits et équipements dédiés", "prix": 15000, "loyer": 600, "rep": 4},
+    "plateau":   {"nom": "Plateau R&D (bâtiment B)", "desc": "Place pour 8 bureaux, un projet de plus en parallèle", "prix": 45000, "loyer": 1500, "rep": 7},
+    "cms":       {"nom": "Ligne de production CMS", "desc": "Prototypes assemblés en 1 jour, séries +50 %, machines de production", "prix": 80000, "loyer": 2200, "rep": 10},
 }
 LOYER_BASE = 400
 # Anciennes positions des postes (sauvegardes v2) : coin haut-gauche de l'emprise
@@ -121,30 +129,96 @@ POSTES = [
     {"nom": "Ingé mécatronique", "poids": {"e": 0.3, "m": 0.5, "f": 0.2}},
 ]
 
-CLIENTS = ["Atelier Bois et Co", "DomoSud", "AgriTech Gironde", "VéloMotion", "Aéro Systèmes", "MedNova",
-           "Océane Robotics", "Vignobles Connectés", "BatiSmart", "EnergiPlus", "LudoKit", "Port Atlantique",
-           "Rail Services", "SolarFerme", "Brasserie du Bassin"]
+# Secteurs : chaque client appartient à un secteur ; les clients bien servis reviennent (fidélité)
+SECTEURS = {
+    "industrie": {"nom": "Industrie", "clients": ["Rail Services", "Port Atlantique", "MécaPrécis", "Usines du Lot"]},
+    "maison":    {"nom": "Maison connectée", "clients": ["DomoSud", "BatiSmart", "Atelier Bois et Co", "HabitaZen"]},
+    "energie":   {"nom": "Énergie", "clients": ["EnergiPlus", "SolarFerme", "Watt'Elle", "Hydro Garonne"]},
+    "agri":      {"nom": "Agriculture", "clients": ["AgriTech Gironde", "Vignobles Connectés", "Brasserie du Bassin", "Huîtres du Cap"]},
+    "mobilite":  {"nom": "Mobilité", "clients": ["VéloMotion", "TramLine", "AutoNova", "Scoot'Atlantique"]},
+    "loisirs":   {"nom": "Grand public", "clients": ["LudoKit", "SonoLab", "Océane Robotics", "FitPulse"]},
+    "medical":   {"nom": "Médical", "clients": ["MedNova", "CardioSense", "Clinique du Parc", "OrthoTech"]},
+    "aero":      {"nom": "Aéro et drones", "clients": ["Aéro Systèmes", "AvioNav", "DroneWorks", "Héli Sud"]},
+    "telecom":   {"nom": "Télécoms", "clients": ["TéléRéseaux", "FibreOuest", "NetBox", "OndeCom"]},
+    "spatial":   {"nom": "Spatial", "clients": ["Orbital Sud", "AstroLab", "StarTrack", "Lune & Co"]},
+}
+CLIENTS = [c for s in SECTEURS.values() for c in s["clients"]]
+FIDELITE_MAX = 5
+NIVEAUX_FIDELITE = ["Nouveau client", "Client", "Client régulier", "Client fidèle", "Client fidèle", "Partenaire"]
 
-# Modèles de contrats : nom, répartition e/m/f, taille de base, renommée minimale
-# Modèles de contrats : nom, répartition e/m/f, taille de base, renommée minimale, technologie ou certification requise
+# Modèles de contrats : nom, répartition e/m/f, taille de base, renommée minimale,
+# technologie ou certification requise (None, un identifiant ou un tuple d'identifiants), secteur
 CONTRATS = [
-    ("Carte LED pour enseigne", (0.75, 0.0, 0.25), 40, 0, None),
-    ("Interface capteur industriel", (0.7, 0.1, 0.2), 60, 0, None),
-    ("Thermostat connecté", (0.4, 0.3, 0.3), 90, 0, None),
-    ("Boîtier domotique Zigbee", (0.35, 0.35, 0.3), 120, 1, "ble"),
-    ("Bracelet connecté", (0.35, 0.35, 0.3), 110, 1, "ble"),
-    ("Chargeur de batterie lithium", (0.6, 0.15, 0.25), 140, 2, "hv"),
-    ("Capteur LoRa agricole", (0.4, 0.2, 0.4), 150, 3, "rf"),
-    ("Onduleur solaire", (0.6, 0.2, 0.2), 230, 4, "hv"),
-    ("Contrôleur moteur BLDC", (0.45, 0.1, 0.45), 260, 5, "moteur"),
-    ("Tracker GPS pour flotte", (0.4, 0.2, 0.4), 240, 6, "rf"),
-    ("Caméra intelligente", (0.35, 0.2, 0.45), 320, 7, "ia"),
-    ("Module radio 2,4 GHz", (0.55, 0.15, 0.3), 380, 9, "rf"),
-    ("Instrument médical portable", (0.4, 0.3, 0.3), 500, 10, "medical"),
-    ("Calculateur pour drone", (0.4, 0.2, 0.4), 650, 12, "moteur"),
-    ("Équipement avionique", (0.5, 0.2, 0.3), 700, 14, "aero"),
+    ("Carte LED pour enseigne", (0.75, 0.0, 0.25), 40, 0, None, "industrie"),
+    ("Lampe de vélo rechargeable", (0.6, 0.2, 0.2), 45, 0, None, "mobilite"),
+    ("Carte relais domotique", (0.7, 0.05, 0.25), 50, 0, None, "maison"),
+    ("Jouet lumineux", (0.5, 0.3, 0.2), 50, 0, None, "loisirs"),
+    ("Minuterie de four industriel", (0.65, 0.1, 0.25), 55, 0, None, "industrie"),
+    ("Interface capteur industriel", (0.7, 0.1, 0.2), 60, 0, None, "industrie"),
+    ("Compteur d'eau d'irrigation", (0.55, 0.2, 0.25), 60, 0, None, "agri"),
+    ("Sonde de cuve à vin", (0.5, 0.25, 0.25), 70, 0, None, "agri"),
+    ("Thermostat connecté", (0.4, 0.3, 0.3), 90, 0, None, "maison"),
+    ("Capteur d'humidité du sol", (0.5, 0.2, 0.3), 100, 1, None, "agri"),
+    ("Bracelet connecté", (0.35, 0.35, 0.3), 110, 1, "ble", "loisirs"),
+    ("Enceinte Bluetooth", (0.45, 0.3, 0.25), 120, 1, "ble", "loisirs"),
+    ("Boîtier domotique Zigbee", (0.35, 0.35, 0.3), 120, 1, "ble", "maison"),
+    ("Pilulier connecté", (0.35, 0.35, 0.3), 120, 2, "ble", "medical"),
+    ("Serrure connectée", (0.35, 0.35, 0.3), 130, 2, "ble", "maison"),
+    ("Afficheur de quai de gare", (0.55, 0.2, 0.25), 130, 2, None, "industrie"),
+    ("Chargeur de batterie lithium", (0.6, 0.15, 0.25), 140, 2, "hv", "energie"),
+    ("Station de recharge pour vélos", (0.55, 0.25, 0.2), 160, 2, "hv", "mobilite"),
+    ("Ruche connectée", (0.4, 0.3, 0.3), 140, 3, "rf", "agri"),
+    ("Capteur LoRa agricole", (0.4, 0.2, 0.4), 150, 3, "rf", "agri"),
+    ("Chargeur USB-C 100 W", (0.65, 0.2, 0.15), 180, 3, "usb", "loisirs"),
+    ("Compteur électrique communicant", (0.5, 0.15, 0.35), 200, 3, "ce", "energie"),
+    ("Tensiomètre de poignet", (0.4, 0.3, 0.3), 200, 4, "ce", "medical"),
+    ("Passerelle Ethernet industrielle", (0.5, 0.1, 0.4), 220, 4, "eth", "industrie"),
+    ("Onduleur solaire", (0.6, 0.2, 0.2), 230, 4, "hv", "energie"),
+    ("Contrôleur de trottinette", (0.45, 0.2, 0.35), 240, 4, "moteur", "mobilite"),
+    ("Contrôleur moteur BLDC", (0.45, 0.1, 0.45), 260, 5, "moteur", "industrie"),
+    ("Box internet", (0.5, 0.2, 0.3), 300, 5, "eth", "telecom"),
+    ("Tracker GPS pour flotte", (0.4, 0.2, 0.4), 240, 6, "rf", "mobilite"),
+    ("Tableau de bord de scooter", (0.45, 0.25, 0.3), 280, 6, "usb", "mobilite"),
+    ("Caméra intelligente", (0.35, 0.2, 0.45), 320, 7, "ia", "industrie"),
+    ("Routeur 4G de chantier", (0.5, 0.2, 0.3), 360, 7, "cell", "telecom"),
+    ("Capteur sous-marin de port", (0.45, 0.35, 0.2), 340, 7, "rf", "industrie"),
+    ("Borne de recharge pour voiture", (0.55, 0.25, 0.2), 420, 8, ("hv", "ce"), "energie"),
+    ("Carte de vision FPGA", (0.55, 0.05, 0.4), 400, 8, "fpga", "industrie"),
+    ("Module radio 2,4 GHz", (0.55, 0.15, 0.3), 380, 9, "rf", "telecom"),
+    ("Robot de cueillette", (0.35, 0.35, 0.3), 450, 9, ("moteur", "ia"), "agri"),
+    ("Instrument médical portable", (0.4, 0.3, 0.3), 500, 10, "medical", "medical"),
+    ("Radar de recul", (0.55, 0.15, 0.3), 500, 10, ("rf", "auto"), "mobilite"),
+    ("Capteur de gaz pour raffinerie", (0.5, 0.3, 0.2), 550, 11, "atex", "industrie"),
+    ("Coffre de clés chiffrées", (0.45, 0.15, 0.4), 520, 11, "secu", "telecom"),
+    ("Calculateur pour drone", (0.4, 0.2, 0.4), 650, 12, "moteur", "aero"),
+    ("Pompe à insuline", (0.4, 0.3, 0.3), 600, 12, ("medical", "ble"), "medical"),
+    ("Calculateur d'aide à la conduite", (0.45, 0.1, 0.45), 650, 12, "auto", "mobilite"),
+    ("Station de base 5G", (0.55, 0.15, 0.3), 700, 13, ("cell", "fpga"), "telecom"),
+    ("Équipement avionique", (0.5, 0.2, 0.3), 700, 14, "aero", "aero"),
+    ("Défibrillateur automatique", (0.45, 0.3, 0.25), 800, 15, "medical", "medical"),
+    ("Charge utile de CubeSat", (0.5, 0.25, 0.25), 900, 16, ("spatial", "espace"), "spatial"),
+    ("Pilotage de réseau électrique", (0.5, 0.1, 0.4), 850, 16, ("hv", "secu"), "energie"),
+    ("Radio logicielle militaire", (0.5, 0.15, 0.35), 900, 17, ("fpga", "rf"), "telecom"),
+    ("Calculateur de moteur d'avion", (0.45, 0.2, 0.35), 1000, 18, ("aero", "moteur"), "aero"),
+    ("Train autonome", (0.4, 0.2, 0.4), 950, 18, ("auto", "secu"), "mobilite"),
+    ("Ordinateur de bord de satellite", (0.5, 0.15, 0.35), 1100, 20, ("spatial", "espace"), "spatial"),
+    ("Implant médical sans fil", (0.4, 0.3, 0.3), 1000, 22, ("medical", "ble"), "medical"),
 ]
-PRIMES = {"medical": 1.3, "aero": 1.4}
+
+# Méga-projets : rares, énormes, payés 25 % de plus ; comptent pour deux projets en parallèle
+# nom, répartition, taille de base, renommée minimale, prérequis, secteur, équipe minimale
+MEGAS = [
+    ("Flotte de drones de livraison", (0.4, 0.25, 0.35), 1600, 10, ("moteur", "rf"), "aero", 6),
+    ("Usine 4.0 clé en main", (0.45, 0.25, 0.3), 1800, 11, ("eth", "moteur"), "industrie", 7),
+    ("Réseau électrique intelligent régional", (0.5, 0.1, 0.4), 2000, 13, ("hv", "secu"), "energie", 8),
+    ("Ligne de métro automatique", (0.4, 0.2, 0.4), 2400, 15, ("auto", "secu"), "mobilite", 9),
+    ("Robot chirurgical", (0.4, 0.3, 0.3), 2600, 17, ("medical", "moteur"), "medical", 10),
+    ("Constellation de nanosatellites", (0.5, 0.2, 0.3), 3000, 18, ("spatial", "espace"), "spatial", 10),
+    ("Cockpit d'avion régional", (0.45, 0.2, 0.35), 2800, 19, ("aero", "fpga"), "aero", 10),
+]
+MEGA_PRIME = 1.25
+
+PRIMES = {"medical": 1.3, "aero": 1.4, "auto": 1.25, "atex": 1.2, "espace": 1.5}
 
 # Choix techniques faits à la signature d'un projet
 CHOIX_TECH = {
@@ -176,12 +250,21 @@ TECHNOS = {
     "moteur": {"nom": "Contrôle moteur", "prix": 9000, "jours": 45, "desc": "Contrôleurs BLDC et drones"},
     "dfm":    {"nom": "Conception pour la fabrication", "prix": 6000, "jours": 30, "desc": "Prototypes −30 %, défauts −10 %"},
     "ia":     {"nom": "IA embarquée", "prix": 15000, "jours": 60, "requis": "ble", "desc": "Caméras intelligentes ; note +0,2"},
+    "usb":    {"nom": "USB-C Power Delivery", "prix": 5000, "jours": 30, "desc": "Chargeurs et tableaux de bord"},
+    "eth":    {"nom": "Ethernet industriel", "prix": 6000, "jours": 35, "desc": "Passerelles, box internet, usines"},
+    "cell":   {"nom": "Réseaux 4G et 5G", "prix": 14000, "jours": 60, "requis": "rf", "desc": "Routeurs et stations de base"},
+    "fpga":   {"nom": "FPGA et traitement du signal", "prix": 16000, "jours": 60, "desc": "Vision, radio logicielle ; debug +1"},
+    "secu":   {"nom": "Cybersécurité embarquée", "prix": 12000, "jours": 50, "desc": "Réseaux électriques, trains ; défauts −5 %"},
+    "spatial": {"nom": "Électronique durcie spatiale", "prix": 30000, "jours": 120, "requis": "fpga", "desc": "Satellites (avec la certification ECSS)"},
 }
 CERTIFS = {
     "ce":      {"nom": "Marquage CE maîtrisé", "prix": 3000, "jours": 20, "desc": "Paie des contrats +5 %"},
     "iso":     {"nom": "ISO 9001", "prix": 10000, "jours": 60, "desc": "Défauts −15 %, note +0,2"},
     "medical": {"nom": "ISO 13485 (médical)", "prix": 18000, "jours": 90, "requis": "iso", "desc": "Dispositifs médicaux, payés 30 % de plus"},
     "aero":    {"nom": "EN 9100 (aéronautique)", "prix": 25000, "jours": 120, "requis": "iso", "desc": "Avionique, payée 40 % de plus"},
+    "auto":    {"nom": "IATF 16949 (automobile)", "prix": 20000, "jours": 90, "requis": "iso", "desc": "Électronique automobile, payée 25 % de plus"},
+    "atex":    {"nom": "ATEX (zones explosives)", "prix": 12000, "jours": 60, "requis": "ce", "desc": "Capteurs pour l'industrie lourde, payés 20 % de plus"},
+    "espace":  {"nom": "ECSS (spatial)", "prix": 40000, "jours": 150, "requis": "iso", "desc": "Satellites, payés 50 % de plus"},
 }
 ENTRETIEN_CERTIF = 150  # € par mois et par certification (audits de suivi)
 
@@ -219,10 +302,26 @@ METEO = {  # probabilités par saison
 PRODUITS = [
     {"id": "meteo", "nom": "Station météo connectée", "rep": (0.45, 0.3, 0.25), "taille": 110, "cout": 3000, "potentiel": 4500, "rep_min": 1},
     {"id": "pedale", "nom": "Pédale d'effet guitare", "rep": (0.6, 0.25, 0.15), "taille": 130, "cout": 3500, "potentiel": 5500, "rep_min": 2},
+    {"id": "synth", "nom": "Synthétiseur modulaire", "rep": (0.6, 0.25, 0.15), "taille": 160, "cout": 4500, "potentiel": 6500, "rep_min": 3},
     {"id": "serre", "nom": "Contrôleur de serre", "rep": (0.4, 0.25, 0.35), "taille": 180, "cout": 5000, "potentiel": 7500, "rep_min": 3},
+    {"id": "meteo2", "nom": "Station météo Pro", "rep": (0.45, 0.25, 0.3), "taille": 170, "cout": 5000, "potentiel": 7500, "rep_min": 3, "suite": "meteo"},
+    {"id": "chargeur", "nom": "Chargeur USB-C 140 W", "rep": (0.65, 0.25, 0.1), "taille": 170, "cout": 6000, "potentiel": 8500, "rep_min": 4, "requis": "usb"},
+    {"id": "pedale2", "nom": "Pédale multi-effets", "rep": (0.55, 0.2, 0.25), "taille": 210, "cout": 6000, "potentiel": 9000, "rep_min": 4, "suite": "pedale"},
     {"id": "robot", "nom": "Robot éducatif", "rep": (0.35, 0.35, 0.3), "taille": 300, "cout": 9000, "potentiel": 13000, "rep_min": 5},
+    {"id": "montre", "nom": "Montre de sport", "rep": (0.35, 0.35, 0.3), "taille": 260, "cout": 8000, "potentiel": 12000, "rep_min": 5, "requis": "ble"},
     {"id": "lora", "nom": "Module LoRa grand public", "rep": (0.5, 0.15, 0.35), "taille": 260, "cout": 7000, "potentiel": 11000, "rep_min": 6},
+    {"id": "carte3d", "nom": "Carte mère d'imprimante 3D", "rep": (0.55, 0.1, 0.35), "taille": 240, "cout": 7000, "potentiel": 10500, "rep_min": 6},
+    {"id": "serre2", "nom": "Serre autonome", "rep": (0.4, 0.3, 0.3), "taille": 290, "cout": 9000, "potentiel": 13500, "rep_min": 6, "suite": "serre"},
+    {"id": "trott", "nom": "Kit trottinette électrique", "rep": (0.45, 0.3, 0.25), "taille": 340, "cout": 11000, "potentiel": 16000, "rep_min": 7, "requis": "moteur"},
+    {"id": "robot2", "nom": "Robot éducatif 2", "rep": (0.35, 0.35, 0.3), "taille": 420, "cout": 13000, "potentiel": 19000, "rep_min": 8, "suite": "robot"},
+    {"id": "camera", "nom": "Caméra animalière IA", "rep": (0.35, 0.25, 0.4), "taille": 380, "cout": 12000, "potentiel": 18000, "rep_min": 8, "requis": "ia"},
     {"id": "drone", "nom": "Contrôleur de vol open source", "rep": (0.45, 0.15, 0.4), "taille": 480, "cout": 15000, "potentiel": 22000, "rep_min": 9},
+    {"id": "montre2", "nom": "Montre de sport GPS", "rep": (0.35, 0.3, 0.35), "taille": 400, "cout": 13000, "potentiel": 19500, "rep_min": 9, "suite": "montre"},
+    {"id": "lora2", "nom": "Passerelle LoRa maison", "rep": (0.5, 0.15, 0.35), "taille": 380, "cout": 11000, "potentiel": 17000, "rep_min": 9, "suite": "lora"},
+    {"id": "batterie", "nom": "Batterie domestique", "rep": (0.6, 0.25, 0.15), "taille": 600, "cout": 22000, "potentiel": 30000, "rep_min": 11, "requis": "hv"},
+    {"id": "sdr", "nom": "Radio logicielle amateur", "rep": (0.55, 0.1, 0.35), "taille": 560, "cout": 20000, "potentiel": 27000, "rep_min": 12, "requis": "fpga"},
+    {"id": "robot3", "nom": "Robot éducatif 3", "rep": (0.35, 0.35, 0.3), "taille": 600, "cout": 20000, "potentiel": 28000, "rep_min": 12, "suite": "robot2"},
+    {"id": "drone2", "nom": "Autopilote de drone pro", "rep": (0.45, 0.15, 0.4), "taille": 700, "cout": 25000, "potentiel": 34000, "rep_min": 13, "suite": "drone"},
 ]
 
 # Phases d'un projet : part des points de chaque domaine
@@ -270,6 +369,60 @@ TROPHEES = {
     "renommee_25":     {"nom": "Référence nationale", "desc": "Atteindre 25 de renommée"},
     "cent_mille":      {"nom": "Coussin de sécurité", "desc": "Avoir 100 000 € en trésorerie"},
     "million":         {"nom": "Millionnaire", "desc": "Avoir 1 000 000 € en trésorerie"},
+    "batiment_b":      {"nom": "Deuxième bâtiment", "desc": "Ouvrir le plateau R&D"},
+    "usine":           {"nom": "On fabrique !", "desc": "Ouvrir la ligne de production CMS"},
+    "partenaire":      {"nom": "Partenaire de confiance", "desc": "Un client atteint le niveau Partenaire"},
+    "gamme":           {"nom": "Gamme complète", "desc": "Lancer la suite d'un de vos produits"},
+    "mega":            {"nom": "Démesure", "desc": "Livrer un méga-projet"},
+    "cinquante":       {"nom": "Usine à projets", "desc": "Livrer 50 contrats"},
+    "dix_missions":    {"nom": "Ambitieux", "desc": "Accomplir 10 missions"},
+    "toutes_missions": {"nom": "Mission accomplie", "desc": "Accomplir toutes les missions"},
 }
-TITRES_FIN = [(1000, "Bricoleur du dimanche"), (3000, "Petit bureau d'études"), (7000, "PME reconnue"),
-              (15000, "Référence nationale"), (10 ** 9, "Légende de l'électronique")]
+# Missions : une suite d'objectifs ; les 3 premiers non accomplis sont proposés
+# (id, texte, mesure, seuil, récompense en €, renommée gagnée) ; mesure "secteur:x" = contrats livrés dans ce secteur
+MISSIONS = [
+    ("m_premier", "Livrer votre premier contrat", "livres", 1, 1000, 0),
+    ("m_equipe2", "Embaucher un premier employé", "employes", 2, 1000, 0),
+    ("m_bureau", "Agrandir le bureau d'études", "local:bureau", 1, 1500, 0),
+    ("m_livres5", "Livrer 5 contrats", "livres", 5, 2500, 1),
+    ("m_note8", "Obtenir une note de 8 ou plus", "note", 8, 2000, 0),
+    ("m_produit", "Lancer un produit maison", "produits", 1, 2500, 0),
+    ("m_techno", "Maîtriser une technologie", "technos", 1, 3000, 0),
+    ("m_rep3", "Atteindre 3 de renommée", "renommee", 3, 3000, 0),
+    ("m_equipe4", "Avoir une équipe de 4 personnes", "employes", 4, 4000, 0),
+    ("m_maison", "Livrer 3 contrats Maison connectée", "secteur:maison", 3, 4000, 0),
+    ("m_fidele", "Rendre un client fidèle", "fideles", 1, 5000, 1),
+    ("m_certif", "Obtenir une certification", "certifs", 1, 5000, 0),
+    ("m_livres15", "Livrer 15 contrats", "livres", 15, 8000, 0),
+    ("m_openspace", "Ouvrir l'open space", "local:openspace", 1, 6000, 0),
+    ("m_agri", "Livrer 4 contrats Agriculture", "secteur:agri", 4, 7000, 0),
+    ("m_serie", "Décrocher une production en série", "series", 1, 6000, 0),
+    ("m_suite", "Lancer la suite d'un produit", "suites", 1, 8000, 0),
+    ("m_rep8", "Atteindre 8 de renommée", "renommee", 8, 10000, 0),
+    ("m_equipe8", "Avoir une équipe de 8 personnes", "employes", 8, 10000, 0),
+    ("m_energie", "Livrer 4 contrats Énergie", "secteur:energie", 4, 12000, 0),
+    ("m_technos4", "Maîtriser 4 technologies", "technos", 4, 15000, 0),
+    ("m_plateau", "Ouvrir le plateau R&D", "local:plateau", 1, 15000, 0),
+    ("m_note9", "Obtenir une note de 9 ou plus", "note", 9, 12000, 0),
+    ("m_fideles3", "Avoir 3 clients fidèles", "fideles", 3, 15000, 0),
+    ("m_mobilite", "Livrer 5 contrats Mobilité", "secteur:mobilite", 5, 18000, 0),
+    ("m_livres40", "Livrer 40 contrats", "livres", 40, 25000, 1),
+    ("m_produits6", "Lancer 6 produits maison", "produits", 6, 20000, 0),
+    ("m_medical", "Livrer 3 contrats Médical", "secteur:medical", 3, 25000, 0),
+    ("m_cms", "Ouvrir la ligne de production CMS", "local:cms", 1, 30000, 0),
+    ("m_rep15", "Atteindre 15 de renommée", "renommee", 15, 30000, 0),
+    ("m_mega", "Livrer un méga-projet", "megas", 1, 50000, 2),
+    ("m_certifs4", "Obtenir 4 certifications", "certifs", 4, 40000, 0),
+    ("m_telecom", "Livrer 4 contrats Télécoms", "secteur:telecom", 4, 40000, 0),
+    ("m_equipe15", "Avoir une équipe de 15 personnes", "employes", 15, 40000, 0),
+    ("m_aero", "Livrer 3 contrats Aéro et drones", "secteur:aero", 3, 50000, 0),
+    ("m_note10", "Obtenir 10/10", "note", 10, 40000, 1),
+    ("m_fideles6", "Avoir 6 clients fidèles", "fideles", 6, 50000, 0),
+    ("m_spatial", "Livrer un contrat Spatial", "secteur:spatial", 1, 80000, 1),
+    ("m_megas3", "Livrer 3 méga-projets", "megas", 3, 120000, 2),
+    ("m_livres100", "Livrer 100 contrats", "livres", 100, 150000, 2),
+]
+NB_MISSIONS_ACTIVES = 3
+
+TITRES_FIN = [(15000, "Bricoleur du dimanche"), (35000, "Petit bureau d'études"), (60000, "PME reconnue"),
+              (95000, "Référence nationale"), (10 ** 9, "Légende de l'électronique")]

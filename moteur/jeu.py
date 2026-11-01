@@ -1,14 +1,15 @@
 """Moteur de Circuit Story : simulation jour par jour d'un bureau d'études électronique."""
 import random
 
-from .extensions import ErreurJeu, Extensions, borne
+from .extensions import ErreurJeu, Extensions, borne, requis_liste
 
-from .donnees import (ANCIENS_POSTES, CHEVEUX, CLIENTS, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
+from .donnees import (ANCIENS_POSTES, CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
                       ETABLIS, GRILLE, HORAIRES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
-                      PHASES, PIECES, POSTE, POSTES, POSTES_DEPART, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES,
-                      DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES)
+                      PHASES, PIECES, POSTE, POSTES, POSTES_DEPART, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
+                      DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS)
 
 JOURS_MOIS = 30
+SALAIRE_BASE, SALAIRE_POINT = 800, 230  # €/mois : base et prix d'un point de compétence
 JOURS_AN = 360
 SEUIL_FAILLITE = -5000
 NB_OFFRES = 4
@@ -16,6 +17,7 @@ NB_CANDIDATS = 4
 DUREE_CEM = 3
 DUREE_FORMATION = 10
 DUREE_CONGES = 5
+VENTES = 0.25  # ventes du 1er mois d'un produit = VENTES × potentiel × (note/10)² × (1 + renommée/25), puis −10 % par mois
 NOM_MAX = 30
 
 
@@ -132,7 +134,7 @@ class Jeu(Extensions):
         if sum(stats.values()) < 2:
             stats[max(poids, key=poids.get)] += 2
         somme = sum(stats.values())
-        salaire = 600 if poste == "Stagiaire" else int(round(800 + 230 * somme, -1))
+        salaire = 600 if poste == "Stagiaire" else SALAIRE_BASE + SALAIRE_POINT * somme
         return {
             "id": self._id(), "nom": r.choice(PRENOMS), "poste": poste, **stats,
             "trait": r.choice(list(TRAITS)), "salaire": salaire, "couleur": r.choice(COULEURS),
@@ -143,16 +145,25 @@ class Jeu(Extensions):
         rep = self.etat["renommee"] + bonus_rep
         r = self.rng
         acquis = set(self.etat.get("technos", [])) | set(self.etat.get("certifs", []))
-        eligibles = [c for c in CONTRATS if c[3] <= rep and (c[4] is None or c[4] in acquis)]
-        nom, mix, base, rmin, requis = r.choices(eligibles, weights=range(1, len(eligibles) + 1))[0]
-        taille = round(base * (1 + 0.04 * min(10, max(0, rep - rmin))) * r.uniform(0.85, 1.2))
+        eligibles = [c for c in CONTRATS if c[3] <= rep and set(requis_liste(c[4])) <= acquis]
+        fidele = self._client_fidele()
+        fid = 0
+        if fidele:  # un client fidèle revient avec un projet de son secteur, plus gros et mieux payé
+            nom_client, fiche = fidele
+            pool = [c for c in eligibles if c[5] == fiche["secteur"]]
+            if pool:
+                eligibles, fid = pool, fiche["fid"]
+        nom, mix, base, rmin, requis, secteur = r.choices(eligibles, weights=range(1, len(eligibles) + 1))[0]
+        client = nom_client if fid else r.choice(SECTEURS[secteur]["clients"])
+        taille = round(base * (1 + 0.04 * min(10, max(0, rep - rmin))) * r.uniform(0.85, 1.2) * (1 + 0.08 * fid))
         total = {d: round(taille * part) for d, part in zip(DOMAINES, mix)}
         taille = sum(total.values())
         return {
-            "id": self._id(), "nom": nom, "client": r.choice(CLIENTS), "taille": taille, "total": total,
-            "paie": int(round(taille * r.uniform(68, 82) * (1 + 0.01 * min(rep, 20)), -2)),
+            "id": self._id(), "nom": nom, "client": client, "taille": taille, "total": total,
+            "paie": int(round(taille * r.uniform(68, 82) * (1 + 0.01 * min(rep, 20)) * (1 + 0.03 * fid), -2)),
             "delai": 14 + round(taille * (0.5 - min(0.3, taille / 1500))),
-            "gain": 1 + taille // 200, "expire": r.randint(18, 40), "requis": requis,
+            "gain": 1 + taille // 200, "expire": r.randint(18, 40) + (15 if fid else 0),
+            "requis": list(requis) if isinstance(requis, tuple) else requis, "secteur": secteur, "fidele": fid,
         }
 
     # ------------------------------------------------------------------ calculs
@@ -282,7 +293,10 @@ class Jeu(Extensions):
         return o
 
     def capacite_projets(self):
-        return 1 + ("bureau" in self.etat["locaux"]) + ("openspace" in self.etat["locaux"])
+        return 1 + sum(l in self.etat["locaux"] for l in ("bureau", "openspace", "plateau"))
+
+    def places_occupees(self):
+        return sum(2 if p.get("mega") else 1 for p in self.etat["projets"])
 
     def horaires(self):
         return HORAIRES[self.etat["heures"]]
@@ -348,7 +362,7 @@ class Jeu(Extensions):
     def _production(self, emp, dom, bon):
         if emp[dom] <= 0:
             return 0.0
-        return emp[dom] * self.efficacite(emp) * (1 + 0.1 * bon[dom])
+        return emp[dom] * self.efficacite(emp) * (1 + 0.06 * bon[dom])
 
     def _detection(self, emp, bon):
         trait = TRAITS[emp["trait"]]
@@ -416,19 +430,22 @@ class Jeu(Extensions):
             "id": self._id(), "type": genre, "nom": base["nom"], "client": base.get("client", ""),
             "taille": base["taille"], "total": base["total"], "paie": base.get("paie", 0), "delai": base.get("delai", 0),
             "gain": base.get("gain", 0), "potentiel": base.get("potentiel", 0), "id_produit": base.get("id_produit"),
+            "secteur": base.get("secteur"), "mega": base.get("mega", False),
             "phases": phases, "phase": 0, "etape": "travail", "defauts": 0.0, "qualite": 0.0,
             "jours": 0, "cem_jours": 0, "echecs_cem": 0, "combos": {}, "combos_jour": [], "equipe": [],
         }
 
-    def _verifier_capacite(self):
-        if len(self.etat["projets"]) >= self.capacite_projets():
-            raise ErreurJeu(f"Vous menez déjà {self.capacite_projets()} projet(s) : agrandissez les locaux pour en mener plus.")
+    def _verifier_capacite(self, places=1):
+        if self.places_occupees() + places > self.capacite_projets():
+            raise ErreurJeu(f"Vous menez déjà {self.places_occupees()} projet(s) sur {self.capacite_projets()} possibles"
+                            + (" (un méga-projet compte double)" if places > 1 else "") + " : agrandissez les locaux pour en mener plus.")
 
     def _entrer_phase(self, p):
         ph = p["phases"][p["phase"]]
         if "attente" in ph and ph["attente"] is None:
-            maison = "four" in self.materiel_actif()  # avec un four de refusion, on assemble soi-même : plus rapide et moins cher
-            ph["attente"] = max(1, (2 if maison else 4) + FOURNISSEURS[self.etat["fournisseur"]]["jours"] + sum(self._choix_effets(p, "jours")))
+            cms = "cms" in self.etat["locaux"]
+            maison = cms or "four" in self.materiel_actif()  # avec un four ou la ligne CMS, on assemble soi-même : plus rapide et moins cher
+            ph["attente"] = max(1, (1 if cms else 2 if maison else 4) + FOURNISSEURS[self.etat["fournisseur"]]["jours"] + sum(self._choix_effets(p, "jours")))
             ph["cout"] = int(round((200 + p["taille"] * 2) * (0.5 if maison else 1) * self._facteur_proto(p), -1))
             self._depenser(ph["cout"])
             ou = "assemblé au labo" if maison else "chez le fabricant"
@@ -567,7 +584,7 @@ class Jeu(Extensions):
             facteur = borne(1 + 0.1 * (note - self.attente_client()), 0.5, 1.25)
             paie = int(round(p["paie"] * facteur * self._facteur_paie(p), -1)) - p.get("acompte", 0)
             ecart = note - self.attente_client()
-            gain = -1 if ecart < -2 else max(0, round(p["gain"] * ecart / 2 + (0.5 if ecart >= 0 else 0)))
+            gain = -1 if ecart < -2 else self._arrondi_hasard(max(0.0, p["gain"] * ecart / 2 + (0.5 if ecart >= 0 else 0)) * self._frein_renommee())
             self._encaisser(paie)
             e["renommee"] = max(0, e["renommee"] + gain)
             e["stats"]["livres"] += 1
@@ -578,11 +595,11 @@ class Jeu(Extensions):
             if p["taille"] >= 300 and p["echecs_cem"] == 0 and note >= 8:
                 self._trophee("sans_faute")
         else:
-            ventes = int(2 * p["potentiel"] * (note / 10) ** 2 * (1 + e["renommee"] / 25))
+            ventes = int(VENTES * p["potentiel"] * (note / 10) ** 2 * (1 + min(e["renommee"], 25) / 25))
             e["produits"].append({"nom": p["nom"], "id_produit": p["id_produit"], "note": note, "ventes": ventes, "mois": 0, "total": 0})
             e["stats"]["produits_lances"] += 1
             if note >= 8:
-                e["renommee"] += 1
+                e["renommee"] += self._arrondi_hasard(self._frein_renommee())
             self._log(f"« {p['nom']} » est en vente ! Note de la presse : {note}/10.", "bon")
             e["historique"].insert(0, {"nom": p["nom"], "client": "Produit maison", "note": note, "montant": 0,
                                        "jours": p["jours"], "type": "produit", "avis": self._avis(note)})
@@ -594,6 +611,14 @@ class Jeu(Extensions):
                 x["projet"] = None
         e["dernier_livre"] = e["historique"][0]
         self._apres_livraison(p, note, e["historique"][0]["montant"])
+
+    def _frein_renommee(self):
+        """Chaque point de renommée est plus dur à gagner quand on est déjà connu (÷6 à 2, ÷88 à 10, ÷400 à 20)."""
+        return 1 / (1 + self.etat["renommee"] / 2) ** 2.5
+
+    def _arrondi_hasard(self, x):
+        """Arrondi aléatoire : 0,3 donne 1 trois fois sur dix (les petits gains ne disparaissent pas)."""
+        return int(x) + (self.rng.random() < x - int(x))
 
     def _avis(self, note):
         if note >= 9:
@@ -608,12 +633,12 @@ class Jeu(Extensions):
 
     def _experience(self, emp, dom, pts):
         emp["xp"][dom] += pts
-        seuil = 60 + 15 * emp[dom]
+        seuil = 60 + 6 * emp[dom] ** 2
         if emp["xp"][dom] >= seuil and emp[dom] < 15:
             emp["xp"][dom] -= seuil
             emp[dom] += 1
             if not emp.get("fondateur") and not emp.get("stage"):
-                emp["salaire"] = int(round(emp["salaire"] * 1.08 + 50, -1))  # chaque progrès se négocie
+                emp["salaire"] += SALAIRE_POINT  # chaque point se paie au prix du marché (le même qu'à l'embauche)
             self._log(f"{emp['nom']} progresse en {NOM_DOMAINE[dom]} ({emp[dom]}).", "bon")
 
     # ------------------------------------------------------------------ trophées, bilans, fin
@@ -642,10 +667,19 @@ class Jeu(Extensions):
             "renommee_25": e["renommee"] >= 25,
             "cent_mille": e["argent"] >= 100_000,
             "million": e["argent"] >= 1_000_000,
+            "batiment_b": "plateau" in e["locaux"],
+            "usine": "cms" in e["locaux"],
+            "partenaire": any(c["fid"] >= FIDELITE_MAX for c in e["clients"].values()),
+            "gamme": e["stats"]["suites"] >= 1,
+            "mega": e["stats"]["megas"] >= 1,
+            "cinquante": e["stats"]["livres"] >= 50,
+            "dix_missions": len(e["missions"]) >= 10,
+            "toutes_missions": len(e["missions"]) >= len(MISSIONS),
         }
         for tid, ok in conditions.items():
             if ok:
                 self._trophee(tid)
+        self._verifier_missions()
 
     def _bilan(self):
         e = self.etat
@@ -864,7 +898,7 @@ class Jeu(Extensions):
             emp = r.choice(mecontents)
             possibles.append({"type": "demission", "titre": "Menace de démission",
                               "texte": f"{emp['nom']} n'en peut plus et pense à partir.",
-                              "options": ["Augmenter son salaire (+300 €/mois)", "Le laisser partir"],
+                              "options": ["Augmenter son salaire (+500 €/mois)", "Le laisser partir"],
                               "employe": emp["id"]})
         if e["heures"] >= 10 and e["employes"][1:]:
             possibles.append({"type": "greve", "titre": "Ras-le-bol général",
@@ -904,7 +938,7 @@ class Jeu(Extensions):
             p["paie"] = int(p["paie"] * 1.2)
         elif t == "salon" and choix == 0:
             self._payer(3000)
-            e["renommee"] += 1
+            e["renommee"] += self._arrondi_hasard(2 * self._frein_renommee())
             e["offres"] = e["offres"][:NB_OFFRES] + [self._offre(bonus_rep=2) for _ in range(2)]
         elif t == "panne":
             if choix == 0:
@@ -918,7 +952,7 @@ class Jeu(Extensions):
         elif t == "demission":
             emp = next((x for x in e["employes"] if x["id"] == ev["employe"]), None)
             if emp and choix == 0:
-                emp["salaire"] += 300
+                emp["salaire"] += 500
                 emp["humeur"] = 8
             elif emp:
                 e["employes"].remove(emp)
@@ -930,7 +964,7 @@ class Jeu(Extensions):
                 for x in e["employes"]:
                     x["humeur"] = borne(x["humeur"] - 4, -8, 8)
         elif t == "recommandation":
-            e["renommee"] += 1
+            e["renommee"] += self._arrondi_hasard(self._frein_renommee())
         e["evenement"] = None
         self._log(f"{ev['titre']} : {ev['options'][choix]}.", "info")
 
@@ -960,10 +994,12 @@ class Jeu(Extensions):
         elif self._action_extension(genre, p):
             pass
         elif genre == "signer":
-            self._verifier_capacite()
             o = next((x for x in e["offres"] if x["id"] == p.get("id")), None)
             if not o:
                 raise ErreurJeu("Cette offre n'est plus disponible.")
+            self._verifier_capacite(2 if o.get("mega") else 1)
+            if len(e["employes"]) < o.get("equipe_min", 0):
+                raise ErreurJeu(f"Il faut une équipe d'au moins {o['equipe_min']} personnes pour ce méga-projet.")
             prix, delai = str(p.get("prix", "1.0")), str(p.get("delai", "1.0"))
             if prix not in PRIX_PROPOSES or delai not in DELAIS_PROPOSES:
                 raise ErreurJeu("Paramètres invalides.")
@@ -972,7 +1008,7 @@ class Jeu(Extensions):
             if e["argent"] < cout:
                 raise ErreurJeu("Trésorerie insuffisante pour le moule d'injection.")
             e["offres"].remove(o)
-            if self.rng.random() >= self.chance_negociation(float(prix), float(delai)):
+            if self.rng.random() >= self.chance_negociation(float(prix), float(delai), o.get("fidele", 0)):
                 c = self.rng.choice(e["concurrents"])
                 e["renommee"] = max(0, e["renommee"] - 1)
                 self._log(f"Négociation perdue : {c['nom']} remporte « {o['nom']} ». Le client a mal pris vos exigences (renommée −1).", "mauvais")
@@ -993,12 +1029,16 @@ class Jeu(Extensions):
             prod = next((x for x in PRODUITS if x["id"] == p.get("id")), None)
             if not prod or e["renommee"] < prod["rep_min"]:
                 raise ErreurJeu("Produit indisponible.")
+            if prod.get("requis") and prod["requis"] not in e["technos"]:
+                raise ErreurJeu(f"Il faut d'abord maîtriser : {TECHNOS[prod['requis']]['nom']}.")
+            if prod.get("suite") and prod["suite"] not in e["gammes"]:
+                raise ErreurJeu(f"Lancez d'abord « {next(x['nom'] for x in PRODUITS if x['id'] == prod['suite'])} ».")
             if any(x.get("id_produit") == prod["id"] for x in e["produits"] + e["projets"]):
                 raise ErreurJeu("Ce produit est déjà en vente ou en développement.")
             choix = self._choix_valides(p.get("tech"))
             total = {d: round(prod["taille"] * part) for d, part in zip(DOMAINES, prod["rep"])}
             base = {"nom": prod["nom"], "taille": sum(total.values()), "total": total,
-                    "potentiel": prod["potentiel"], "id_produit": prod["id"]}
+                    "potentiel": round(prod["potentiel"] * self.bonus_suite(prod)), "id_produit": prod["id"]}
             base, cout = self._appliquer_choix(base, choix)
             self._payer(prod["cout"] + cout)
             pr = self._creer_projet(base, "produit")
@@ -1016,6 +1056,9 @@ class Jeu(Extensions):
             if pr["type"] == "contrat":
                 e["renommee"] = max(0, e["renommee"] - 1)
                 self._encaisser(-pr.get("acompte", 0))  # l'acompte est rendu au client
+                if pr.get("client") in e["clients"]:
+                    c = e["clients"][pr["client"]]
+                    c["fid"] = max(0, c["fid"] - 2)
             e["projets"].remove(pr)
             for x in e["employes"]:
                 if x.get("projet") == pr["id"]:
@@ -1129,6 +1172,7 @@ class Jeu(Extensions):
         v["frais_structure"] = self.frais_structure()
         v["postes_ouverts"] = self.postes_ouverts()
         v["capacite"] = self.capacite_projets()
+        v["places"] = self.places_occupees()
         v["annee_jeu"] = e["jours_total"] // JOURS_AN + 1
         v["attente_client"] = round(self.attente_client(), 1)
         v["employes"] = [{**x, "moral": round(self.moral(x)), "cout_formation": self.cout_formation(x),

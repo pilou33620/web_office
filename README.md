@@ -37,7 +37,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Combos d'équipe** : équipe complète (un spécialiste par domaine), duo qualité (perfectionniste + chasseur de bugs), mentorat (expert + junior), équipe soudée.
 - **Horaires** : de 6 h à 12 h par jour. Plus d'heures = plus de production, mais moral en baisse, fatigue, défauts et heures sup à payer.
 - **Évènements** : pénuries de composants, salons pros, clients pressés, pannes, subventions, menaces de démission, ras-le-bol face aux horaires.
-- **Bilans annuels** avec impôt sur le bénéfice (15, 25 ou 33 % selon la difficulté), **16 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
+- **Bilans annuels** avec impôt sur le bénéfice (15, 25 ou 33 % selon la difficulté), **24 trophées** et une **fin de partie au bout de 20 ans** avec score et titre. Les clients deviennent plus exigeants à mesure que la renommée grandit, et les frais de structure augmentent avec l'effectif.
 
 - **Choix techniques à la signature** : nombre de couches du PCB, microcontrôleur (STM32, ESP32, nRF52), type de boîtier (impression 3D, usiné, moule d'injection). Chaque choix modifie les points à produire, le coût du proto, les chances aux tests CEM et la note.
 - **Négociation et concurrence** : au prix et au délai affichés, le client signe ; demander plus est un pari. Trois bureaux concurrents remportent aussi des appels d'offres et figurent au classement (onglet Société).
@@ -46,6 +46,12 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Fournisseurs de composants** (européen, asiatique, local premium), **prêts bancaires** sur 24 mois et **levée de fonds**.
 - **Carrières** : promotion en chef de projet (+8 % de production pour son équipe), tentatives de débauchage par la concurrence, stagiaires d'école gratuits pendant 3 mois. **Vie d'équipe** : anniversaires, pots de livraison, séminaires.
 - **Météo et saisons** sur le plan (pluie, neige, orage, brouillard, canicule), ambiance du soir et de nuit quand les horaires s'allongent.
+- **Secteurs et clients fidèles** : 54 types de contrats dans 10 secteurs (industrie, maison connectée, énergie, agriculture, mobilité, grand public, médical, aéro, télécoms, spatial). Un client bien servi devient fidèle (★ à ★★★★★ « Partenaire ») et revient avec des projets plus gros, plus faciles à négocier.
+- **Méga-projets** : dès 10 de renommée, de rares projets géants (usine 4.0, métro automatique, constellation de satellites…) qui occupent deux places, demandent une grande équipe et plusieurs technologies, et paient 25 % de plus.
+- **22 produits maison** dont 7 suites (v2, v3) : une suite se vend d'autant mieux que le modèle précédent a été bien noté.
+- **Bâtiment B** : plateau R&D (8 bureaux, un projet de plus) et ligne de production CMS (prototypes en 1 jour, séries +50 %, machines de production). 12 technologies et 7 certifications au total.
+- **40 missions** enchaînées, trois proposées à la fois sur le tableau de bord, avec une prime et parfois de la renommée.
+- **Vitesse** : ½×, 1×, 2× et 4×.
 - **Scénarios** (Le garage, Startup IoT, Sous-traitant aéro, Reprise d'entreprise), **3 niveaux de difficulté** et **3 emplacements de sauvegarde** (Journal › Parties et sauvegardes).
 
 Sur le plan, les employés se déplacent : ils vont au labo pour le routage et le bring-up, à l'atelier pour la 3D, au labo CEM pendant les tests, et se retrouvent sur la terrasse pour les réunions de phase. Ils vont aussi demander de l'aide au collègue le plus fort de leur domaine, et progressent grâce à lui. Leurs pauses se passent sur la terrasse, ou dans la **salle de pause** une fois louée (moral +5, meilleure récupération), avec canapé et baby-foot.

@@ -1,7 +1,8 @@
 """Extensions du moteur : choix techniques, R&D, certifications, SAV, négociation, concurrence, séries,
 fournisseurs, prêts et investisseurs, carrières, vie d'équipe, météo, scénarios et difficulté."""
-from .donnees import (CERTIFS, CHOIX_TECH, CONCURRENTS, DIFFICULTES, ENTRETIEN_CERTIF, FOURNISSEURS, METEO, PRETS,
-                      PRIMES, SAISONS, SCENARIOS, TAUX_PRET, TECHNOS)
+from .donnees import (CERTIFS, CHOIX_TECH, CONCURRENTS, DIFFICULTES, ENTRETIEN_CERTIF, FIDELITE_MAX, FOURNISSEURS, MEGA_PRIME,
+                      MEGAS, METEO, MISSIONS, NB_MISSIONS_ACTIVES, NIVEAUX_FIDELITE, PRETS, PRIMES, PRODUITS, SAISONS, SCENARIOS,
+                      SECTEURS, TAUX_PRET, TECHNOS)
 
 DUREE_GARANTIE = 120
 DUREE_STAGE = 90
@@ -16,6 +17,11 @@ def borne(x, lo, hi):
     return max(lo, min(hi, x))
 
 
+def requis_liste(requis):
+    """Prérequis d'un contrat : aucun, un identifiant ou une liste d'identifiants."""
+    return [] if not requis else [requis] if isinstance(requis, str) else list(requis)
+
+
 class Extensions:
     # ------------------------------------------------------------------ mise en place
     def _init_extensions(self, scenario="garage", difficulte="normal"):
@@ -26,8 +32,16 @@ class Extensions:
         e.setdefault("difficulte", difficulte)
         for cle, val in (("technos", []), ("certifs", []), ("recherches", []), ("garanties", []), ("series", []),
                          ("prets", []), ("fournisseur", "europe"), ("parts", 1.0), ("meteo", "soleil"), ("fete", None),
-                         ("dernier_seminaire", -999), ("victoire", None), ("objectif", None), ("offre_serie", None)):
+                         ("dernier_seminaire", -999), ("victoire", None), ("objectif", None), ("offre_serie", None),
+                         ("clients", {}), ("gammes", {}), ("missions", [])):
             e.setdefault(cle, val)
+        st = e["stats"]
+        for cle in ("megas", "suites", "series"):
+            st.setdefault(cle, 0)
+        st.setdefault("secteurs", {})
+        st.setdefault("meilleure_note", max([h["note"] for h in e["historique"]], default=0))
+        for prod in e["produits"]:  # anciennes sauvegardes : les produits en vente comptent pour les suites
+            e["gammes"].setdefault(prod["id_produit"], prod["note"])
         if not e.get("concurrents"):
             e["concurrents"] = [{"nom": n, "renommee": r} for n, r in CONCURRENTS]
         for x in e["employes"]:
@@ -65,6 +79,8 @@ class Extensions:
             b["f"] += 1
         if "rf" in self.etat["technos"]:
             b["cem"] += 0.05
+        if "fpga" in self.etat["technos"]:
+            b["debug"] += 1
         return b
 
     def _choix_effets(self, p, cle):
@@ -80,7 +96,7 @@ class Extensions:
     def _facteur_defauts(self):
         e = self.etat
         f = FOURNISSEURS[e["fournisseur"]]["defauts"]
-        return f * (0.85 if "iso" in e["certifs"] else 1) * (0.9 if "dfm" in e["technos"] else 1)
+        return f * (0.85 if "iso" in e["certifs"] else 1) * (0.9 if "dfm" in e["technos"] else 1) * (0.95 if "secu" in e["technos"] else 1)
 
     def _facteur_proto(self, p):
         f = 1.0
@@ -90,7 +106,8 @@ class Extensions:
 
     def _facteur_paie(self, p):
         e = self.etat
-        return (1.05 if "ce" in e["certifs"] else 1) * PRIMES.get(p.get("requis"), 1) * DIFFICULTES[e["difficulte"]]["paie"]
+        prime = max([PRIMES.get(x, 1) for x in requis_liste(p.get("requis"))], default=1)
+        return (1.05 if "ce" in e["certifs"] else 1) * prime * DIFFICULTES[e["difficulte"]]["paie"]
 
     def _mult_chef(self, actifs):
         return 1.08 if any(x.get("chef") for x in actifs) else 1.0
@@ -134,9 +151,36 @@ class Extensions:
         base = {**base, "total": total, "taille": sum(total.values())}
         return base, cout
 
-    def chance_negociation(self, prix, delai):
-        """Au prix et au délai affichés, le client signe à coup sûr ; demander plus est un pari."""
-        return round(borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"], 0.05, 1.0), 2)
+    def chance_negociation(self, prix, delai, fid=0):
+        """Au prix et au délai affichés, le client signe à coup sûr ; demander plus est un pari (moins risqué avec un client fidèle)."""
+        return round(borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"] + 0.05 * fid, 0.05, 1.0), 2)
+
+    # ------------------------------------------------------------------ clients fidèles, méga-projets, suites
+    def _client_fidele(self):
+        """Un client fidèle (niveau 2 ou plus) qui revient, ou None."""
+        fideles = [(nom, c) for nom, c in self.etat.get("clients", {}).items() if c["fid"] >= 2 and c.get("secteur")]
+        if not fideles or self.rng.random() >= 0.35:
+            return None
+        return self.rng.choices(fideles, weights=[c["fid"] for _, c in fideles])[0]
+
+    def _offre_mega(self):
+        e, r = self.etat, self.rng
+        acquis = set(e["technos"]) | set(e["certifs"])
+        possibles = [m for m in MEGAS if m[3] <= e["renommee"] and set(m[4]) <= acquis]
+        if not possibles:
+            return None
+        nom, mix, base, rmin, requis, secteur, equipe = r.choice(possibles)
+        total = {d: round(base * r.uniform(0.9, 1.15) * part) for d, part in zip(("e", "m", "f"), mix)}
+        taille = sum(total.values())
+        return {"id": self._id(), "nom": nom, "client": r.choice(SECTEURS[secteur]["clients"]), "taille": taille, "total": total,
+                "paie": int(round(taille * r.uniform(70, 80) * (1 + 0.01 * min(e["renommee"], 20)) * MEGA_PRIME, -3)),
+                "delai": 60 + round(taille * 0.12), "gain": 1 + taille // 200, "expire": 60, "requis": list(requis),
+                "secteur": secteur, "fidele": 0, "mega": True, "equipe_min": equipe}
+
+    def bonus_suite(self, prod):
+        """Une suite se vend mieux si le modèle précédent a plu (+8 % par point de note au-dessus de 6)."""
+        note = self.etat["gammes"].get(prod.get("suite"), 0)
+        return 1 + 0.08 * max(0, note - 6) if prod.get("suite") else 1
 
     # ------------------------------------------------------------------ R&D, certifications, prêts
     def _lancer_recherche(self, genre, rid):
@@ -280,6 +324,11 @@ class Extensions:
                 c = r.choices(e["concurrents"], weights=[1 + c["renommee"] for c in e["concurrents"]])[0]
                 e["offres"].remove(o)
                 self._log(f"{c['nom']} remporte l'appel d'offres « {o['nom']} ».", "info")
+        if e["renommee"] >= 10 and not any(o.get("mega") for o in e["offres"]) and r.random() < 0.012:
+            mega = self._offre_mega()
+            if mega:
+                e["offres"].append(mega)
+                self._log(f"Méga-projet en vue : « {mega['nom']} » pour {mega['client']} !", "bon")
         for x in list(e["employes"]):
             if x.get("stage"):
                 x["stage"] -= 1
@@ -287,7 +336,7 @@ class Extensions:
                     if e["evenement"]:
                         x["stage"] = 1  # on attend que l'évènement en cours soit réglé
                     else:
-                        salaire = int(round(900 + 230 * (x["e"] + x["m"] + x["f"]), -1))
+                        salaire = 900 + 230 * (x["e"] + x["m"] + x["f"])
                         e["evenement"] = {"type": "fin_stage", "titre": "Fin de stage", "employe": x["id"], "salaire": salaire,
                                           "texte": f"Le stage de {x['nom']} se termine. L'embaucher ?",
                                           "options": [f"L'embaucher ({salaire:,} €/mois)".replace(",", " "), "Lui dire au revoir"]}
@@ -307,7 +356,7 @@ class Extensions:
             if r.random() < f["risque"]:
                 self._log(f"Rupture de composants : pas de lot ce mois-ci pour « {s['nom']} ».", "mauvais")
             else:
-                recettes += int(s["marge"] * f["serie"])
+                recettes += int(s["marge"] * f["serie"] * (1.5 if "cms" in e["locaux"] else 1))
             s["mois"] -= 1
             if s["mois"] <= 0:
                 e["series"].remove(s)
@@ -336,13 +385,32 @@ class Extensions:
     # ------------------------------------------------------------------ livraisons et évènements
     def _apres_livraison(self, p, note, montant):
         e, r = self.etat, self.rng
+        st = e["stats"]
+        st["meilleure_note"] = max(st["meilleure_note"], note)
+        if p["type"] == "produit":
+            e["gammes"][p["id_produit"]] = max(e["gammes"].get(p["id_produit"], 0), note)
+            if any(x["id"] == p["id_produit"] and x.get("suite") for x in PRODUITS):
+                st["suites"] += 1
+        else:
+            if p.get("secteur"):
+                st["secteurs"][p["secteur"]] = st["secteurs"].get(p["secteur"], 0) + 1
+            if p.get("mega"):
+                st["megas"] += 1
+            if p.get("client"):
+                c = e["clients"].setdefault(p["client"], {"secteur": p.get("secteur"), "fid": 0, "livres": 0})
+                ecart = note - self.attente_client()
+                avant = c["fid"]
+                c["fid"] = borne(c["fid"] + (2 if ecart >= 1.5 else 1 if ecart >= 0 else -2 if ecart < -1 else 0), 0, FIDELITE_MAX)
+                c["livres"] += 1
+                if c["fid"] >= 3 > avant:
+                    self._log(f"{p['client']} devient un client fidèle : il reviendra avec de plus gros projets.", "bon")
         if p["type"] == "contrat" and p["defauts"] >= 0.3:
             e["garanties"].append({"nom": p["nom"], "client": p["client"], "defauts": round(p["defauts"], 1), "jours": DUREE_GARANTIE})
         if note >= 7:
             e["pot"] = True
         if p["type"] == "contrat" and note >= 7 and len(e["series"]) < 4 and r.random() < 0.35:
             e["offre_serie"] = {"nom": p["nom"], "client": p["client"], "mois": r.randint(6, 18),
-                                "marge": int(round(p["paie"] * 0.06 * note / 8, -1))}
+                                "marge": int(round(p["paie"] * 0.04 * note / 8, -1))}
 
     def _evenements_extensions(self, possibles):
         e, r = self.etat, self.rng
@@ -376,6 +444,7 @@ class Extensions:
         elif t == "serie":
             if choix == 0:
                 e["series"].append(dict(ev["serie"]))
+                e["stats"]["series"] += 1
         elif t == "debauche":
             x = next((y for y in e["employes"] if y["id"] == ev["employe"]), None)
             if x and choix == 0:
@@ -428,6 +497,32 @@ class Extensions:
             e["victoire"] = {"ok": False, "vue": False, "texte": "Le délai du scénario est écoulé sans atteindre l'objectif. Vous pouvez continuer à jouer."}
             self._log(e["victoire"]["texte"], "mauvais")
 
+    # ------------------------------------------------------------------ missions
+    def _mesure(self, cle):
+        e, st = self.etat, self.etat["stats"]
+        if cle.startswith("secteur:"):
+            return st["secteurs"].get(cle[8:], 0)
+        if cle.startswith("local:"):
+            return int(cle[6:] in e["locaux"])
+        return {"livres": st["livres"], "employes": len(e["employes"]), "produits": st["produits_lances"],
+                "technos": len(e["technos"]), "certifs": len(e["certifs"]), "renommee": e["renommee"],
+                "fideles": sum(1 for c in e["clients"].values() if c["fid"] >= 3), "series": st["series"],
+                "suites": st["suites"], "megas": st["megas"], "note": st["meilleure_note"]}[cle]
+
+    def missions_actives(self):
+        faites = set(self.etat["missions"])
+        return [m for m in MISSIONS if m[0] not in faites][:NB_MISSIONS_ACTIVES]
+
+    def _verifier_missions(self):
+        e = self.etat
+        for mid, texte, cle, seuil, argent, rep in self.missions_actives():
+            if self._mesure(cle) >= seuil:
+                e["missions"].append(mid)
+                self._encaisser(argent)
+                e["renommee"] += rep
+                gain = f"+{argent:,} €".replace(",", " ") + (f", renommée +{rep}" if rep else "")
+                self._log(f"Mission accomplie : {texte} ({gain}).", "trophee")
+
     def progres_objectif(self):
         e = self.etat
         obj = e.get("objectif")
@@ -455,4 +550,9 @@ class Extensions:
         v["seminaire_dans"] = max(0, DELAI_SEMINAIRE - (e["jours_total"] - e["dernier_seminaire"]))
         v["cout_seminaire"] = 1000 + 300 * len([x for x in e["employes"] if not x["absent"]])
         v["levee_possible"] = 60000 + 15000 * e["renommee"]
+        v["missions_actives"] = [{"id": m[0], "texte": m[1], "progres": min(self._mesure(m[2]), m[3]), "seuil": m[3],
+                                  "argent": m[4], "renommee": m[5]} for m in self.missions_actives()]
+        v["clients_top"] = [{"nom": nom, "secteur": SECTEURS.get(c.get("secteur"), {}).get("nom", ""), "fid": c["fid"],
+                             "niveau": NIVEAUX_FIDELITE[c["fid"]], "livres": c["livres"]}
+                            for nom, c in sorted(e["clients"].items(), key=lambda x: (-x[1]["fid"], -x[1]["livres"]))[:8]]
         return v

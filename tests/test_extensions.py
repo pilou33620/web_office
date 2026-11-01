@@ -192,10 +192,90 @@ class TestExtensions(unittest.TestCase):
         jour(j)
         self.assertEqual(j.etat["bilans"][-1]["impot"], round((30000 - j.etat["bilans"][-1]["charges"]) * 0.33, -1))
 
+    def test_clients_fideles(self):
+        j = Jeu(graine=40)
+        o = j.etat["offres"][0]
+        p = j._creer_projet(o, "contrat")
+        p.update(client="DomoSud", secteur="maison")
+        for _ in range(3):
+            j._apres_livraison(p, 10, 0)  # notes largement au-dessus de l'attente : +2 par livraison
+        c = j.etat["clients"]["DomoSud"]
+        self.assertEqual((c["fid"], c["livres"]), (5, 3))
+        self.assertEqual(j.etat["stats"]["secteurs"]["maison"], 3)
+        j._apres_livraison(p, 1, 0)
+        self.assertEqual(c["fid"], 3)  # une très mauvaise note fait reculer
+        offres = [j._offre() for _ in range(200)]
+        fideles = [x for x in offres if x["fidele"]]
+        self.assertTrue(fideles and all(x["client"] == "DomoSud" and x["secteur"] == "maison" for x in fideles))
+        self.assertGreater(j.chance_negociation(1.3, 1.0, fid=3), j.chance_negociation(1.3, 1.0))
+
+    def test_mega_projet(self):
+        j = Jeu(graine=41)
+        e = j.etat
+        e["renommee"], e["technos"], e["argent"] = 12, ["moteur", "rf"], 100000
+        mega = j._offre_mega()
+        self.assertEqual((mega["nom"], mega["equipe_min"]), ("Flotte de drones de livraison", 6))
+        e["offres"].append(mega)
+        with self.assertRaises(ErreurJeu):
+            j.action("signer", id=mega["id"])  # équipe trop petite
+        for _ in range(5):
+            j._nouvel_employe(j._candidat(), None)
+        with self.assertRaises(ErreurJeu):
+            j.action("signer", id=mega["id"])  # 2 places nécessaires, le garage n'en a qu'une
+        e["locaux"].append("bureau")
+        j.action("signer", id=mega["id"])
+        self.assertEqual((j.places_occupees(), e["projets"][0]["mega"]), (2, True))
+        with self.assertRaises(ErreurJeu):
+            j.action("signer", id=e["offres"][0]["id"])  # complet
+        j._apres_livraison(e["projets"][0], 8, 0)
+        self.assertEqual(e["stats"]["megas"], 1)
+
+    def test_suites_de_produits(self):
+        j = Jeu(graine=42)
+        e = j.etat
+        e["renommee"], e["argent"] = 5, 100000
+        with self.assertRaises(ErreurJeu):
+            j.action("produit", id="meteo2")  # la v1 d'abord
+        with self.assertRaises(ErreurJeu):
+            j.action("produit", id="chargeur")  # USB-C requis
+        e["gammes"]["meteo"] = 9
+        j.action("produit", id="meteo2")
+        self.assertEqual(e["projets"][0]["potentiel"], round(7500 * 1.24))
+        j._apres_livraison(e["projets"][0], 8, 0)
+        self.assertEqual((e["stats"]["suites"], e["gammes"]["meteo2"]), (1, 8))
+
+    def test_missions(self):
+        j = Jeu(graine=43)
+        e = j.etat
+        self.assertEqual([m["id"] for m in j.vue()["missions_actives"]], ["m_premier", "m_equipe2", "m_bureau"])
+        argent = e["argent"]
+        e["stats"]["livres"] = 1
+        e["locaux"].append("bureau")
+        j._verifier_missions()
+        self.assertEqual(e["missions"], ["m_premier", "m_bureau"])
+        self.assertEqual(e["argent"], argent + 2500)
+        self.assertEqual(j.vue()["missions_actives"][0]["id"], "m_equipe2")
+        ancien = json.loads(json.dumps(e))
+        for cle in ("clients", "gammes", "missions"):
+            ancien.pop(cle)
+        for cle in ("megas", "suites", "series", "secteurs", "meilleure_note"):
+            ancien["stats"].pop(cle)
+        json.dumps(Jeu(ancien).vue())  # ancienne sauvegarde : complétée sans erreur
+
     def test_contrats_requis_existent(self):
-        from moteur.donnees import CERTIFS, TECHNOS
-        for c in CONTRATS:
-            self.assertTrue(c[4] is None or c[4] in TECHNOS or c[4] in CERTIFS)
+        from moteur.donnees import CERTIFS, MEGAS, MISSIONS, PRODUITS, SECTEURS, TECHNOS
+        from moteur.extensions import requis_liste
+        connus = set(TECHNOS) | set(CERTIFS)
+        for c in CONTRATS + MEGAS:
+            self.assertTrue(set(requis_liste(c[4])) <= connus, c[0])
+            self.assertIn(c[5], SECTEURS, c[0])
+        self.assertEqual([c[3] for c in CONTRATS], sorted(c[3] for c in CONTRATS))  # tirage pondéré par l'ordre
+        ids = {p["id"] for p in PRODUITS}
+        for p in PRODUITS:
+            self.assertTrue(p.get("suite") in ids | {None} and p.get("requis") in set(TECHNOS) | {None}, p["id"])
+        j = Jeu(graine=1)
+        for m in MISSIONS:
+            j._mesure(m[2])  # chaque mesure de mission existe
 
 
 if __name__ == "__main__":

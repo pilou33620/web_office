@@ -3,9 +3,9 @@ import random
 
 from .extensions import ErreurJeu, Extensions, borne, requis_liste
 
-from .donnees import (ANCIENS_POSTES, CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
+from .donnees import (CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
                       ETABLIS, GRILLE, HORAIRES, OBSTACLES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
-                      PHASES, PIECES, POSTE, POSTES, POSTES_DEPART, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
+                      PHASES, PIECES, POSTE, POSTES, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
                       DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS)
 
 JOURS_MOIS = 30
@@ -17,6 +17,8 @@ NB_CANDIDATS = 4
 DUREE_CEM = 3
 DUREE_FORMATION = 10
 DUREE_CONGES = 5
+BANDE_ETIQUETTE = 24  # px en bas de chaque pièce, laissés libres pour son nom (rangement automatique)
+VERSION_PLAN = 3      # à augmenter quand le plan ou le rangement change : les parties sont rangées à nouveau
 VENTES = 0.25  # ventes du 1er mois d'un produit = VENTES × potentiel × (note/10)² × (1 + renommée/25), puis −10 % par mois
 NOM_MAX = 30
 
@@ -59,12 +61,12 @@ class Jeu(Extensions):
             "employes": [], "candidats": [], "offres": [], "projets": [], "produits": [],
             "evenement": None, "journal": [], "historique": [], "faillite": False,
             "stats": {"livres": 0, "ca": 0, "produits_lances": 0},
-            "trophees": [], "bilans": [], "combos_vus": [], "objets": [], "version_plan": 2,
+            "trophees": [], "bilans": [], "combos_vus": [], "objets": [], "version_plan": VERSION_PLAN,
         })
         self.etat["exercice"] = self._exercice_vide()
-        bureaux = [self._ajouter_objet("poste", x, y)["id"] for x, y in POSTES_DEPART]
-        for mid in MATERIEL_DEPART:
-            self._ajouter_objet(mid, *MATERIEL[mid]["pos"])
+        for mid in MATERIEL_DEPART:  # sur l'établi du garage
+            self._ajouter_objet(mid, *self._place_auto(mid))
+        bureaux = [self._ajouter_objet("poste", *self._place_auto("poste"))["id"] for _ in range(2)]
         self.etat["employes"].append({
             "id": self._id(), "nom": directeur, "poste": "Fondateur · ingé élec", "e": 5, "m": 2, "f": 4,
             "trait": "endurant", "salaire": 0, "couleur": "#ffc94d", "cheveux": "#5a3a22", "peau": "#f6cfa6",
@@ -96,29 +98,26 @@ class Jeu(Extensions):
             x.setdefault("projet", None)
         if "objets" not in e:
             self._migrer_v3()
-        if e.get("version_plan") != 2:  # plan garage + bâtiment carré : tout est replacé automatiquement
+        if e.get("version_plan") != VERSION_PLAN:  # nouveau plan ou nouveau rangement : tout est replacé automatiquement
             if "bureau" not in e["locaux"] and e["locaux"]:
                 e["locaux"].append("bureau")  # pièces louées avant d'emménager (permis autrefois) : on emménage
             self._replacer_objets()
-            e["version_plan"] = 2
+            e["version_plan"] = VERSION_PLAN
         e["version"] = 3
 
     def _migrer_v3(self):
-        """v2 -> v3 : postes fixes et matériel/déco sans position deviennent des objets placés."""
+        """v2 -> v3 : postes fixes et matériel/déco sans position deviennent des objets (placés ensuite par _replacer_objets)."""
         e = self.etat
         e["objets"] = []
         ouverts = [0, 1] + ([2, 3, 4, 5] if "bureau" in e["locaux"] else []) + ([6, 7, 8, 9] if "openspace" in e["locaux"] else [])
-        ids = {i: self._ajouter_objet("poste", *ANCIENS_POSTES[i])["id"] for i in ouverts}
+        ids = {i: self._ajouter_objet("poste", 0, 0)["id"] for i in ouverts}
         for x in e["employes"]:
             x["bureau"] = ids.get(x["bureau"]) or next(i for i in ids.values() if i not in {y["bureau"] for y in e["employes"]})
         for mid in e["materiel"]:
-            self._ajouter_objet(mid, *MATERIEL[mid]["pos"])
+            self._ajouter_objet(mid, 0, 0)
         for did in e["deco"]:
             if not DECO[did].get("global"):
-                try:
-                    self._ajouter_objet(did, *self._place_auto(did))
-                except ErreurJeu:
-                    pass  # pièce non louée ou pleine : l'effet reste acquis, l'objet n'apparaît pas
+                self._ajouter_objet(did, 0, 0)  # pièce non louée ou pleine au rangement : l'effet reste acquis, l'objet disparaît
 
     def _exercice_vide(self):
         return {"ca": 0, "charges": 0, "livres": 0, "notes": [], "rep0": self.etat.get("renommee", 0)}
@@ -257,21 +256,33 @@ class Jeu(Extensions):
         return piece
 
     def _place_auto(self, genre):
-        f = self.fiche(genre)
-        for k in f["pieces"]:
-            if k not in self.pieces_dispo():
+        """Rangement automatique : le petit matériel sur l'établi, le reste contre les murs (le centre reste libre pour
+        circuler), en évitant la bande du bas où s'affiche le nom de la pièce."""
+        f, carte, dispo = self.fiche(genre), self.carte(), self.pieces_dispo()
+        w, h = f["w"], f["h"]
+        candidats = []  # (établi d'abord, rang de la pièce préférée, bande du nom, distance au mur, y, x)
+        if genre in MATERIEL:
+            for bx, by, bw, bh in ETABLIS[carte]:
+                if bh >= bw and w <= bw:  # établi vertical : appareils les uns sous les autres
+                    candidats += [(0, 0, 0, y - by, y, bx + (bw - w) // 2) for y in range(by, by + bh - h + 1, 4)]
+                elif bh < bw and h <= bh:  # établi horizontal : côte à côte
+                    candidats += [(0, 0, 0, x - bx, by + (bh - h) // 2, x) for x in range(bx, bx + bw - w + 1, 4)]
+        for rang, k in enumerate(f["pieces"]):
+            if k not in dispo:
                 continue
             px, py, pw, ph = PIECES[k]["rect"]
-            ys, xs = range(py, py + ph - f["h"] + 1, 8), range(px, px + pw - f["w"] + 1, 8)
-            if 10 * f["w"] * f["h"] < pw * ph:  # petit objet : depuis le coin opposé, pour laisser la place aux gros
-                ys, xs = reversed(ys), list(reversed(xs))
+            xs = sorted(set(range(px, px + pw - w + 1, 8)) | {px + pw - w})  # + collé au mur de droite / du bas
+            ys = sorted(set(range(py, py + ph - h + 1, 8)) | {py + ph - h})
             for y in ys:
                 for x in xs:
-                    try:
-                        self._verifier_place(genre, x, y)
-                        return x, y
-                    except ErreurJeu:
-                        pass
+                    mur = min(x - px, px + pw - x - w, y - py, py + ph - y - h)
+                    candidats.append((1, rang, y + h > py + ph - BANDE_ETIQUETTE, mur, y, x))
+        for *_, y, x in sorted(candidats):
+            try:
+                self._verifier_place(genre, x, y)
+                return x, y
+            except ErreurJeu:
+                pass
         raise ErreurJeu(f"Plus de place libre pour : {f['nom']}.")
 
     def _replacer_objets(self):

@@ -30,39 +30,38 @@ GRILLE = 4
 
 # Poste de travail : l'emprise inclut la chaise et la place de l'employé devant le meuble
 POSTE = {"nom": "Bureau de travail", "prix": 400, "w": 76, "h": 64, "pieces": TRAVAIL}
-POSTES_DEPART = [(452, 468), (540, 560)]
 
 # Matériel : bonus de production (6 % par point), debug (détection des défauts), cem (chance aux tests)
-# w, h : taille sur le plan ; pos : emplacement par défaut (achat automatique, anciennes sauvegardes)
+# w, h : taille sur le plan (le rangement automatique choisit l'emplacement)
 _FW = ["garage", "labo", "etudes", "openspace", "plateau"]  # le labo d'abord : outils firmware sur l'établi
 MATERIEL = {
     # Labo électronique
-    "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (448, 412)},
-    "station":  {"nom": "Station de soudage", "dom": "e", "prix": 300, "bonus": 1, "piece": "labo", "w": 28, "h": 36, "pos": (484, 412)},
-    "alim":     {"nom": "Alimentation de labo", "dom": "e", "prix": 450, "bonus": 1, "piece": "labo", "w": 32, "h": 32, "pos": (28, 374)},
-    "micro":    {"nom": "Microscope de soudure", "dom": "e", "prix": 1800, "bonus": 1, "debug": 1, "piece": "labo", "w": 32, "h": 36, "pos": (28, 476)},
-    "oscillo":  {"nom": "Oscilloscope 4 voies", "dom": "e", "prix": 2800, "bonus": 2, "debug": 1, "piece": "labo", "w": 36, "h": 44, "pos": (26, 420)},
-    "sonde":    {"nom": "Sondes champ proche", "dom": "e", "prix": 1200, "bonus": 0, "cem": 0.10, "piece": "labo", "w": 28, "h": 30, "pos": (30, 526)},
-    "four":     {"nom": "Four de refusion", "dom": "e", "prix": 6500, "bonus": 3, "piece": "labo", "w": 74, "h": 56, "pos": (110, 284)},
-    "spectre":  {"nom": "Analyseur de spectre", "dom": "e", "prix": 14000, "bonus": 2, "cem": 0.10, "piece": "labo", "w": 74, "h": 44, "pos": (110, 372)},
+    "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo", "w": 28, "h": 36},
+    "station":  {"nom": "Station de soudage", "dom": "e", "prix": 300, "bonus": 1, "piece": "labo", "w": 28, "h": 36},
+    "alim":     {"nom": "Alimentation de labo", "dom": "e", "prix": 450, "bonus": 1, "piece": "labo", "w": 32, "h": 32},
+    "micro":    {"nom": "Microscope de soudure", "dom": "e", "prix": 1800, "bonus": 1, "debug": 1, "piece": "labo", "w": 32, "h": 36},
+    "oscillo":  {"nom": "Oscilloscope 4 voies", "dom": "e", "prix": 2800, "bonus": 2, "debug": 1, "piece": "labo", "w": 36, "h": 44},
+    "sonde":    {"nom": "Sondes champ proche", "dom": "e", "prix": 1200, "bonus": 0, "cem": 0.10, "piece": "labo", "w": 28, "h": 30},
+    "four":     {"nom": "Four de refusion", "dom": "e", "prix": 6500, "bonus": 3, "piece": "labo", "w": 74, "h": 56},
+    "spectre":  {"nom": "Analyseur de spectre", "dom": "e", "prix": 14000, "bonus": 2, "cem": 0.10, "piece": "labo", "w": 74, "h": 44},
     # Atelier méca / 3D
-    "fdm":      {"nom": "Imprimante 3D FDM", "dom": "m", "prix": 650, "bonus": 2, "piece": "atelier", "w": 46, "h": 46, "pos": (214, 274)},
-    "resine":   {"nom": "Imprimante résine", "dom": "m", "prix": 2400, "bonus": 2, "piece": "atelier", "w": 38, "h": 42, "pos": (270, 276)},
-    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier", "w": 84, "h": 32, "pos": (214, 344)},
-    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier", "w": 92, "h": 72, "pos": (216, 430)},
+    "fdm":      {"nom": "Imprimante 3D FDM", "dom": "m", "prix": 650, "bonus": 2, "piece": "atelier", "w": 46, "h": 46},
+    "resine":   {"nom": "Imprimante résine", "dom": "m", "prix": 2400, "bonus": 2, "piece": "atelier", "w": 38, "h": 42},
+    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier", "w": 84, "h": 32},
+    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier", "w": 92, "h": 72},
     # Firmware (établi du bureau, ou labo)
-    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "etudes", "pieces": _FW, "w": 20, "h": 20, "pos": (520, 420)},
-    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 34, "h": 20, "pos": (58, 34)},
-    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 28, "h": 20, "pos": (100, 34)},
-    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 40, "h": 24, "pos": (136, 32)},
-    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "etudes", "pieces": _FW, "w": 90, "h": 24, "pos": (184, 32)},
+    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "etudes", "pieces": _FW, "w": 20, "h": 20},
+    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 34, "h": 20},
+    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 28, "h": 20},
+    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 40, "h": 24},
+    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "etudes", "pieces": _FW, "w": 90, "h": 24},
     # Labo CEM
-    "esd":      {"nom": "Générateur ESD", "dom": "c", "prix": 3500, "bonus": 0, "cem": 0.08, "piece": "cem", "w": 40, "h": 40, "pos": (220, 816)},
-    "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem", "w": 104, "h": 104, "pos": (214, 648)},
+    "esd":      {"nom": "Générateur ESD", "dom": "c", "prix": 3500, "bonus": 0, "cem": 0.08, "piece": "cem", "w": 40, "h": 40},
+    "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem", "w": 104, "h": 104},
     # Ligne de production CMS (hangar voisin)
-    "pickplace": {"nom": "Machine pick-and-place", "dom": "e", "prix": 30000, "bonus": 3, "piece": "cms", "w": 56, "h": 96, "pos": (688, 136)},
-    "rayonx":   {"nom": "Inspection par rayons X", "dom": "e", "prix": 24000, "bonus": 1, "debug": 3, "piece": "cms", "w": 56, "h": 80, "pos": (688, 248)},
-    "aoi":      {"nom": "Inspection optique automatique", "dom": "e", "prix": 12000, "bonus": 1, "debug": 1, "cem": 0.05, "piece": "cms", "w": 56, "h": 60, "pos": (688, 344)},
+    "pickplace": {"nom": "Machine pick-and-place", "dom": "e", "prix": 30000, "bonus": 3, "piece": "cms", "w": 56, "h": 96},
+    "rayonx":   {"nom": "Inspection par rayons X", "dom": "e", "prix": 24000, "bonus": 1, "debug": 3, "piece": "cms", "w": 56, "h": 80},
+    "aoi":      {"nom": "Inspection optique automatique", "dom": "e", "prix": 12000, "bonus": 1, "debug": 1, "cem": 0.05, "piece": "cms", "w": 56, "h": 60},
 }
 for _m in MATERIEL.values():
     _m.setdefault("pieces", [_m["piece"]])
@@ -109,8 +108,6 @@ LOCAUX = {
     "cms":       {"nom": "Hangar de production CMS", "desc": "Prototypes assemblés en 1 jour, séries +50 %, machines de production", "prix": 80000, "loyer": 2200, "rep": 10},
 }
 LOYER_BASE = 400
-# Anciennes positions des postes (sauvegardes v2) : coin haut-gauche de l'emprise
-ANCIENS_POSTES = [(34, 66), (147, 66), (260, 66), (34, 152), (147, 152), (260, 152), (26, 660), (108, 660), (26, 760), (108, 760)]
 
 TRAITS = {
     "perfectionniste": {"nom": "Perfectionniste", "desc": "Moins de défauts, un peu plus lent", "vitesse": 0.9, "defauts": 0.5},

@@ -577,7 +577,7 @@ const PLAN = (() => {
     const v = rueVolumes();
     const gx = 430, gy = 400, gw = 250;
     v.push(...murs([[gx + gw, gy, gx + gw, gy + gw], [gx, gy + gw, gx + 50, gy + gw], [gx + 200, gy + gw, gx + gw, gy + gw]], 16, '#c9a77e'));
-    v.push([gx + 125 + gy + gw, boite(gx + 50, gy + gw - 2, 150, 4, 4, '#9aa1a8', 52)]);
+    v.push([gx + 125 + gy + gw, boite(gx + 50, gy + gw - 2, 150, 4, 4, '#9aa1a8', 12)]);
     v.push([540 + 728, voiture(540, 700, '#4a8ad8', false)], [760 + 420, arbre(760, 420, 22, 0)]);
     v.push([720 + 715, boite(720, 700, 22, 14, 14, '#d9534f', 30) + boite(729, 705, 4, 4, 30, '#3d3d3d')]);
     for (let k = 0; k < 6; k++) v.push([700 + k * 16 + 778, boule(700 + k * 16, 778, 6, 7, '#4fa043')]);

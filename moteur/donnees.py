@@ -111,7 +111,7 @@ def _grille_postes(k):
 # Emplacements prévus du rangement automatique, essayés avant la règle générale : type -> [(x, y), ...]
 # Postes : une grille par pièce de travail (pas les bureaux individuels ni la direction) ; la déco ne s'y pose pas d'elle-même.
 EMPLACEMENTS = {
-    "poste": [(444, 456), (548, 456), (444, 524), (548, 524)] + [p for k in TRAVAIL if PIECES[k]["genre"] == "bureau" for p in _grille_postes(k)],
+    "poste": [(444, 480), (548, 480), (444, 548), (548, 548)] + [p for k in TRAVAIL if PIECES[k]["genre"] == "bureau" for p in _grille_postes(k)],
     # salle de pause du R2 : cuisine contre le mur du haut, canapé en bas, baby-foot au centre, jeux et boissons contre les murs
     "canape": [(960, 2668)], "babyfoot": [(946, 2518)], "cafe": [(1040, 2400)], "arcade": [(878, 2400)],
     "distrib": [(878, 2438)], "fontaine": [(878, 2472)], "aquarium": [(880, 2674)],

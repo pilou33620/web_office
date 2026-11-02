@@ -47,7 +47,7 @@ function pieceMateriel(dom) {
 // Emplacements debout (centre du personnage) par lieu, sur chaque carte
 const SPOTS = {
   garage: {
-    labo: [[470, 462], [520, 462], [600, 462], [620, 600]],
+    labo: [[524, 466], [625, 466], [620, 600], [470, 466]],  // devant l'établi, entre les écrans des bureaux (sinon caché derrière)
     reunion: [[136, 717], [184, 717], [160, 695], [160, 742], [220, 712], [250, 726]],
     terrasse: [[280, 262], [304, 280], [330, 262], [240, 290], [350, 290]],
   },

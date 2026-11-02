@@ -25,7 +25,7 @@ DUREE_CEM = 3
 DUREE_FORMATION = 10
 DUREE_CONGES = 5
 BANDE_ETIQUETTE = 24  # px en bas de chaque pièce, laissés libres pour son nom (rangement automatique)
-VERSION_PLAN = 8      # à augmenter quand le plan ou le rangement change : les parties sont rangées à nouveau
+VERSION_PLAN = 9      # à augmenter quand le plan ou le rangement change : les parties sont rangées à nouveau
 PLAN_MINIMUM = 7      # plan avec cloisons et portes : les parties plus anciennes ne sont pas reprises
 POSTE_W, POSTE_H = 76, 64
 VENTES = 0.25  # ventes du 1er mois d'un produit = VENTES × potentiel × (note/10)² × (1 + renommée/25), puis −10 % par mois

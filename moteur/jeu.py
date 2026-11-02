@@ -1,4 +1,5 @@
 """Moteur de Circuit Story : simulation jour par jour d'un bureau d'études électronique."""
+import math
 import random
 
 from .extensions import ErreurJeu, Extensions, borne, requis_liste
@@ -9,7 +10,7 @@ from .donnees import (CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE
                       PHASES, PIECES, POSTE, POSTES, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
                       DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS,
                       JOURS_AN, SALAIRE_BASE, HAUSSE_POINT, SENIORITES, KICKOFF, ROLES, SERVICE_SANS_RESP,
-                      CHOIX_TECH, COMMISSION, EXIGEANTS, INVESTISSEMENTS, PRIME_CHEF, PRIME_COMMERCIAL, STOCK_BATIMENT, STOCK_GARAGE)
+                      CHOIX_TECH, COMMISSION, EXIGEANTS, PRESTATAIRES, INVESTISSEMENTS, PRIME_CHEF, PRIME_COMMERCIAL, STOCK_BATIMENT, STOCK_GARAGE)
 
 JOURS_MOIS = 30
 SEUIL_FAILLITE = -5000
@@ -329,6 +330,19 @@ class Jeu(Personnel, Extensions):
         """Qualité d'une étape d'indus ou de qualif : 60 % sans spécialiste installé, jusqu'à 100 % avec un expert du métier."""
         return min(1.0, 0.6 + 0.05 * max([self.metier(x, metier) for x in self.gens_de(fonction)], default=0))
 
+    def qualite_projet(self, p, etape):
+        """Qualité de l'indus ou de la qualif d'un projet : celle du prestataire choisi, sinon celle de l'équipe."""
+        q = p.get("qualite_presta", {}).get(etape)
+        return self.qualite_etape(etape, etape) if q is None else q
+
+    @staticmethod
+    def _externes(p, ph):
+        """Domaines de la phase confiés à un prestataire, avec son offre."""
+        presta = p.get("presta", {})
+        if ph.get("etape") == "indus" and presta.get("indus", "interne") != "interne":
+            return {d: PRESTATAIRES["indus"]["options"][presta["indus"]] for d in ph["besoin"]}
+        return {d: PRESTATAIRES[d]["options"][presta[d]] for d in ph["besoin"] if presta.get(d, "interne") != "interne"}
+
     def chefs_projet(self):
         return [x for x in self.etat["employes"] if x.get("chef") and not x["absent"]]
 
@@ -613,7 +627,7 @@ class Jeu(Personnel, Extensions):
     def _entrer_phase(self, p):
         ph = p["phases"][p["phase"]]
         if ph.get("essais") and ph["attente"] is None:
-            ph["attente"] = max(2, ph["essais"] - (self.qualite_etape("qualif", "qualif") >= 0.9))
+            ph["attente"] = max(2, ph["essais"] - (self.qualite_projet(p, "qualif") >= 0.9))
             self._log(f"« {p['nom']} » : essais de qualification ({ph['attente']} jours en étuve et sur pot vibrant).", "info")
         elif "attente" in ph and ph["attente"] is None:
             maison = "four" in self.materiel_actif()  # avec un four de refusion, on assemble soi-même : plus rapide et moins cher
@@ -637,9 +651,10 @@ class Jeu(Personnel, Extensions):
         if ni:
             parts = {"e": 0.12, "m": 0, "f": 0} if ni == 1 else {"e": 0.1, "m": 0.15, "f": 0.08}
             besoin = {d: max(3, round(t[d] * k)) for d, k in parts.items() if k and t[d] > 0}
-            p["phases"].append({"nom": "Industrialisation " + ("de la carte" if ni == 1 else "du produit"), "besoin": besoin, "fait": {d: 0.0 for d in besoin}})
+            p["phases"].append({"nom": "Industrialisation " + ("de la carte" if ni == 1 else "du produit"), "etape": "indus", "besoin": besoin, "fait": {d: 0.0 for d in besoin}})
         if nq:
-            p["phases"].append({"nom": "Qualification " + ("de la carte" if nq == 1 else "du produit"), "besoin": {}, "fait": {}, "attente": None, "essais": 4 if nq == 1 else 7})
+            essais = round((4 if nq == 1 else 7) * PRESTATAIRES["qualif"]["options"][p.get("presta", {}).get("qualif", "interne")].get("duree", 1))
+            p["phases"].append({"nom": "Qualification " + ("de la carte" if nq == 1 else "du produit"), "etape": "qualif", "besoin": {}, "fait": {}, "attente": None, "essais": essais})
 
     def _kickoff(self, p):
         """Réunion de lancement dans le bâtiment : la nouvelle phase démarre déjà avancée de 5 %."""
@@ -657,7 +672,8 @@ class Jeu(Personnel, Extensions):
     def _utilite(self, emp, p):
         if p["etape"] == "travail":
             ph = p["phases"][p["phase"]]
-            return max([emp[d] for d in ph["besoin"] if ph["besoin"][d] - ph["fait"][d] > 1e-6] or [0])
+            ext = self._externes(p, ph)
+            return max([emp[d] for d in ph["besoin"] if ph["besoin"][d] - ph["fait"][d] > 1e-6 and d not in ext] or [0])
         if p["etape"] == "debug":
             return (emp["e"] + emp["f"]) / 4
         return 0
@@ -681,7 +697,8 @@ class Jeu(Personnel, Extensions):
             if not p.get("chef") or p["etape"] != "travail":
                 continue
             ph = p["phases"][p["phase"]]
-            for d in [d for d in ph["besoin"] if ph["besoin"][d] - ph["fait"][d] > 1e-6]:
+            ext = self._externes(p, ph)
+            for d in [d for d in ph["besoin"] if ph["besoin"][d] - ph["fait"][d] > 1e-6 and d not in ext]:
                 if any(x[d] >= 3 for x in equipes[p["id"]]):
                     continue  # domaine déjà couvert
                 emp = max(libres, key=lambda x: x[d], default=None)
@@ -725,7 +742,8 @@ class Jeu(Personnel, Extensions):
                 self._log(f"Combo débloqué sur « {p['nom']} » : {COMBOS[c]['nom']} !", "bon")
         mult = (1.1 if "trio" in combos else 1.0) * (1.05 if "soudee" in combos else 1.0) * self._mult_chef(p) * self._affinites(actifs, p)
         pedagogues = [x for x in actifs if "pedagogue" in x["traits"]]
-        taux_defauts = 0.07 * self.horaires()["defauts"] * (0.7 if "qualite" in combos else 1.0) * self._facteur_defauts()
+        taux_base = 0.07 * self._facteur_defauts() * math.prod(self._choix_effets(p, "defauts"))
+        taux_defauts = taux_base * self.horaires()["defauts"] * (0.7 if "qualite" in combos else 1.0)
         taux_defauts *= 1 - 0.1 * p.get("suivi", 0)  # le chef de projet fait le lien entre les équipes
         for emp in actifs:
             emp["projet_jour"] = p["id"]
@@ -733,9 +751,18 @@ class Jeu(Personnel, Extensions):
             ph = p["phases"][p["phase"]]
             if ph.get("attente"):
                 ph["attente"] -= 1
+                # essais ratés : plus probable en interne sans spécialiste ou chez un labo low-cost
+                if not ph["attente"] and ph.get("etape") == "qualif" and self.rng.random() < 0.5 * (1 - self.qualite_projet(p, "qualif")):
+                    ph["attente"] = ph["essais"]
+                    self._log(f"« {p['nom']} » : essais de qualification ratés, à refaire ({ph['essais']} jours).", "mauvais")
+            ext = self._externes(p, ph)
+            for d, o in ext.items():  # le prestataire avance de son côté, plus vite sur un gros projet
+                pts = min(max(o["rythme"], p["taille"] * o["rythme"] / 150), ph["besoin"][d] - ph["fait"][d])
+                ph["fait"][d] += pts
+                p["defauts"] += pts * taux_base * o.get("defauts", 1)
             for emp in actifs:
                 reste = {d: ph["besoin"][d] - ph["fait"][d] for d in ph["besoin"]}
-                doms = [d for d, r in reste.items() if r > 1e-6 and emp[d] > 0]
+                doms = [d for d, r in reste.items() if r > 1e-6 and emp[d] > 0 and d not in ext]
                 if doms:
                     d = max(doms, key=lambda k: emp[k])
                     pts = min(self._production(emp, d, bon) * mult * self._contexte(emp, p, actifs) * self._coordination(emp, p, actifs), reste[d])
@@ -809,7 +836,7 @@ class Jeu(Personnel, Extensions):
             ventes = VENTES * p["potentiel"] * (note / 10) ** 2 * (1 + min(e["renommee"], 25) / 25)
             prix = max(20, round(p["potentiel"] / 60))
             ni, nq = self._niveau(p, "indus"), self._niveau(p, "qualif")
-            qi, qq = self.qualite_etape("indus", "indus"), self.qualite_etape("qualif", "qualif")
+            qi, qq = self.qualite_projet(p, "indus"), self.qualite_projet(p, "qualif")
             e["produits"].append({"nom": p["nom"], "id_produit": p["id_produit"], "note": note, "prix": prix, "stock": 0, "mois": 0, "total": 0,
                                   "demande": max(5, round(ventes * 2 / prix)),  # unités par mois (×2 : la fabrication coûte la moitié du prix)
                                   "cout_unite": round(prix * 0.5 * (1 - 0.15 * ni * qi), 2),  # l'indus baisse le coût unitaire
@@ -1260,9 +1287,10 @@ class Jeu(Personnel, Extensions):
             choix = self._choix_valides(tech)
             if o.get("secteur") in EXIGEANTS and choix["qualif"] == "aucune":
                 raise ErreurJeu("Ce client exige une qualification (carte ou produit fini).")
-            base, cout = self._appliquer_choix(o, choix)
+            presta = self._presta_valides(p.get("presta"), o, choix)
+            base, cout = self._appliquer_choix(o, choix, presta)
             if cout and e["argent"] < cout:
-                raise ErreurJeu("Trésorerie insuffisante pour le moule d'injection.")
+                raise ErreurJeu("Trésorerie insuffisante pour les frais payés à la signature.")
             e["offres"].remove(o)
             if self.rng.random() >= self.chance_negociation(float(prix), float(delai), o.get("fidele", 0)):
                 c = self.rng.choice(e["concurrents"])
@@ -1275,6 +1303,7 @@ class Jeu(Personnel, Extensions):
                 self._depenser(cout)
             pr = self._creer_projet(base, "contrat")
             pr["choix"], pr["requis"] = choix, o.get("requis")
+            self._confier(pr, presta)
             e["projets"].append(pr)
             e["reunion"] = True
             pr["acompte"] = int(round(pr["paie"] * 0.3, -1))
@@ -1303,10 +1332,12 @@ class Jeu(Personnel, Extensions):
             total = {d: round(prod["taille"] * part) for d, part in zip(DOMAINES, prod["rep"])}
             base = {"nom": prod["nom"], "taille": sum(total.values()), "total": total,
                     "potentiel": round(prod["potentiel"] * self.bonus_suite(prod)), "id_produit": prod["id"]}
-            base, cout = self._appliquer_choix(base, choix)
+            presta = self._presta_valides(p.get("presta"), base, choix)
+            base, cout = self._appliquer_choix(base, choix, presta)
             self._payer(prod["cout"] + cout)
             pr = self._creer_projet(base, "produit")
             pr["choix"] = choix
+            self._confier(pr, presta)
             self._etapes(pr)
             self._kickoff(pr)
             e["projets"].append(pr)

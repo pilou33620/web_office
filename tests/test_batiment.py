@@ -207,8 +207,8 @@ class TestBatiment(unittest.TestCase):
         p = j.etat["projets"][0]
         noms = [ph["nom"] for ph in p["phases"]]
         self.assertIn("Industrialisation du produit", noms)
-        self.assertEqual(p["phases"][-1]["essais"], 7)
-        self.assertEqual(argent - j.etat["argent"], (6 + 5) * 100 - p["acompte"])
+        self.assertEqual(p["phases"][-1]["essais"], 10)  # en interne : essais 50 % plus longs
+        self.assertEqual(argent - j.etat["argent"], round((6 + 5) * 100 / 3, -1) - p["acompte"])  # en interne : prix ÷3
         exigeant = dict(j.etat["offres"][0], secteur="aero")
         j.etat["offres"][0] = exigeant
         with self.assertRaises(ErreurJeu):

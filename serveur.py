@@ -139,7 +139,7 @@ CATALOGUE = {
     "produits": donnees.PRODUITS, "domaines": donnees.NOM_DOMAINE,
     "horaires": donnees.HORAIRES, "combos": donnees.COMBOS, "trophees": donnees.TROPHEES,
     "pieces": donnees.PIECES, "etablis": donnees.ETABLIS, "obstacles": donnees.OBSTACLES, "poste": donnees.POSTE, "grille": donnees.GRILLE,
-    "choix_tech": donnees.CHOIX_TECH, "prix_proposes": donnees.PRIX_PROPOSES, "delais_proposes": donnees.DELAIS_PROPOSES,
+    "choix_tech": donnees.CHOIX_TECH, "prestataires": donnees.PRESTATAIRES, "prix_proposes": donnees.PRIX_PROPOSES, "delais_proposes": donnees.DELAIS_PROPOSES,
     "technos": donnees.TECHNOS, "certifs": donnees.CERTIFS, "fournisseurs": donnees.FOURNISSEURS, "prets": donnees.PRETS,
     "scenarios": donnees.SCENARIOS, "difficultes": donnees.DIFFICULTES, "entretien_certif": donnees.ENTRETIEN_CERTIF,
     "secteurs": donnees.SECTEURS, "nb_missions": len(donnees.MISSIONS),

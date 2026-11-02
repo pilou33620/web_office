@@ -1129,24 +1129,36 @@ function modaleSignature() {
   if (!cible) { signature = null; return ''; }
   const exigeant = sg.genre === 'signer' && CAT.exigeants.includes(cible.secteur);
   const groupe = (cat, cle, val, options, desc) => `<div class="section" style="margin-top:6px">${esc(cat)}</div><div class="onglets">${Object.entries(options).map(([k, o]) => {
-    const bloque = (o.requis && !e.technos.includes(o.requis)) || (exigeant && cle === 'qualif' && k === 'aucune');
-    return `<button type="button" data-act="sig-opt" data-cle="${cle}" data-id="${k}" class="${val === k ? 'actif' : ''}" style="${val === k ? 'background:#ffc94d' : ''}" ${bloque ? 'disabled' : ''}>${esc(o.nom || o)}</button>`;
+    const manque = o.requis && !e.technos.includes(o.requis) && !e.certifs.includes(o.requis) && (CAT.technos[o.requis] || CAT.certifs[o.requis]).nom;
+    const bloque = manque || (exigeant && cle === 'qualif' && k === 'aucune');
+    return `<button type="button" data-act="sig-opt" data-cle="${cle}" data-id="${k}" class="${val === k ? 'actif' : ''}" style="${val === k ? 'background:#ffc94d' : ''}" ${bloque ? 'disabled' : ''}${manque ? ` title="Il faut : ${esc(manque)}"` : ''}>${esc(o.nom || o)}${manque ? `<br><small>🔒 ${esc(manque)}</small>` : ''}</button>`;
   }).join('')}</div>${desc ? `<p style="font-size:13px">${esc(desc)}</p>` : ''}`;
   let h = `<h2 id="modale-titre">${esc(cible.nom)}</h2><p>${sg.genre === 'signer' ? `${esc(cible.client)} · ${eur(cible.paie)} · ${cible.delai} j` : `Produit maison · prototype ${eur(cible.cout)}`}</p>`;
   if (cible.mega) h += `<p style="font-size:13px"><b>Méga-projet</b> : occupe 2 places de projet pendant ${cible.delai} jours, payé 25 % de plus.</p>`;
   if (cible.fidele) h += `<p style="font-size:13px">Client fidèle ${etoiles(cible.fidele)} : il accepte plus facilement vos conditions.</p>`;
   const sansMeca = sg.genre === 'signer' ? cible.total.m === 0 : cible.rep[1] === 0;
+  const base0 = sg.genre === 'signer' ? cible.total : { e: Math.round(cible.taille * cible.rep[0]), m: Math.round(cible.taille * cible.rep[1]), f: Math.round(cible.taille * cible.rep[2]) };
   for (const [cle, cat] of Object.entries(CAT.choix_tech)) {
     if (cle === 'boitier' && sansMeca) { h += `<div class="section" style="margin-top:6px">${esc(cat.nom)}</div><p style="font-size:13px">Pas de partie mécanique sur ce projet.</p>`; continue; }
     h += groupe(cat.nom, cle, sg.tech[cle], cat.options, cat.options[sg.tech[cle]].desc);
   }
+  // qui fait chaque étape : l'équipe ou un prestataire (seulement les étapes présentes sur ce projet)
+  const presentes = { f: base0.f > 0, m: !sansMeca, indus: sg.tech.indus !== 'aucune', qualif: sg.tech.qualif !== 'aucune' };
+  const presta = Object.fromEntries(Object.keys(CAT.prestataires).map((k) => [k, presentes[k] ? sg.presta[k] : 'interne']));
+  h += `<div class="section" style="margin-top:10px">Qui fait le travail ?</div>`;
+  for (const [cle, cat] of Object.entries(CAT.prestataires)) {
+    if (presentes[cle]) h += groupe(cat.nom, 'presta-' + cle, presta[cle], cat.options, cat.options[presta[cle]].desc);
+  }
   // même calcul que le moteur (_appliquer_choix) : points après les choix × coût par point, −15 % avec un chef de projet
-  const base = sg.genre === 'signer' ? cible.total : { e: Math.round(cible.taille * cible.rep[0]), m: Math.round(cible.taille * cible.rep[1]), f: Math.round(cible.taille * cible.rep[2]) };
   const opts = Object.entries(sg.tech).filter(([k]) => !(k === 'boitier' && sansMeca)).map(([k, v]) => CAT.choix_tech[k].options[v]);
-  const points = ['e', 'm', 'f'].reduce((t, d) => t + opts.reduce((x, o) => (d in o ? Math.round(x * o[d]) : x), base[d]), 0);
+  const pts = Object.fromEntries(['e', 'm', 'f'].map((d) => [d, opts.reduce((x, o) => (d in o ? Math.round(x * o[d]) : x), base0[d])]));
+  const points = pts.e + pts.m + pts.f;
   const chefs = e.employes.some((x) => x.chef);
-  const etapes = Math.round(opts.reduce((t, o) => t + (o.cout_point || 0), 0) * points * (chefs ? 0.85 : 1) / 10) * 10, moule = opts.reduce((t, o) => t + (o.cout || 0), 0);
-  if (etapes + moule) h += `<p style="font-size:13px">Payé à la signature : <b>${eur(etapes + moule)}</b>${etapes ? ` (indus et qualification ${eur(etapes)}${chefs ? ', −15 % grâce au chef de projet' : ''})` : ''}</p>`;
+  const offre = (k) => CAT.prestataires[k].options[presta[k]];
+  const etapes = Math.round(['indus', 'qualif'].reduce((t, k) => t + (CAT.choix_tech[k].options[sg.tech[k]].cout_point || 0) * offre(k).prix, 0) * points * (chefs ? 0.85 : 1) / 10) * 10;
+  const dev = Math.round(['f', 'm'].reduce((t, d) => t + (offre(d).prix_point || 0) * pts[d], 0) / 10) * 10, moule = opts.reduce((t, o) => t + (o.cout || 0), 0);
+  const details = [moule && `moule ${eur(moule)}`, etapes && `indus et qualification ${eur(etapes)}${chefs ? ', −15 % grâce au chef de projet' : ''}`, dev && `prestataires ${eur(dev)}`].filter(Boolean);
+  if (etapes + moule + dev) h += `<p style="font-size:13px">Payé à la signature : <b>${eur(etapes + moule + dev)}</b> (${details.join(' · ')})</p>`;
   if (exigeant) h += `<p style="font-size:13px">Marché exigeant : une qualification est obligatoire.</p>`;
   if (sg.genre === 'signer') {
     const ch = chanceNego(Number(sg.prix), Number(sg.delai), cible.fidele || 0);
@@ -1162,6 +1174,8 @@ const AIDE = [
   ['Méga-projets', "Dès 10 de renommée, de rares projets géants apparaissent : ils occupent deux places, demandent une grande équipe et plusieurs technos."],
   ['Produits maison', "Lancez vos produits, puis leurs suites : une v2 se vend d'autant mieux que la v1 a été bien notée. Une fois en vente, commandez des lots au sous-traitant (Projets › En vente) : un gros lot coûte moins cher par unité mais risque de rester en stock. Un lot peut arriver en retard ou défectueux ; le contrôle à réception le repère mieux avec un bon qualiticien."],
   ['Indus et qualification', "À la signature, deux étapes optionnelles et payantes, pour la carte ou le produit fini. L'industrialisation baisse le coût unitaire, les défauts en série et les retours. La qualification (essais en température et vibrations) améliore la note, réduit les pannes et est obligatoire pour l'auto, l'aéro, le médical et le spatial. Installez un employé doué au Bureau indus ou au Labo de qualification pour mieux les réussir."],
+  ['Prestataires', "À la signature, pour le firmware, la méca, l'indus et la qualif : en interne (gratuit ou moins cher, mais ça occupe l'équipe, et l'indus et la qualif sont moins efficaces sans spécialiste), un freelance ou un labo low-cost (prix moyen, qualité variable) ou un bureau d'études ou un labo accrédité (cher, rapide et sûr). Un prestataire avance de son côté sans occuper l'équipe."],
+  ['Options avancées', "Certaines options de signature (8 et 12 couches, FPGA, 4G, boîtier blindé ou étanche, USB-C, composants auto, aéro ou spatiaux…) se débloquent avec une techno ou une certification : le cadenas indique laquelle."],
   ['Chefs et commerciaux', "Les chefs de projet suivent plusieurs projets : une place de projet de plus chacun, ils composent eux-mêmes l'équipe (le meilleur spécialiste libre de chaque domaine), meilleure note, moins de retard et de surcoûts, prime du client si le projet est livré à l'heure et bien noté ; leur effet baisse avec le nombre de projets suivis. Les responsables d'équipe font produire et progresser leur service et évitent les pertes de coordination. Les commerciaux rendent les offres mieux payées, les négocient, prospectent le secteur choisi et touchent une commission."],
   ['Missions', "Trois missions sont proposées à la fois sur le tableau de bord. Chacune rapporte une prime, parfois de la renommée."],
   ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware) et des compétences métier, une séniorité, plusieurs traits, une motivation, un moral et une fatigue. Le CV ne dit pas tout : l'entretien et le spécialiste en révèlent plus, le reste se découvre avec le temps. Gare au burn-out, et soignez les entretiens annuels."],
@@ -1353,19 +1367,22 @@ document.addEventListener('click', async (ev) => {
       const tech = Object.fromEntries(Object.entries(CAT.choix_tech).map(([k, c]) => [k, c.defaut]));
       const o = b.dataset.genre === 'signer' && ETAT.offres.find((x) => x.id === id);
       if (o && CAT.exigeants.includes(o.secteur)) tech.qualif = 'carte';
-      signature = { genre: b.dataset.genre, id, tech, prix: '1.0', delai: '1.0' };
+      const presta = Object.fromEntries(Object.keys(CAT.prestataires).map((k) => [k, 'interne']));
+      signature = { genre: b.dataset.genre, id, tech, presta, prix: '1.0', delai: '1.0' };
       return rendre();
     }
     case 'sig-opt': {
       const cle = b.dataset.cle;
-      if (cle === 'prix' || cle === 'delai') signature[cle] = brut; else signature.tech[cle] = brut;
+      if (cle === 'prix' || cle === 'delai') signature[cle] = brut;
+      else if (cle.startsWith('presta-')) signature.presta[cle.slice(7)] = brut;
+      else signature.tech[cle] = brut;
       return rendre();
     }
     case 'sig-annuler': signature = null; return rendre();
     case 'sig-ok': {
       const sg = signature;
       signature = null;
-      return agir(sg.genre, sg.genre === 'signer' ? { id: sg.id, prix: sg.prix, delai: sg.delai, tech: sg.tech } : { id: sg.id, tech: sg.tech });
+      return agir(sg.genre, sg.genre === 'signer' ? { id: sg.id, prix: sg.prix, delai: sg.delai, tech: sg.tech, presta: sg.presta } : { id: sg.id, tech: sg.tech, presta: sg.presta });
     }
     case 'abandonner':
       if (!confirm('Abandonner ce projet ? Un contrat abandonné coûte 1 point de renommée.')) return;

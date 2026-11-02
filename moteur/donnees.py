@@ -367,27 +367,72 @@ CHOIX_TECH = {
         "2": {"nom": "2 couches", "desc": "Proto −40 % et 1 jour de moins, CEM plus difficile", "proto": 0.6, "jours": -1, "cem": -0.08},
         "4": {"nom": "4 couches", "desc": "Le bon compromis"},
         "6": {"nom": "6 couches", "desc": "Proto ×2,5 et 2 jours de plus, CEM facile, note +0,2", "proto": 2.5, "jours": 2, "cem": 0.10, "note": 0.2},
+        "8": {"nom": "8 couches HDI", "desc": "Proto ×4 et 3 jours de plus, CEM très facile, note +0,3", "proto": 4, "jours": 3, "cem": 0.15, "note": 0.3, "requis": "rf"},
+        "12": {"nom": "12 couches", "desc": "Proto ×6 et 4 jours de plus, CEM +0,2, note +0,4", "proto": 6, "jours": 4, "cem": 0.20, "note": 0.4, "requis": "fpga"},
     }},
     "mcu": {"nom": "Microcontrôleur", "defaut": "stm32", "options": {
         "stm32": {"nom": "STM32", "desc": "Polyvalent et bien connu"},
         "esp32": {"nom": "ESP32", "desc": "Wi-Fi intégré : firmware −15 %, CEM plus délicate", "f": 0.85, "cem": -0.05},
         "nrf": {"nom": "nRF52", "desc": "BLE basse conso : firmware +15 %, note +0,3", "f": 1.15, "note": 0.3, "requis": "ble"},
+        "4g": {"nom": "Module 4G", "desc": "Connecté partout : firmware −10 %, CEM plus délicate, note +0,3", "f": 0.9, "cem": -0.05, "note": 0.3, "requis": "cell"},
+        "secu": {"nom": "MCU sécurisé", "desc": "Élément sécurisé : firmware +10 %, défauts −10 %, note +0,2", "f": 1.1, "defauts": 0.9, "note": 0.2, "requis": "secu"},
+        "fpga": {"nom": "FPGA", "desc": "Firmware +30 %, note +0,4", "f": 1.3, "note": 0.4, "requis": "fpga"},
     }},
     "boitier": {"nom": "Boîtier", "defaut": "usine", "options": {
         "impression": {"nom": "Impression 3D", "desc": "Méca −30 %, note −0,3", "m": 0.7, "note": -0.3},
         "usine": {"nom": "Usiné", "desc": "Solide et standard"},
         "injection": {"nom": "Moule d'injection", "desc": "Moule 3 000 €, méca +25 %, note +0,5", "m": 1.25, "note": 0.5, "cout": 3000},
+        "blinde": {"nom": "Blindé", "desc": "Boîtier métal : méca +20 %, CEM +0,10, note +0,2", "m": 1.2, "cem": 0.10, "note": 0.2, "requis": "rf"},
+        "ip67": {"nom": "Étanche IP67", "desc": "Moule 2 000 €, méca +30 %, note +0,4", "m": 1.3, "note": 0.4, "cout": 2000, "requis": "dfm"},
+    }},
+    "alim": {"nom": "Alimentation", "defaut": "standard", "options": {
+        "standard": {"nom": "Standard", "desc": "Régulateurs classiques"},
+        "usbc": {"nom": "USB-C PD", "desc": "Électronique +10 %, note +0,2", "e": 1.1, "note": 0.2, "requis": "usb"},
+        "isolee": {"nom": "Puissance isolée", "desc": "Électronique +20 %, note +0,3", "e": 1.2, "note": 0.3, "requis": "hv"},
+    }},
+    # « requis » : une techno ou une certification
+    "composants": {"nom": "Grade des composants", "defaut": "commercial", "options": {
+        "commercial": {"nom": "Commercial", "desc": "Composants du catalogue standard"},
+        "auto": {"nom": "Automobile AEC-Q", "desc": "Proto ×1,5, défauts −10 %, note +0,3", "proto": 1.5, "defauts": 0.9, "note": 0.3, "requis": "auto"},
+        "aero": {"nom": "Aéronautique", "desc": "Proto ×2, défauts −15 %, note +0,4", "proto": 2, "defauts": 0.85, "note": 0.4, "requis": "aero"},
+        "spatial": {"nom": "Spatial durci", "desc": "Proto ×4, défauts −25 %, note +0,6", "proto": 4, "defauts": 0.75, "note": 0.6, "requis": "spatial"},
+    }},
+    "fabrication": {"nom": "Fabrication", "defaut": "standard", "options": {
+        "standard": {"nom": "Sans relecture", "desc": "Le routage part tel quel chez le fabricant"},
+        "dfm": {"nom": "Relecture DFM", "desc": "Électronique +5 %, défauts −20 %", "e": 1.05, "defauts": 0.8, "requis": "dfm"},
     }},
     # étapes optionnelles et payantes entre le prototype et la série (bureau indus et labo de qualification, au R1)
     "indus": {"nom": "Industrialisation", "defaut": "aucune", "options": {
         "aucune": {"nom": "Aucune", "desc": "Moins cher ; sur un gros projet, plus de défauts en série et de retours"},
-        "carte": {"nom": "Carte", "desc": "≈ 4 % du contrat : coût unitaire −15 %, défauts et retours −40 %, séries plus fréquentes et rentables", "cout_point": 3, "indus": 1},
-        "produit": {"nom": "Produit fini", "desc": "≈ 7 % : carte, logiciel et boîtier ; coût unitaire −30 %, défauts et retours −70 %, encore plus de séries", "cout_point": 6, "indus": 2},
+        "carte": {"nom": "Carte", "desc": "Coût unitaire −15 %, défauts et retours −40 %, séries plus fréquentes et rentables", "cout_point": 3, "indus": 1},
+        "produit": {"nom": "Produit fini", "desc": "Carte, logiciel et boîtier : coût unitaire −30 %, défauts et retours −70 %, encore plus de séries", "cout_point": 6, "indus": 2},
     }},
     "qualif": {"nom": "Qualification", "defaut": "aucune", "options": {
         "aucune": {"nom": "Aucune", "desc": "Pas d'essais : interdit aux marchés exigeants (auto, aéro, médical, spatial)"},
-        "carte": {"nom": "Carte", "desc": "≈ 4 %, 4 jours d'essais (température, vibrations) : note +0,3, pannes −40 %", "cout_point": 3, "qualif": 1, "note": 0.3},
-        "produit": {"nom": "Produit fini", "desc": "≈ 6 %, 7 jours : qualification complète, note +0,5, pannes −70 %", "cout_point": 5, "qualif": 2, "note": 0.5},
+        "carte": {"nom": "Carte", "desc": "4 jours d'essais (température, vibrations) : note +0,3, pannes −40 %", "cout_point": 3, "qualif": 1, "note": 0.3},
+        "produit": {"nom": "Produit fini", "desc": "7 jours : qualification complète, note +0,5, pannes −70 %", "cout_point": 5, "qualif": 2, "note": 0.5},
+    }},
+}
+# Qui fait le travail : l'équipe (gratuit) ou un prestataire payé à la signature, qui avance sans occuper l'équipe.
+# Firmware et méca : prix par point et rythme (points par jour sur un projet de 150 points, proportionnel au-delà).
+# Indus et qualif : « prix » multiplie le coût de l'étape ; « qualite » (min, max) remplace celle de l'équipe.
+_DEV = {
+    "interne": {"nom": "En interne", "desc": "Gratuit : fait par l'équipe (vous au début)"},
+    "freelance": {"nom": "Freelance", "desc": "≈ 35 € par point, avance sans occuper l'équipe ; défauts +30 %", "prix_point": 35, "rythme": 4, "defauts": 1.3},
+    "be": {"nom": "Bureau d'études", "desc": "≈ 55 € par point, plus rapide ; défauts −30 %", "prix_point": 55, "rythme": 7, "defauts": 0.7},
+}
+PRESTATAIRES = {
+    "f": {"nom": "Firmware", "options": _DEV},
+    "m": {"nom": "Mécanique", "options": _DEV},
+    "indus": {"nom": "Industrialisation", "options": {
+        "interne": {"nom": "En interne", "desc": "Prix ÷3, travail fait par l'équipe : 60 % d'efficacité sans spécialiste au Bureau indus", "prix": 1 / 3},
+        "freelance": {"nom": "Freelance", "desc": "Prix normal, fait dehors, efficacité 70 à 90 %", "prix": 1, "qualite": (0.7, 0.9), "rythme": 4},
+        "be": {"nom": "Bureau d'études", "desc": "Prix ×1,5, fait dehors, efficacité 100 %", "prix": 1.5, "qualite": (1, 1), "rythme": 7},
+    }},
+    "qualif": {"nom": "Qualification", "options": {
+        "interne": {"nom": "En interne", "desc": "Prix ÷3, essais 50 % plus longs, risque de devoir les refaire (moins avec un spécialiste au Labo)", "prix": 1 / 3, "duree": 1.5},
+        "lowcost": {"nom": "Labo low-cost", "desc": "Prix normal, efficacité 70 à 90 %, petit risque d'essais à refaire", "prix": 1, "qualite": (0.7, 0.9)},
+        "labo": {"nom": "Labo accrédité", "desc": "Prix ×1,5, efficacité 100 %, jamais d'essais à refaire", "prix": 1.5, "qualite": (1, 1)},
     }},
 }
 EXIGEANTS = ("mobilite", "aero", "medical", "spatial")  # secteurs qui exigent une qualification

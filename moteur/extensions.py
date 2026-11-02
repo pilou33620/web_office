@@ -3,7 +3,7 @@ fournisseurs, prêts et investisseurs, carrières, vie d'équipe, météo, scén
 from .donnees import (CERTIFS, CHOIX_TECH, CONCURRENTS, DIFFICULTES, ENTRETIEN_CERTIF, FIDELITE_MAX, FOURNISSEURS, MEGA_PRIME,
                       MEGAS, METEO, MISSIONS, NB_MISSIONS_ACTIVES, NIVEAUX_FIDELITE, PRETS, PRIMES, PRODUITS, SAISONS, SCENARIOS,
                       SECTEURS, TAUX_PRET, TECHNOS, BREVET, IDEES_BREVET, NOM_DOMAINE, ROLES, AGRANDIR_STOCK, LOTS,
-                      STOCK_BATIMENT, STOCK_GARAGE, STOCKAGE, INVESTISSEMENTS)
+                      STOCK_BATIMENT, STOCK_GARAGE, STOCKAGE, INVESTISSEMENTS, PRESTATAIRES)
 
 DUREE_GARANTIE = 120
 DUREE_STAGE = 90
@@ -147,13 +147,32 @@ class Extensions:
             opt = cat["options"].get(v)
             if not opt:
                 raise ErreurJeu("Choix technique invalide.")
-            if opt.get("requis") and opt["requis"] not in self.etat["technos"]:
-                raise ErreurJeu(f"{opt['nom']} : il faut d'abord maîtriser {TECHNOS[opt['requis']]['nom']}.")
+            if opt.get("requis") and opt["requis"] not in self.etat["technos"] + self.etat["certifs"]:
+                raise ErreurJeu(f"{opt['nom']} : il faut d'abord {(TECHNOS.get(opt['requis']) or CERTIFS[opt['requis']])['nom']}.")
             res[k] = v
         return res
 
-    def _appliquer_choix(self, base, choix):
-        """Modifie les points à produire selon les choix ; renvoie le coût immédiat (moule d'injection)."""
+    @staticmethod
+    def _presta_valides(presta, base, choix):
+        """Qui fait chaque étape ; « interne » quand l'étape n'existe pas sur ce projet."""
+        presta = presta if isinstance(presta, dict) else {}
+        res = {}
+        for k, cat in PRESTATAIRES.items():
+            v = presta.get(k, "interne")
+            if v not in cat["options"]:
+                raise ErreurJeu("Prestataire invalide.")
+            utile = base["total"][k] > 0 if k in base["total"] else choix[k] != "aucune"
+            res[k] = v if utile else "interne"
+        return res
+
+    def _confier(self, p, presta):
+        """Note qui fait quoi ; un prestataire d'indus ou de qualif a une efficacité tirée au sort à la signature."""
+        p["presta"] = presta
+        p["qualite_presta"] = {k: round(self.rng.uniform(*o["qualite"]), 2)
+                               for k in ("indus", "qualif") if "qualite" in (o := PRESTATAIRES[k]["options"][presta[k]])}
+
+    def _appliquer_choix(self, base, choix, presta=None):
+        """Modifie les points à produire selon les choix ; renvoie le coût payé à la signature (moule, indus, qualif, prestataires)."""
         total = dict(base["total"])
         cout = 0
         for k, v in choix.items():
@@ -164,10 +183,12 @@ class Extensions:
             cout += opt.get("cout", 0)
         if base["total"]["m"] == 0 and choix.get("boitier") != CHOIX_TECH["boitier"]["defaut"]:
             choix["boitier"] = CHOIX_TECH["boitier"]["defaut"]  # pas de méca : le choix du boîtier ne s'applique pas
-            return self._appliquer_choix(base, choix)
+            return self._appliquer_choix(base, choix, presta)
         base = {**base, "total": total, "taille": sum(total.values())}
-        etapes = sum(CHOIX_TECH[k]["options"][v].get("cout_point", 0) for k, v in choix.items()) * base["taille"]
-        return base, cout + int(round(etapes * (0.85 if self.chefs_projet() else 1), -1))  # le chef de projet pilote l'indus et la qualif
+        offre = lambda k: PRESTATAIRES[k]["options"][(presta or {}).get(k, "interne")]
+        etapes = sum(CHOIX_TECH[k]["options"][choix[k]].get("cout_point", 0) * offre(k)["prix"] for k in ("indus", "qualif")) * base["taille"]
+        dev = sum(offre(d).get("prix_point", 0) * total[d] for d in ("f", "m"))
+        return base, cout + int(round(etapes * (0.85 if self.chefs_projet() else 1), -1)) + int(round(dev, -1))  # le chef de projet pilote l'indus et la qualif
 
     def chance_negociation(self, prix, delai, fid=0):
         """Au prix et au délai affichés, le client signe à coup sûr ; demander plus est un pari (moins risqué avec un client fidèle)."""
@@ -633,7 +654,7 @@ class Extensions:
                 if c["fid"] >= 3 > avant:
                     self._log(f"{p['client']} devient un client fidèle : il reviendra avec de plus gros projets.", "bon")
         ni, nq = self._niveau(p, "indus"), self._niveau(p, "qualif")
-        qi, qq = self.qualite_etape("indus", "indus"), self.qualite_etape("qualif", "qualif")
+        qi, qq = self.qualite_projet(p, "indus"), self.qualite_projet(p, "qualif")
         # défauts vus par le client : l'indus et la qualif en évitent ; sans indus, un gros projet en laisse passer plus
         reel = p["defauts"] * (1 - 0.35 * ni * qi) * (1 - 0.35 * nq * qq) * (1.3 if not ni and p["taille"] >= 250 else 1)
         if p["type"] == "contrat" and reel >= 0.3:

@@ -27,6 +27,42 @@ class TestExtensions(unittest.TestCase):
         with self.assertRaises(ErreurJeu):
             j.action("signer", id=j.etat["offres"][0]["id"], tech={"mcu": "nrf"})  # BLE requis
 
+    def test_prestataires(self):
+        j = Jeu(graine=1)
+        j.etat["argent"] = 100000
+        o = dict(j.etat["offres"][0], secteur="industrie", total={"e": 60, "m": 0, "f": 40}, taille=100)
+        j.etat["offres"][0] = o
+        argent = j.etat["argent"]
+        with self.assertRaises(ErreurJeu):
+            j.action("signer", id=o["id"], presta={"f": "inconnu"})
+        j.action("signer", id=o["id"], tech={"indus": "carte", "qualif": "produit"},
+                 presta={"f": "freelance", "m": "be", "indus": "be", "qualif": "labo"})
+        p = j.etat["projets"][0]
+        self.assertEqual(p["presta"]["m"], "interne")  # pas de méca sur ce projet
+        self.assertEqual(argent - j.etat["argent"], 35 * 40 + round((3 + 5) * 1.5 * 100, -1) - p["acompte"])
+        self.assertEqual(p["qualite_presta"], {"indus": 1.0, "qualif": 1.0})
+        self.assertEqual(p["phases"][-1]["essais"], 7)
+        # le freelance avance le firmware seul, l'équipe ne s'en occupe pas
+        ph = p["phases"][0]
+        j._travailler(p, [], j.bonus())
+        self.assertEqual(ph["fait"]["f"], 4)  # 4 points par jour sur un projet de cette taille
+        j._travailler(p, [], j.bonus())
+        self.assertEqual(ph["fait"]["f"], ph["besoin"]["f"])
+        self.assertEqual(ph["fait"]["e"], 0)
+        # options verrouillées par une certification
+        with self.assertRaises(ErreurJeu):
+            j.action("signer", id=j.etat["offres"][0]["id"], tech={"composants": "auto"})
+        j.etat["certifs"].append("auto")
+        self.assertEqual(j._choix_valides({"composants": "auto"})["composants"], "auto")
+
+    def test_qualif_ratee(self):
+        j = Jeu(graine=2)
+        p = {"nom": "X", "taille": 100, "total": {"e": 100, "m": 0, "f": 0}, "presta": {"qualif": "interne"}, "choix": {}, "etape": "travail", "phase": 0, "defauts": 0.0,
+             "combos": {}, "phases": [{"nom": "Qualification", "etape": "qualif", "besoin": {}, "fait": {}, "attente": 1, "essais": 6}]}
+        j.rng.random = lambda: 0.0  # tirage le plus défavorable
+        j._travailler(p, [], j.bonus())
+        self.assertEqual(p["phases"][0]["attente"], 6)
+
     def test_negociation(self):
         j = Jeu(graine=2)
         self.assertEqual(j.chance_negociation(1.0, 1.0), 1.0)

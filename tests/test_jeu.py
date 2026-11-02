@@ -339,6 +339,29 @@ class TestJeu(unittest.TestCase):
         self.assertTrue(any(o["type"] == "fdm" for o in k.etat["objets"]))
         k.action("vendre", id=9999)  # revendable : elle est bien sur le plan
 
+    def test_rangement_postes_et_salle_de_pause(self):
+        """Postes sur la grille prévue, salle de pause disposée (canapé, baby-foot, jeux contre le mur), même après des achats de déco."""
+        from moteur.donnees import EMPLACEMENTS
+        j = Jeu(graine=31)
+        e = j.etat
+        e["argent"], e["renommee"] = 10 ** 6, 30
+        for l in ("bureau", "pause", "openspace", "plateau"):
+            j.action("local", id=l)
+        for d in ("table", "biblio", "armoire", "imprimante", "plantes", "ficus"):
+            j.action("poser", id=d)
+        for d in ("canape", "babyfoot", "arcade", "distrib", "fontaine", "aquarium", "cafe"):
+            j.action("poser", id=d)
+            o = e["objets"][-1]
+            self.assertEqual((o["x"], o["y"]), EMPLACEMENTS[d][0], d)
+        while True:
+            try:
+                j.action("poser", id="poste")
+            except ErreurJeu:
+                break
+        grille = set(EMPLACEMENTS["poste"])
+        self.assertTrue(all((o["x"], o["y"]) in grille for o in e["objets"] if o["type"] == "poste"))
+        self.assertEqual(sum(o["type"] == "poste" for o in e["objets"]), 16)
+
     def test_tout_tient_dans_le_batiment(self):
         """Quel que soit l'ordre d'achat, chaque appareil trouve sa place et le bâtiment garde 16 postes."""
         from moteur.donnees import MATERIEL

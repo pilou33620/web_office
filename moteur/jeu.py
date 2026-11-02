@@ -4,7 +4,7 @@ import random
 from .extensions import ErreurJeu, Extensions, borne, requis_liste
 
 from .donnees import (CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
-                      ETABLIS, GRILLE, HORAIRES, OBSTACLES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
+                      EMPLACEMENTS, ETABLIS, GRILLE, HORAIRES, OBSTACLES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
                       PHASES, PIECES, POSTE, POSTES, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
                       DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS)
 
@@ -18,7 +18,8 @@ DUREE_CEM = 3
 DUREE_FORMATION = 10
 DUREE_CONGES = 5
 BANDE_ETIQUETTE = 24  # px en bas de chaque pièce, laissés libres pour son nom (rangement automatique)
-VERSION_PLAN = 3      # à augmenter quand le plan ou le rangement change : les parties sont rangées à nouveau
+VERSION_PLAN = 4      # à augmenter quand le plan ou le rangement change : les parties sont rangées à nouveau
+POSTE_W, POSTE_H = 76, 64
 VENTES = 0.25  # ventes du 1er mois d'un produit = VENTES × potentiel × (note/10)² × (1 + renommée/25), puis −10 % par mois
 NOM_MAX = 30
 
@@ -260,13 +261,23 @@ class Jeu(Extensions):
         circuler), en évitant la bande du bas où s'affiche le nom de la pièce."""
         f, carte, dispo = self.fiche(genre), self.carte(), self.pieces_dispo()
         w, h = f["w"], f["h"]
-        candidats = []  # (établi d'abord, rang de la pièce préférée, bande du nom, distance au mur, y, x)
+        # emplacements prévus d'abord (grille des postes, disposition de la salle de pause…)
+        for x, y in EMPLACEMENTS.get(genre, []):
+            try:
+                self._verifier_place(genre, x, y)
+                return x, y
+            except ErreurJeu:
+                pass
+        dans = lambda x, y: any(r[0] <= x and r[1] <= y and x + POSTE_W <= r[0] + r[2] and y + POSTE_H <= r[1] + r[3] for r in (PIECES[k]["rect"] for k in dispo))
+        postes = [] if genre == "poste" else [p for p in EMPLACEMENTS["poste"] if dans(*p)]  # seulement ceux de la carte courante
+        gene = lambda x, y: any(x < px + POSTE_W and px < x + w and y < py + POSTE_H and py < y + h for px, py in postes)
+        candidats = []  # (établi d'abord, gêne un poste prévu, rang de la pièce préférée, bande du nom, distance au mur, y, x)
         if genre in MATERIEL:
             for bx, by, bw, bh in ETABLIS[carte]:
                 if bh >= bw and w <= bw:  # établi vertical : appareils les uns sous les autres
-                    candidats += [(0, 0, 0, y - by, y, bx + (bw - w) // 2) for y in range(by, by + bh - h + 1, 4)]
+                    candidats += [(0, 0, 0, 0, y - by, y, bx + (bw - w) // 2) for y in range(by, by + bh - h + 1, 4)]
                 elif bh < bw and h <= bh:  # établi horizontal : côte à côte
-                    candidats += [(0, 0, 0, x - bx, by + (bh - h) // 2, x) for x in range(bx, bx + bw - w + 1, 4)]
+                    candidats += [(0, 0, 0, 0, x - bx, by + (bh - h) // 2, x) for x in range(bx, bx + bw - w + 1, 4)]
         for rang, k in enumerate(f["pieces"]):
             if k not in dispo:
                 continue
@@ -276,7 +287,7 @@ class Jeu(Extensions):
             for y in ys:
                 for x in xs:
                     mur = min(x - px, px + pw - x - w, y - py, py + ph - y - h)
-                    candidats.append((1, rang, y + h > py + ph - BANDE_ETIQUETTE, mur, y, x))
+                    candidats.append((1, gene(x, y), rang, y + h > py + ph - BANDE_ETIQUETTE, mur, y, x))
         for *_, y, x in sorted(candidats):
             try:
                 self._verifier_place(genre, x, y)

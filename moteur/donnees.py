@@ -17,8 +17,8 @@ PIECES = {
     "pause":     {"nom": "Salle de pause", "rect": (476, 496, 156, 156), "local": "pause", "carte": "batiment"},
     "cms":       {"nom": "Ligne CMS", "rect": (688, 128, 136, 364), "local": "cms", "carte": "batiment"},
 }
-# Ordre de placement automatique de la déco : salle de pause et pièces de travail avant le bureau d'études (gardé pour les postes)
-INTERIEUR = ["garage", "pause", "openspace", "plateau", "labo", "atelier", "cem", "cms", "etudes"]
+# Ordre de placement automatique de la déco (la salle de pause a ses emplacements prévus, voir EMPLACEMENTS)
+INTERIEUR = ["garage", "openspace", "plateau", "labo", "atelier", "etudes", "pause", "cem", "cms"]
 TRAVAIL = ["garage", "etudes", "openspace", "plateau"]
 # Par carte (les deux cartes partagent les coordonnées) :
 # établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
@@ -27,6 +27,21 @@ ETABLIS = {"garage": [(440, 408, 232, 44)], "batiment": [(48, 236, 36, 248)]}
 # plan.js dessine ces meubles à partir de ces rectangles, dans cet ordre.
 OBSTACLES = {"garage": [(636, 468, 32, 112)], "batiment": [(476, 496, 156, 30), (752, 128, 72, 364)]}
 GRILLE = 4
+
+# Emplacements prévus du rangement automatique, essayés avant la règle générale : type -> [(x, y), ...]
+# Postes : une grille par pièce (garage, bureau d'études, open space, plateau R&D) ; la déco ne s'y pose pas d'elle-même.
+EMPLACEMENTS = {
+    "poste": [(444, 456), (548, 456), (444, 524), (548, 524),
+              (48, 496), (128, 496), (48, 560), (128, 560),
+              (476, 236), (556, 236), (476, 300), (556, 300), (476, 364), (556, 364),
+              (216, 68), (296, 68), (376, 68), (216, 132), (296, 132), (376, 132)],
+    # salle de pause : canapé en bas, baby-foot au centre, jeux et boissons contre le mur de droite
+    "canape": [(480, 612)], "babyfoot": [(500, 548)], "cafe": [(478, 532)], "arcade": [(598, 532)],
+    "distrib": [(598, 566)], "fontaine": [(610, 594)], "aquarium": [(588, 624)],
+    # plantes : coins libres des pièces de travail
+    "plantes": [(476, 452), (604, 452), (48, 624), (176, 624), (216, 196), (436, 196), (604, 620)],
+    "ficus": [(596, 448), (476, 448)],
+}
 
 # Poste de travail : l'emprise inclut la chaise et la place de l'employé devant le meuble
 POSTE = {"nom": "Bureau de travail", "prix": 400, "w": 76, "h": 64, "pieces": TRAVAIL}

@@ -50,8 +50,8 @@ const SPOTS = {
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
 
-function corps(x) {
-  return `<div class="anim"><svg viewBox="-17 -17 34 34" width="34" height="34" aria-hidden="true">${PLAN.perso(0, 0, esc(x.couleur), esc(x.cheveux), (x.id || 0) % 4, esc(x.peau || PLAN.PEAUX[0]))}</svg></div>`;
+function corps(x, assis = false) {
+  return `<div class="anim">${PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis)}</div>`;
 }
 
 const PERSOS = {};
@@ -94,7 +94,7 @@ function rendrePersos() {
   }
   for (const emp of presents) {
     const { lieu, x: cx, y: cy } = pos[emp.id];
-    const x = cx - 17, y = cy - 17;
+    const [X, Y] = PLAN.iso(cx, cy, 0), x = Math.round(X - 18), y = Math.round(Y - 50);  // pieds de la figure au point du sol
     let t = '', c = '';
     if (vue === 'moral') { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
     else if (joue && e.fete && emp.lieu === 'fete') { t = e.fete.type === 'anniv' ? (emp.nom === e.fete.nom ? 'Merci !' : 'Joyeux anniversaire !') : 'Santé !'; c = '#ffc94d'; }
@@ -106,7 +106,7 @@ function rendrePersos() {
     else if (joue && p && emp.tache === 'cem') { t = 'CEM…'; c = DC.c; }
     else if (joue && ['salle', 'terrasse', 'accueil'].includes(lieu)) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
     else if (joue && !p) { t = 'zzz'; c = '#e8e8e8'; }
-    const html = corps(emp) + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
+    const html = corps(emp, lieu === 'bureau') + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
     let el = PERSOS[emp.id];
     if (!el) {
       el = PERSOS[emp.id] = document.createElement('div');
@@ -125,7 +125,7 @@ function rendrePersos() {
       el._t = setTimeout(() => el.classList.remove('marche'), duree * 1000);
     }
     const assis = lieu === 'bureau';
-    el.style.zIndex = assis ? 2 : 4;
+    el.style.zIndex = Math.round(cx + cy);  // les plus proches devant
     const travaille = joue && (lieu === 'babyfoot' || (p && (assis || lieu === 'labo' || lieu === 'atelier' || lieu === 'cem' || lieu === 'visite') && emp.tache));
     el.classList.toggle('bob', !!travaille && emp.id % 2 === 0);
     el.classList.toggle('bob2', !!travaille && emp.id % 2 === 1);
@@ -136,66 +136,70 @@ function rendrePersos() {
 
 // Pièce à louer -> pièce du plan où afficher le verrou
 const VERROUS = { atelier: 'atelier', plateau: 'plateau', cem: 'cem', openspace: 'openspace', pause: 'pause', cms: 'cms' };
-// Pastilles de la vue Productivité : [domaine, carte, x, y]
+// Pastilles de la vue Productivité : [domaine, carte, x, y] (coordonnées du sol)
 const PUCES = [['f', 'garage', 560, 376], ['e', 'garage', 446, 376], ['e', 'batiment', 90, 242], ['f', 'batiment', 54, 502], ['m', 'batiment', 54, 74], ['c', 'batiment', 482, 74]];
 
+const DESSINS = new Map();  // dessin SVG de chaque objet placé, recalculé seulement s'il bouge
 function rendreMonde() {
   const e = ETAT, h = [], svg = [];
-  const cle = carte() + '|' + [...e.locaux].sort().join(',') + '|' + e.deco.filter((d) => d === 'eclairage' || d === 'isolation').sort().join(',') + '|' + e.entreprise;
+  const cle = carte() + '|' + [...e.locaux].sort().join(',') + '|' + e.entreprise;
   if (cache.decor !== cle) {
     const demenage = cache.decor && cache.decor.split('|')[0] !== carte();
     cache.decor = cle;
-    $('#statique').innerHTML = PLAN.decor(e, CAT);
+    $('#statique').innerHTML = PLAN.fond(e, CAT);
+    $('#devant').innerHTML = PLAN.devant(e);
+    cache.fixes = PLAN.fixes(e, CAT);
     if (demenage) requestAnimationFrame(recentrer);
   }
-  const p = e.projets.length > 0;
   const occupes = {};
   for (const x of e.employes) occupes[x.bureau] = x;
-  const tries = [...e.objets].sort((a, b) => (b.type === 'tapis') - (a.type === 'tapis'));  // les tapis dessous
-  for (const o of tries) {
-    const f = fiche(o.type);
-    if (!f) continue;
-    let dessin, titre = f.nom;
+  const etablis = CAT.etablis[carte()];
+  const objets = e.objets.map((o) => [o, fiche(o.type)]).filter(([, f]) => f);
+  const elements = cache.fixes.map(([prof, s]) => [prof, s]);
+  for (const [o, f] of objets) {
+    const k = `${o.id}|${o.type}|${o.x}|${o.y}`;
+    if (!DESSINS.has(k)) DESSINS.set(k, PLAN.objet(o, f, etablis));
+    let titre = f.nom;
     if (o.type === 'poste') {
       const emp = occupes[o.id];
-      const travaille = emp && !emp.absent && (emp.lieu || 'bureau') === 'bureau' && joue && p;
-      dessin = PLAN.poste(o.x, o.y, !emp ? '#2b3442' : travaille ? 'url(#g-ecran)' : '#5a7a9a', !!emp, !!emp && emp.id % 2 === 0);
       titre = !emp ? 'Bureau libre' : emp.absent ? `${emp.nom} · ${ABSENCE[emp.absence] || 'absent'}` : `Bureau de ${emp.nom}`;
-    } else {
-      dessin = PLAN.objet(o.type, o.x, o.y, f.w, f.h);
     }
-    const panne = o.type in e.pannes ? `<g class="panne"><circle cx="${o.x + f.w}" cy="${o.y}" r="9" fill="#ff8a7a" stroke="#2b1d14" stroke-width="2"/><text x="${o.x + f.w}" y="${o.y + 4}" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#2b1d14">!</text></g>` : '';
-    const choisi = amenage && selection === o.id ? `<rect x="${o.x - 3}" y="${o.y - 3}" width="${f.w + 6}" height="${f.h + 6}" rx="6" fill="rgba(255,201,77,.2)" stroke="#ffc94d" stroke-width="3" stroke-dasharray="6 4"/>` : '';
-    svg.push(`<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${dessin}${panne}${choisi}</g>`);
+    let extra = '';
+    if (o.type in e.pannes) { const [X, Y] = PLAN.iso(o.x + f.w / 2, o.y + f.h / 2, 46); extra += `<circle cx="${X}" cy="${Y}" r="9" fill="#ff8a7a" stroke="#2b1d14" stroke-width="2"/><text x="${X}" y="${Y + 4}" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#2b1d14">!</text>`; }
+    if (amenage && selection === o.id) extra += `<polygon points="${PLAN.empreinte(o.x - 3, o.y - 3, f.w + 6, f.h + 6)}" fill="rgba(255,201,77,.25)" stroke="#ffc94d" stroke-width="3" stroke-dasharray="6 4"/>`;
+    elements.push([PLAN.profondeur(o, f), `<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${DESSINS.get(k)}${extra}</g>`]);
   }
-  svg.push(PLAN.etiquettes(e));
+  if (DESSINS.size > 400) DESSINS.clear();  // anciens emplacements oubliés de temps en temps
+  svg.push(elements.sort((a, b) => a[0] - b[0]).map((x) => x[1]).join(''));
   if (placement) {
     // zones autorisées pour l'objet en cours de placement
     for (const k of fiche(placement.type).pieces) {
       if (!pieceDispo(k)) continue;
       const [x, y, w, hh] = CAT.pieces[k].rect;
-      svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="6" fill="rgba(123,224,138,.14)" stroke="rgba(47,138,58,.9)" stroke-width="2.5" stroke-dasharray="8 5"/>`);
+      svg.push(`<polygon points="${PLAN.empreinte(x, y, w, hh)}" fill="rgba(123,224,138,.16)" stroke="rgba(47,138,58,.9)" stroke-width="2.5" stroke-dasharray="8 5"/>`);
     }
   }
   if (vue === 'moral') {
-    const t = e.moral >= 70 ? '123,224,138' : e.moral >= 55 ? '255,201,77' : '255,138,122', [x, y, w, hh] = PLAN.cadreMoral(e);
-    svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${hh}" rx="12" fill="rgba(${t},.25)"/>`);
+    const t = e.moral >= 70 ? '123,224,138' : e.moral >= 55 ? '255,201,77' : '255,138,122';
+    svg.push(`<polygon points="${PLAN.cadreMoral(e)}" fill="rgba(${t},.25)"/>`);
   }
   h.push(`<svg class="couche" viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}" xmlns="http://www.w3.org/2000/svg">${svg.join('')}</svg>`);
-  const verrou = (lid, [x, y, w, hh]) => {
-    const l = CAT.locaux[lid], bloque = e.renommee < l.rep;
-    return `<div class="verrou" style="left:${x}px;top:${y}px;width:${w}px;height:${hh}px">
-      <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#fff7e6" stroke-width="2.4"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="#ffc94d" stroke="#2b1d14" stroke-width="1.8"/></svg>
+  // carte « à louer » au centre de la pièce (sur le sol de la vue isométrique)
+  const verrou = (lid, cx, cy) => {
+    const l = CAT.locaux[lid], bloque = e.renommee < l.rep, [X, Y] = PLAN.iso(cx, cy, 0);
+    return `<div class="verrou" style="left:${Math.round(X - 90)}px;top:${Math.round(Y - 62)}px">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#fff7e6" stroke-width="2.4"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="#ffc94d" stroke="#2b1d14" stroke-width="1.8"/></svg>
       <b>${esc(l.nom)}</b><small>${bloque ? `Renommée ${l.rep} requise` : 'Local à louer'}</small>
       <button type="button" class="btn petit" data-act="local" data-id="${lid}" ${bloque || e.argent < l.prix ? 'disabled' : ''}>Louer · ${eur(l.prix)}</button></div>`;
   };
-  if (carte() === 'garage') h.push(verrou('bureau', [560, 150, 250, 170]));
-  else for (const [lid, k] of Object.entries(VERROUS)) if (!e.locaux.includes(lid)) h.push(verrou(lid, CAT.pieces[k].rect));
+  if (carte() === 'garage') h.push(verrou('bureau', 690, 190));
+  else for (const [lid, k] of Object.entries(VERROUS)) if (!e.locaux.includes(lid)) { const [x, y, w, hh] = CAT.pieces[k].rect; h.push(verrou(lid, x + w / 2, y + hh / 2)); }
   if (vue === 'prod') {
     const b = e.bonus;
     for (const [d, c, x, y] of PUCES) {
       if (c !== carte() || (d === 'm' && !e.locaux.includes('atelier')) || (d === 'c' && !e.locaux.includes('cem'))) continue;
-      h.push(`<div class="puce-prod" style="left:${x}px;top:${y}px;background:${DC[d]}">${d === 'c' ? `CEM +${Math.round(b.cem * 100)} %` : `${DN[d]} +${b[d] * PCT_BONUS} %`}</div>`);
+      const [X, Y] = PLAN.iso(x, y, 0);
+      h.push(`<div class="puce-prod" style="left:${Math.round(X)}px;top:${Math.round(Y)}px;background:${DC[d]}">${d === 'c' ? `CEM +${Math.round(b.cem * 100)} %` : `${DN[d]} +${b[d] * PCT_BONUS} %`}</div>`);
     }
   }
   majHtml('#dyn', h.join(''));
@@ -564,15 +568,17 @@ function validePlace(type, x, y, ignorer) {
   return !ETAT.objets.some((o) => { const g = fiche(o.type); return o.id !== ignorer && !g.libre && chevauche(o.x, o.y, g.w, g.h); });
 }
 
+// Point du sol (coordonnées du moteur) sous le doigt, coin de l'objet calé sur la grille
 function pointMonde(ev) {
   const r = $('#monde').getBoundingClientRect(), s = r.width / PLAN.W, f = fiche(placement.type), g = CAT.grille;
-  return [Math.round(((ev.clientX - r.left) / s - f.w / 2) / g) * g, Math.round(((ev.clientY - r.top) / s - f.h / 2) / g) * g];
+  const [x, y] = PLAN.versMonde((ev.clientX - r.left) / s, (ev.clientY - r.top) / s);
+  return [Math.round((x - f.w / 2) / g) * g, Math.round((y - f.h / 2) / g) * g];
 }
 
 function majFantome(ev) {
   if (!placement) return;
   const [x, y] = pointMonde(ev), f = fiche(placement.type), el = $('#fantome');
-  Object.assign(el.style, { left: x + 'px', top: y + 'px', width: f.w + 'px', height: f.h + 'px' });
+  el.querySelector('polygon').setAttribute('points', PLAN.empreinte(x, y, f.w, f.h));
   el.classList.toggle('invalide', !validePlace(placement.type, x, y, placement.id));
 }
 
@@ -894,7 +900,8 @@ $('#cadre').addEventListener('wheel', (ev) => {
 }, { passive: false });
 
 async function demarrer() {
-  $('#monde').insertAdjacentHTML('beforeend', '<div id="fantome" class="fantome" hidden></div>');
+  $('#dyn').insertAdjacentHTML('afterend', '<div id="devant"></div>');  // façade basse et extérieur : devant les objets, sous les personnages
+  $('#monde').insertAdjacentHTML('beforeend', `<div id="fantome" class="fantome" hidden><svg viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}"><polygon points=""/></svg></div>`);
   $('#monde').style.width = PLAN.W + 'px';
   $('#monde').style.height = PLAN.H + 'px';
   appliquerZoom(tablette() ? $('#cadre').clientWidth / PLAN.W : 0.8);

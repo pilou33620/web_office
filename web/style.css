@@ -28,7 +28,8 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #cadre { touch-action: pan-x pan-y; }
 #monde { position: absolute; left: 0; top: 0; transform-origin: 0 0; background-color: #7cc46a; }
 #monde > div { position: absolute; inset: 0; }
-#statique > svg, #dyn > svg.couche { position: absolute; left: 0; top: 0; display: block; }
+#statique > svg, #dyn > svg.couche, #devant > svg { position: absolute; left: 0; top: 0; display: block; }
+#devant { pointer-events: none; }
 #dyn g.cliquable { cursor: pointer; }
 #dyn g.cliquable:hover { filter: brightness(1.08); }
 #persos { pointer-events: none; }
@@ -37,7 +38,7 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #monde[data-soir="soir"] .lum-soir, #monde[data-soir="nuit"] .lum-soir { display: inline; }
 #monde[data-soir="soir"] .soleil, #monde[data-soir="nuit"] .soleil,
 #monde[data-meteo="pluie"] .soleil, #monde[data-meteo="orage"] .soleil, #monde[data-meteo="neige"] .soleil, #monde[data-meteo="brouillard"] .soleil { display: none; }
-.verrou { position: absolute; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 30px !important; gap: 6px; text-align: center; background: rgba(30, 26, 22, .78); border: 2.5px solid var(--trait); border-radius: 8px; padding: 8px; }
+.verrou { position: absolute; z-index: 6; width: 180px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; background: rgba(30, 26, 22, .82); border: 2.5px solid var(--trait); border-radius: 12px; padding: 8px; box-shadow: 0 4px 0 rgba(0,0,0,.3); }
 .verrou b { font-family: var(--titre); font-weight: 600; font-size: 15px; }
 .verrou small { font-size: 12px; color: #d6dccb; }
 .zoom { position: absolute; right: 12px; top: 72px; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; border: 2.5px solid var(--bord); box-shadow: 0 4px 0 rgba(0,0,0,.35); }
@@ -46,7 +47,7 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #zone.amenage .zoom { top: 12px; }
 
 /* Personnages (dessin SVG vu de dessus, centré dans une boîte de 34 px) */
-.perso { position: absolute; width: 34px; height: 34px; }
+.perso { position: absolute; width: 36px; height: 56px; }
 .perso > .anim { position: absolute; inset: 0; }
 .perso.bob > .anim { animation: bob .45s ease-in-out infinite; }
 .perso.bob2 > .anim { animation: bob .45s ease-in-out .2s infinite; }
@@ -166,8 +167,9 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 .placement b { font-family: var(--titre); font-size: 17px; }
 .placement p { margin: 0; font-size: 13px; font-weight: 700; }
 .placement .btn.secondaire { background: #efe3c8; color: var(--trait); }
-.fantome { position: absolute; z-index: 9; border: 3px dashed #2f8a3a; border-radius: 6px; background: rgba(123, 224, 138, .45); pointer-events: none; }
-.fantome.invalide { border-color: #b8322a; background: rgba(255, 138, 122, .5); }
+.fantome { position: absolute; left: 0; top: 0; z-index: 9; pointer-events: none; }
+.fantome polygon { fill: rgba(123, 224, 138, .5); stroke: #2f8a3a; stroke-width: 3; stroke-dasharray: 8 5; }
+.fantome.invalide polygon { fill: rgba(255, 138, 122, .55); stroke: #b8322a; }
 .cliquable { cursor: pointer; }
 .choisi { outline: 3px solid var(--or); outline-offset: 2px; z-index: 6 !important; }
 #zone.amenage .hud-bas { display: none; }

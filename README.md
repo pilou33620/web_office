@@ -32,7 +32,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Conditions de travail** : sièges ergonomiques, éclairage, pauses café, climatisation l'été, isolation phonique quand l'équipe grandit… La vue *Productivité* affiche le multiplicateur obtenu.
 - **Matériel** : multimètre, oscilloscope, four de refusion, analyseur de spectre, imprimantes 3D, CNC, sondes J-Link, banc de test, chambre CEM… Chaque appareil apparaît sur le plan.
 - **Locaux** : on démarre dans le garage de la maison, puis on emménage dans un bâtiment carré (accueil, bureau d'études, labo élec, salle de réunion, sanitaires, serveurs, couloir en anneau). On y loue ensuite l'atelier 3D, la salle de pause et sa terrasse, l'open space, le labo CEM, le plateau R&D, puis le hangar de production voisin. Loyer mensuel en conséquence.
-- **Plan** : vue de dessus détaillée (lumière du jour, éclairage le soir, personnages, rue animée). Sur téléphone, on fait glisser le plan au doigt et on zoome en pinçant ; les boutons + / − / ⌖ zooment et recentrent.
+- **Plan** : vue isométrique façon Game Dev Story (murs du fond avec fenêtres et décoration, façade basse pour voir dedans), appareils à taille réelle, lumière du jour et éclairage du soir, personnages, rue animée. Bureaux rangés sur une grille et salle de pause disposée automatiquement. Sur téléphone, on fait glisser le plan au doigt et on zoome en pinçant ; les boutons + / − / ⌖ zooment et recentrent.
 - **Aménagement libre** : les bureaux s'achètent à l'unité (un par employé) et se placent où l'on veut, sur une grille aimantée, comme le matériel et une vingtaine d'objets (plantes, ficus, fontaine, distributeur, bibliothèque de datasheets, armoire à composants, table de réunion, aquarium, tapis, affiches, borne d'arcade…). Le mode aménagement (bouton en haut à gauche) permet de déplacer ou revendre (à moitié prix) n'importe quel objet.
 - **Projets en parallèle** : 1 projet au garage, 2 après l'emménagement, 3 avec l'open space, 4 avec le plateau R&D. Chaque employé peut être affecté à un projet ou laissé en automatique (il va là où il est le plus utile).
 - **Combos d'équipe** : équipe complète (un spécialiste par domaine), duo qualité (perfectionniste + chasseur de bugs), mentorat (expert + junior), équipe soudée.
@@ -66,7 +66,7 @@ moteur/donnees.py   catalogues (matériel, déco, locaux, traits, contrats, prod
 moteur/jeu.py       simulation jour par jour et actions du joueur
 moteur/extensions.py  R&D, certifications, SAV, séries, finances, carrières, météo, scénarios
 serveur.py          serveur HTTP + API JSON
-web/                interface (index.html, style.css, jeu.js ; plan.js dessine le plan, les objets et les personnages)
+web/                interface (index.html, style.css, jeu.js ; plan.js dessine le plan isométrique, les objets et les personnages)
 tests/              tests unitaires du moteur, banc du serveur
 appairage.py        sécurité réseau, copie identique de web_suite/lanceur/appairage.py
 ```

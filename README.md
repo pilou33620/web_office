@@ -28,7 +28,9 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Projets** : signez un contrat (un acompte de 30 % est versé), puis lancez le temps. Chaque projet passe par le schéma, le routage PCB et les pièces 3D, la fabrication du prototype (4 jours, 2 avec un four de refusion, payante), puis le firmware et le bring-up, un debug facultatif puis des **tests CEM** qui peuvent échouer et obliger à corriger le routage.
 - **Qualité** : le travail génère des défauts. Le matériel de debug et les « chasseurs de bugs » les éliminent. À la livraison, le client donne une **note sur 10** qui fixe le solde payé et la renommée gagnée. Le retard fait baisser la note.
 - **Produits maison** : développez votre propre produit, il se vend ensuite chaque mois selon sa note et votre renommée.
-- **Équipe** : chaque employé a des compétences (Élec, Méca 3D, Firmware), un trait (perfectionniste, rapide, créatif, sociable, râleur, chasseur de bugs, endurant), un moral et une fatigue. Ils progressent en travaillant ; on peut les former (+2 dans un domaine) ou les envoyer en congés.
+- **Équipe** : chaque employé a des compétences (Élec, Méca 3D, Firmware), des compétences métier (logiciel, industrialisation, qualification, commercial, gestion), une séniorité (junior à expert), deux ou trois traits (perfectionniste, rapide, leader, pédagogue, négociateur, rigoureux, stressé, solitaire, ambitieux…), une motivation (salaire, ambiance, beaux projets, formation, horaires), un moral et une fatigue. Ils progressent en travaillant ; on peut les former (+2 dans un domaine) ou les envoyer en congés.
+- **Recrutement** : le CV ne montre qu'un trait, cache un talent et gonfle parfois la séniorité (on paie ce qu'il annonce). L'entretien (300 €) révèle la vraie séniorité, la motivation et une impression sur un trait caché, juste trois fois sur quatre ; le spécialiste, très cher, révèle tout. Le reste se découvre avec le temps.
+- **Vie des employés** : affinités et conflits entre collègues (découverts en travaillant ensemble ; un chef apaise les conflits), ancienneté (+2 % par an, jusqu'à +10 %, et plus de fidélité face au débauchage), burn-out après une fatigue trop longue, maladies, naissances, entretiens annuels (promotion de séniorité, augmentation, formation).
 - **Conditions de travail** : sièges ergonomiques, éclairage, pauses café, climatisation l'été, isolation phonique quand l'équipe grandit… La vue *Productivité* affiche le multiplicateur obtenu.
 - **Matériel** : multimètre, oscilloscope, four de refusion, analyseur de spectre, imprimantes 3D, CNC, sondes J-Link, banc de test, chambre CEM… Chaque appareil apparaît sur le plan.
 - **Locaux** : on démarre dans le garage de la maison, puis on emménage dans un bâtiment carré (accueil, bureau d'études, labo élec, salle de réunion, sanitaires, serveurs, couloir en anneau). On y loue ensuite l'atelier 3D, la salle de pause et sa terrasse, l'open space, le labo CEM, le plateau R&D, puis le hangar de production voisin. Loyer mensuel en conséquence.
@@ -45,7 +47,7 @@ Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La
 - **Recherche et technologies** (BLE, radiofréquence, puissance, contrôle moteur, conception pour la fabrication, IA embarquée) et **certifications** (CE, ISO 9001, ISO 13485 médical, EN 9100 aéro) : elles débloquent de nouveaux contrats mieux payés et donnent des bonus.
 - **SAV et garanties** : un projet livré avec des défauts peut revenir pendant 120 jours. **Production en série** : un client satisfait peut commander une série qui rapporte chaque mois.
 - **Fournisseurs de composants** (européen, asiatique, local premium), **prêts bancaires** sur 24 mois et **levée de fonds**.
-- **Carrières** : promotion en chef de projet (+8 % de production pour son équipe), tentatives de débauchage par la concurrence, stagiaires d'école gratuits pendant 3 mois. **Vie d'équipe** : anniversaires, pots de livraison, séminaires.
+- **Carrières** : promotion en chef de projet (+6 % de production pour son équipe, +1 % par point de gestion ; dès 10 points de compétences pour un leader), tentatives de débauchage par la concurrence, stagiaires d'école gratuits pendant 3 mois. **Vie d'équipe** : anniversaires, pots de livraison, séminaires.
 - **Météo et saisons** sur le plan (pluie, neige, orage, brouillard, canicule), ambiance du soir et de nuit quand les horaires s'allongent.
 - **Secteurs et clients fidèles** : 54 types de contrats dans 10 secteurs (industrie, maison connectée, énergie, agriculture, mobilité, grand public, médical, aéro, télécoms, spatial). Un client bien servi devient fidèle (★ à ★★★★★ « Partenaire ») et revient avec des projets plus gros, plus faciles à négocier.
 - **Méga-projets** : dès 10 de renommée, de rares projets géants (usine 4.0, métro automatique, constellation de satellites…) qui occupent deux places, demandent une grande équipe et plusieurs technologies, et paient 25 % de plus.
@@ -62,7 +64,8 @@ Sous −5 000 € de trésorerie, c'est la faillite.
 ## Structure
 
 ```
-moteur/donnees.py   catalogues (matériel, déco, locaux, traits, contrats, produits)
+moteur/donnees.py   catalogues (matériel, déco, locaux, traits, métiers, séniorités, contrats, produits)
+moteur/personnel.py séniorité, traits, motivations, affinités, burn-out, entretiens, recrutement
 moteur/jeu.py       simulation jour par jour et actions du joueur
 moteur/extensions.py  R&D, certifications, SAV, séries, finances, carrières, météo, scénarios
 serveur.py          serveur HTTP + API JSON

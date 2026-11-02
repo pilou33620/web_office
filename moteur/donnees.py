@@ -132,7 +132,42 @@ TRAITS = {
     "raleur":   {"nom": "Râleur", "desc": "Efficace mais plombe l'ambiance", "vitesse": 1.1, "moral": -5},
     "debug":    {"nom": "Chasseur de bugs", "desc": "Trouve deux fois plus de défauts", "detection": 2.0},
     "endurant": {"nom": "Endurant", "desc": "Se fatigue deux fois moins vite", "fatigue": 0.5},
+    "leader":   {"nom": "Leader", "desc": "Chef de projet dès 10 points de compétences ; son bonus de chef est 50 % plus fort"},
+    "pedagogue": {"nom": "Pédagogue", "desc": "Ses coéquipiers apprennent 50 % plus vite"},
+    "negociateur": {"nom": "Négociateur", "desc": "Commercial +3 : meilleures offres et négociations"},
+    "rigoureux": {"nom": "Rigoureux", "desc": "Moins de défauts, Qualification +2", "defauts": 0.8},
+    "autonome": {"nom": "Autonome", "desc": "+8 % de vitesse sans chef de projet sur son projet"},
+    "encadrement": {"nom": "Besoin d'encadrement", "desc": "−15 % sans chef de projet sur son projet, +10 % avec"},
+    "stresse":  {"nom": "Stressé", "desc": "Perd ses moyens quand la date de livraison approche (−15 %, plus de défauts)"},
+    "distrait": {"nom": "Distrait", "desc": "Un peu plus rapide mais beaucoup plus de défauts", "vitesse": 1.05, "defauts": 1.35},
+    "solitaire": {"nom": "Solitaire", "desc": "+10 % dans une petite équipe (2 ou moins), −10 % dans une grande (4 ou plus)"},
+    "ambitieux": {"nom": "Ambitieux", "desc": "Apprend 30 % plus vite mais réclame des promotions"},
 }
+# Compétences métier, en plus d'Élec, Méca et Firmware (elles serviront aussi aux bureaux du bâtiment)
+METIERS = {
+    "logiciel":   {"nom": "Logiciel", "desc": "+3 % de production en firmware par point"},
+    "indus":      {"nom": "Industrialisation", "desc": "Marge des séries +4 % par point (le meilleur de l'équipe)"},
+    "qualif":     {"nom": "Qualification", "desc": "Chance aux tests CEM +1,5 % par point (le meilleur de l'équipe)"},
+    "commercial": {"nom": "Commercial", "desc": "Offres mieux payées (+1,5 %) et négociation plus sûre (+1 %) par point (le meilleur)"},
+    "gestion":    {"nom": "Gestion", "desc": "Un chef de projet donne +6 % de production à son équipe, plus 1 % par point"},
+}
+# Séniorité : apprentissage, défauts, prime de salaire mensuelle, points de compétences (élec + méca + firmware) pour y accéder
+SENIORITES = [
+    {"nom": "Junior", "xp": 1.4, "defauts": 1.25, "prime": 0, "points": 0},
+    {"nom": "Confirmé", "xp": 1.0, "defauts": 1.0, "prime": 200, "points": 6},
+    {"nom": "Senior", "xp": 0.8, "defauts": 0.85, "prime": 500, "points": 11},
+    {"nom": "Expert", "xp": 0.6, "defauts": 0.7, "prime": 900, "points": 16},
+]
+MOTIVATIONS = {
+    "salaire":   {"nom": "Le salaire", "desc": "Content s'il est payé au moins au prix du marché"},
+    "ambiance":  {"nom": "L'ambiance", "desc": "Content quand le moral de l'équipe dépasse 70 %"},
+    "projets":   {"nom": "Les beaux projets", "desc": "Content quand un produit maison ou un gros projet est en cours"},
+    "formation": {"nom": "Se former", "desc": "Content s'il a été formé dans l'année"},
+    "horaires":  {"nom": "Ses horaires", "desc": "Content tant qu'on ne dépasse pas 8 h par jour"},
+}
+COUT_ENTRETIEN = 300
+SALAIRE_BASE, SALAIRE_POINT = 800, 230  # €/mois : base et prix d'un point de compétence
+JOURS_AN = 360
 
 PRENOMS = ["Léa", "Hugo", "Inès", "Sami", "Marc", "Chloé", "Yanis", "Camille", "Lucas", "Nora", "Théo",
            "Emma", "Rayan", "Julie", "Maël", "Sarah", "Nathan", "Zoé", "Karim", "Manon", "Bastien", "Elsa",
@@ -148,6 +183,11 @@ POSTES = [
     {"nom": "Dév firmware", "poids": {"e": 0.15, "m": 0.0, "f": 0.85}},
     {"nom": "Ingé hardware", "poids": {"e": 0.6, "m": 0.05, "f": 0.35}},
     {"nom": "Ingé mécatronique", "poids": {"e": 0.3, "m": 0.5, "f": 0.2}},
+    {"nom": "Dév logiciel", "poids": {"e": 0.05, "m": 0.0, "f": 0.6}, "metier": "logiciel"},
+    {"nom": "Ingé industrialisation", "poids": {"e": 0.35, "m": 0.35, "f": 0.05}, "metier": "indus"},
+    {"nom": "Technicien·ne qualification", "poids": {"e": 0.5, "m": 0.15, "f": 0.1}, "metier": "qualif"},
+    {"nom": "Ingé commercial·e", "poids": {"e": 0.25, "m": 0.05, "f": 0.1}, "metier": "commercial"},
+    {"nom": "Ingé chef de projet", "poids": {"e": 0.3, "m": 0.15, "f": 0.25}, "metier": "gestion"},
 ]
 
 # Secteurs : chaque client appartient à un secteur ; les clients bien servis reviennent (fidélité)

@@ -34,7 +34,7 @@ class Extensions:
         for cle, val in (("technos", []), ("certifs", []), ("recherches", []), ("garanties", []), ("series", []),
                          ("prets", []), ("fournisseur", "europe"), ("parts", 1.0), ("meteo", "soleil"), ("fete", None),
                          ("dernier_seminaire", -999), ("victoire", None), ("objectif", None), ("offre_serie", None),
-                         ("clients", {}), ("gammes", {}), ("missions", [])):
+                         ("clients", {}), ("gammes", {}), ("missions", []), ("affinites", {}), ("affinites_connues", [])):
             e.setdefault(cle, val)
         st = e["stats"]
         for cle in ("megas", "suites", "series"):
@@ -47,12 +47,14 @@ class Extensions:
             e["concurrents"] = [{"nom": n, "renommee": r} for n, r in CONCURRENTS]
         for x in e["employes"]:
             self._completer_employe(x)
+        e["candidats"] = [c if "traits" in c else self._candidat() for c in e["candidats"]]  # anciens CV, sans les nouveautés
 
     def _completer_employe(self, x):
         x.setdefault("anniv", [self.rng.randint(0, 11), self.rng.randint(1, 30)])
         x.setdefault("chef", False)
         x.setdefault("stage", 0)
         x.setdefault("absence", None)
+        self._completer_personnel(x)
 
     def _appliquer_scenario(self):
         e = self.etat
@@ -112,9 +114,6 @@ class Extensions:
         prime = max([PRIMES.get(x, 1) for x in requis_liste(p.get("requis"))], default=1)
         return (1.05 if "ce" in e["certifs"] else 1) * prime * DIFFICULTES[e["difficulte"]]["paie"]
 
-    def _mult_chef(self, actifs):
-        return 1.08 if any(x.get("chef") for x in actifs) else 1.0
-
     def mensualites(self):
         return sum(x["mensualite"] for x in self.etat["prets"])
 
@@ -156,7 +155,7 @@ class Extensions:
 
     def chance_negociation(self, prix, delai, fid=0):
         """Au prix et au délai affichés, le client signe à coup sûr ; demander plus est un pari (moins risqué avec un client fidèle)."""
-        return round(borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"] + 0.05 * fid, 0.05, 1.0), 2)
+        return round(borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"] + 0.05 * fid + 0.01 * self.meilleur_metier("commercial"), 0.05, 1.0), 2)
 
     # ------------------------------------------------------------------ clients fidèles, méga-projets, suites
     def _client_fidele(self):
@@ -250,8 +249,9 @@ class Extensions:
             emp = self.employe(p.get("id"))
             if emp.get("chef"):
                 raise ErreurJeu("Déjà chef de projet.")
-            if emp["e"] + emp["m"] + emp["f"] < 14:
-                raise ErreurJeu("Il faut 14 points de compétences au total pour devenir chef de projet.")
+            seuil = 10 if "leader" in emp["traits"] else 14
+            if emp["e"] + emp["m"] + emp["f"] < seuil:
+                raise ErreurJeu(f"Il faut {seuil} points de compétences au total pour devenir chef de projet.")
             if emp.get("stage"):
                 raise ErreurJeu("Un stagiaire ne peut pas être promu.")
             emp["chef"] = True
@@ -361,7 +361,7 @@ class Extensions:
             if r.random() < f["risque"]:
                 self._log(f"Rupture de composants : pas de lot ce mois-ci pour « {s['nom']} ».", "mauvais")
             else:
-                recettes += int(s["marge"] * f["serie"] * (1.5 if "cms" in e["locaux"] else 1))
+                recettes += int(s["marge"] * f["serie"] * (1.5 if "cms" in e["locaux"] else 1) * (1 + 0.04 * self.meilleur_metier("indus")))
             s["mois"] -= 1
             if s["mois"] <= 0:
                 e["series"].remove(s)
@@ -419,7 +419,8 @@ class Extensions:
 
     def _evenements_extensions(self, possibles):
         e, r = self.etat, self.rng
-        stars = [x for x in e["employes"] if not x.get("fondateur") and not x.get("stage") and x["e"] + x["m"] + x["f"] >= 12]
+        stars = [x for x in e["employes"] if not x.get("fondateur") and not x.get("stage") and x["e"] + x["m"] + x["f"] >= 12
+                 and r.random() >= self.fidelite(x)]  # les fidèles n'écoutent même pas
         if stars:
             x = r.choice(stars)
             c = max(e["concurrents"], key=lambda c: c["renommee"])
@@ -462,7 +463,7 @@ class Extensions:
             libres = self.bureaux_libres()
             if libres:
                 c = self._candidat()
-                self._nouvel_employe(c, libres[0], poste="Stagiaire d'école", salaire=0, humeur=2, stage=DUREE_STAGE,
+                self._nouvel_employe(c, libres[0], poste="Stagiaire d'école", salaire=0, humeur=2, stage=DUREE_STAGE, seniorite=0, annonce=0,
                                      e=max(1, c["e"] // 2), m=max(0, c["m"] // 2), f=max(1, c["f"] // 2))
                 self._log(f"{c['nom']} arrive en stage pour 3 mois.", "bon")
         elif t == "fin_stage":

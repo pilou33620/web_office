@@ -8,7 +8,7 @@ const DC = { e: '#ffc94d', m: '#f08a6c', f: '#7cc0f2', c: '#b08af0' };
 const PIECE = { labo: 'Labo élec', atelier: 'Atelier 3D', etudes: "Bureau d'études", cem: 'Labo CEM', cms: 'Ligne CMS' };
 const PCT_BONUS = 6;  // % de production par point de matériel (moteur : _production)
 const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', equipe: 'Équipe', materiel: 'Matériel', locaux: 'Locaux', journal: 'Journal', societe: 'Société' };
-const ABSENCE = { formation: 'En formation', conges: 'En congés', seminaire: 'Séminaire' };
+const ABSENCE = { formation: 'En formation', conges: 'En congés', seminaire: 'Séminaire', burnout: 'Burn-out', maladie: 'Malade', naissance: 'Congé naissance' };
 const METEO_NOM = { soleil: 'soleil', pluie: 'pluie', neige: 'neige', canicule: 'canicule', orage: 'orage', brouillard: 'brouillard' };
 const SAISON_NOM = { hiver: 'Hiver', printemps: 'Printemps', ete: 'Été', automne: 'Automne' };
 
@@ -53,6 +53,8 @@ const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ç
 function corps(x, assis = false) {
   return `<div class="anim">${PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis)}</div>`;
 }
+
+const sprite = (x) => `<div class="perso">${corps(x)}</div>`;  // portrait des listes (équipe, candidats)
 
 const PERSOS = {};
 function rendrePersos() {
@@ -124,14 +126,26 @@ function rendrePersos() {
       clearTimeout(el._t);
       el._t = setTimeout(() => el.classList.remove('marche'), duree * 1000);
     }
-    const assis = lieu === 'bureau';
-    el.style.zIndex = Math.round(cx + cy);  // les plus proches devant
+    const assis = lieu === 'bureau', d = Math.round(cx + cy);
+    el.style.zIndex = 2 * d;  // les plus proches devant
+    // par-dessus le personnage : copie, découpée à sa taille, de ce qui est devant lui (armoire, plante, bureau de la rangée suivante…)
+    const devant = cache.elements.filter(([prof, , k]) => {
+      const b = BOITES.get(k);
+      return prof > cx + cy && b && b.x < x + 36 && x < b.x + b.width && b.y < y + 56 && y < b.y + b.height;
+    });
+    const masque = devant.length ? `<svg width="36" height="56" viewBox="${x} ${y} 36 56" xmlns="http://www.w3.org/2000/svg">${devant.map((v) => v[1]).join('')}</svg>` : '';
+    if (el._masque !== masque) {
+      el._masque = masque;
+      if (!el._m) { el._m = document.createElement('div'); el._m.className = 'masque'; cont.appendChild(el._m); }
+      el._m.innerHTML = masque;
+    }
+    Object.assign(el._m ? el._m.style : {}, { left: x + 'px', top: y + 'px', zIndex: 2 * d + 1 });
     const travaille = joue && (lieu === 'babyfoot' || (p && (assis || lieu === 'labo' || lieu === 'atelier' || lieu === 'cem' || lieu === 'visite') && emp.tache));
     el.classList.toggle('bob', !!travaille && emp.id % 2 === 0);
     el.classList.toggle('bob2', !!travaille && emp.id % 2 === 1);
     vus.add(String(emp.id));
   }
-  for (const id of Object.keys(PERSOS)) if (!vus.has(id)) { PERSOS[id].remove(); delete PERSOS[id]; }
+  for (const id of Object.keys(PERSOS)) if (!vus.has(id)) { PERSOS[id].remove(); if (PERSOS[id]._m) PERSOS[id]._m.remove(); delete PERSOS[id]; }
 }
 
 // Pièce à louer -> pièce du plan où afficher le verrou
@@ -140,6 +154,7 @@ const VERROUS = { atelier: 'atelier', plateau: 'plateau', cem: 'cem', openspace:
 const PUCES = [['f', 'garage', 560, 376], ['e', 'garage', 446, 376], ['e', 'batiment', 90, 242], ['f', 'batiment', 54, 502], ['m', 'batiment', 54, 74], ['c', 'batiment', 482, 74]];
 
 const DESSINS = new Map();  // dessin SVG de chaque objet placé, recalculé seulement s'il bouge
+const BOITES = new Map();  // contour à l'écran de chaque élément du plan
 function rendreMonde() {
   const e = ETAT, h = [], svg = [];
   const cle = carte() + '|' + [...e.locaux].sort().join(',') + '|' + e.entreprise;
@@ -155,7 +170,7 @@ function rendreMonde() {
   for (const x of e.employes) occupes[x.bureau] = x;
   const etablis = CAT.etablis[carte()];
   const objets = e.objets.map((o) => [o, fiche(o.type)]).filter(([, f]) => f);
-  const elements = cache.fixes.map(([prof, s]) => [prof, s]);
+  const elements = cache.fixes.map(([prof, s], i) => [prof, s, `F${i}|${cle}`]);
   for (const [o, f] of objets) {
     const k = `${o.id}|${o.type}|${o.x}|${o.y}`;
     if (!DESSINS.has(k)) DESSINS.set(k, PLAN.objet(o, f, etablis));
@@ -167,10 +182,11 @@ function rendreMonde() {
     let extra = '';
     if (o.type in e.pannes) { const [X, Y] = PLAN.iso(o.x + f.w / 2, o.y + f.h / 2, 46); extra += `<circle cx="${X}" cy="${Y}" r="9" fill="#ff8a7a" stroke="#2b1d14" stroke-width="2"/><text x="${X}" y="${Y + 4}" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#2b1d14">!</text>`; }
     if (amenage && selection === o.id) extra += `<polygon points="${PLAN.empreinte(o.x - 3, o.y - 3, f.w + 6, f.h + 6)}" fill="rgba(255,201,77,.25)" stroke="#ffc94d" stroke-width="3" stroke-dasharray="6 4"/>`;
-    elements.push([PLAN.profondeur(o, f), `<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${DESSINS.get(k)}${extra}</g>`]);
+    elements.push([PLAN.profondeur(o, f), `<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${DESSINS.get(k)}${extra}</g>`, k + extra]);
   }
   if (DESSINS.size > 400) DESSINS.clear();  // anciens emplacements oubliés de temps en temps
-  svg.push(elements.sort((a, b) => a[0] - b[0]).map((x) => x[1]).join(''));
+  cache.elements = elements.sort((a, b) => a[0] - b[0]);
+  svg.push(`<g class="elements">${elements.map((x) => `<g>${x[1]}</g>`).join('')}</g>`);
   if (placement) {
     // zones autorisées pour l'objet en cours de placement
     for (const k of fiche(placement.type).pieces) {
@@ -203,6 +219,10 @@ function rendreMonde() {
     }
   }
   majHtml('#dyn', h.join(''));
+  // contour à l'écran de chaque élément, mesuré une fois : sert à cacher les personnages qui passent derrière
+  const gs = $('#dyn g.elements').children;
+  cache.elements.forEach((x, i) => { if (!BOITES.has(x[2])) { const r = gs[i].getBBox(); if (r.width) BOITES.set(x[2], r); } });  // plan caché : rien mesuré
+  if (BOITES.size > 600) BOITES.clear();
   rendrePersos();
 }
 
@@ -231,6 +251,21 @@ const ligne = (o) => `<div class="ligne">${o.avatar || `<div class="pastille" st
   <div class="txt"><div class="t1">${o.t1}</div>${o.t2 ? `<div class="t2">${o.t2}</div>` : ''}${o.t3 ? `<div class="t3">${o.t3}</div>` : ''}${o.extra || ''}</div>${o.btn || ''}</div>`;
 const bouton = (act, id, texte, actif = true, cls = '', attrs = '') => `<button type="button" class="btn ${cls}" data-act="${act}" data-id="${esc(id)}" ${attrs} ${actif ? '' : 'disabled'}>${esc(texte)}</button>`;
 const repartition = (t) => `Élec ${t.e} · Méca ${t.m} · Firmware ${t.f}`;
+const aDecouvrir = (x) => x.traits_caches || Object.values(x.metier).includes(null) || !x.seniorite_sure || (!x.motivation && !x.fondateur);
+// Séniorité, traits, compétences métier et motivation connus ; « ? » pour ce qui reste à découvrir
+function profil(x) {
+  const chip = (texte, titre = '', fond = '') => `<span class="chip" title="${esc(titre)}"${fond ? ` style="background:${fond};color:#2b1d14"` : ''}>${esc(texte)}</span>`;
+  const sen = CAT.seniorites[x.seniorite].nom;
+  let h = chip(x.seniorite_sure ? sen : `Se dit ${sen.toLowerCase()} ?`, x.seniorite_sure ? 'Séniorité vérifiée' : 'Annoncé sur le CV, à vérifier en entretien', '#bfe6ff');
+  h += x.traits.map((t) => chip(CAT.traits[t].nom, CAT.traits[t].desc)).join('');
+  if (x.traits_caches) h += chip(`${x.traits_caches} trait${x.traits_caches > 1 ? 's' : ''} ?`, 'Se découvre avec le temps ou grâce au spécialiste');
+  if (x.indice) h += chip(`Semble ${CAT.traits[x.indice].nom.toLowerCase()}…`, "Impression d'entretien, pas toujours juste");
+  h += Object.entries(x.metier).filter(([, n]) => n !== 0).map(([m, n]) => chip(n === null ? `${CAT.metiers[m].nom} ?` : `${CAT.metiers[m].nom} ${n}`, n === null ? 'Talent caché : le spécialiste le révèle' : CAT.metiers[m].desc)).join('');
+  if (x.motivation) h += chip(`Tient à : ${CAT.motivations[x.motivation].nom.toLowerCase()}`, CAT.motivations[x.motivation].desc, x.satisfait === false ? '#ff8a7a' : x.satisfait ? '#7be08a' : '');
+  if (x.amis && x.amis.length) h += chip(`Ami·e de ${x.amis.join(', ')}`, 'Travaillent mieux ensemble', '#7be08a');
+  if (x.froid && x.froid.length) h += chip(`En froid avec ${x.froid.join(', ')}`, 'Moins efficaces ensemble ; un chef de projet apaise', '#ff8a7a');
+  return `<div class="chips" style="margin-top:4px">${h}</div>`;
+}
 const requisListe = (r) => (!r ? [] : Array.isArray(r) ? r : [r]);
 const nomRequis = (r) => requisListe(r).map((x) => (CAT.technos[x] || CAT.certifs[x] || { nom: x }).nom).join(' + ');
 const etoiles = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
@@ -327,26 +362,24 @@ function panneauEquipe() {
     <div class="btns">${bouton('seminaire', '', e.seminaire_dans ? `Séminaire possible dans ${e.seminaire_dans} j` : `Organiser un séminaire · ${eur(e.cout_seminaire)}`, !e.seminaire_dans && e.argent >= e.cout_seminaire, 'petit')}</div>`;
   h += `<div class="section">Équipe · ${e.employes.length} / ${e.postes_ouverts.length} postes · moral ${e.moral} %</div>`;
   h += e.employes.map((x) => {
-    const t = CAT.traits[x.trait];
     const etat = x.absent ? `${x.formation ? 'Formation ' + DN[x.formation] : ABSENCE[x.absence] || 'Absent'} : retour dans ${x.absent} j` : x.stage ? `Stage gratuit : encore ${x.stage} j` : x.salaire ? eur(x.salaire) + ' / mois' : 'Gérant';
-    const promu = !x.chef && !x.stage && x.e + x.m + x.f >= 14;
+    const promu = !x.chef && !x.stage && x.e + x.m + x.f >= (x.traits.includes('leader') ? 10 : 14);
     const btns = `<div class="btns">${['e', 'm', 'f'].map((d) => `<button type="button" class="btn petit secondaire" data-act="former" data-id="${x.id}" data-dom="${d}" ${x.absent || e.argent < x.cout_formation ? 'disabled' : ''}>Former ${DN[d]}</button>`).join('')}
-      ${bouton('conges', x.id, 'Congés', !x.absent, 'petit secondaire')}${promu ? bouton('promouvoir', x.id, 'Promouvoir chef de projet', true, 'petit') : ''}${x.fondateur ? '' : bouton('licencier', x.id, 'Licencier', true, 'petit secondaire')}</div>
+      ${bouton('conges', x.id, 'Congés', !x.absent, 'petit secondaire')}${promu ? bouton('promouvoir', x.id, 'Promouvoir chef de projet', true, 'petit') : ''}${aDecouvrir(x) ? bouton('specialiste', x.id, `Spécialiste · ${eur(e.cout_specialiste)}`, e.argent >= e.cout_specialiste, 'petit secondaire') : ''}${x.fondateur ? '' : bouton('licencier', x.id, 'Licencier', true, 'petit secondaire')}</div>
       <div class="t2" style="font-size:12px">Formation : ${eur(x.cout_formation)}, ${10} jours, +2 dans le domaine</div>
       ${e.projets.length > 1 ? `<label class="t2" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:13px">Projet
         <select class="choix" data-affecter="${x.id}"><option value="">Automatique</option>${e.projets.map((p) => `<option value="${p.id}" ${x.projet === p.id ? 'selected' : ''}>${esc(p.nom)} · ${esc(p.client || 'maison')}</option>`).join('')}</select></label>` : ''}`;
     return ligne({
       avatar: sprite(x), t1: `${esc(x.nom)} — ${esc(x.poste)}`, t2: repartition(x),
-      t3: etat,
-      extra: `<div class="chips" style="margin-top:4px"><span class="chip" title="${esc(t.desc)}">${esc(t.nom)}</span><span class="chip" style="background:${x.moral >= 70 ? '#7be08a' : x.moral >= 50 ? '#ffc94d' : '#ff8a7a'};color:#2b1d14">Moral ${x.moral} %</span><span class="chip">Fatigue ${Math.round(x.fatigue)}</span><span class="chip" title="Moral × conditions de travail × trait">Efficacité ${x.efficacite} %</span>${x.chef ? '<span class="chip" style="background:#ffc94d;color:#2b1d14" title="+8 % de production et moins de défauts pour son équipe">Chef de projet</span>' : ''}</div>${btns}`,
+      t3: etat + (x.fondateur ? '' : ` · ${x.anciennete < 1 ? "moins d'un an" : Math.floor(x.anciennete) + ' an' + (x.anciennete >= 2 ? 's' : '')} dans la maison`),
+      extra: `${profil(x)}<div class="chips" style="margin-top:4px"><span class="chip" style="background:${x.moral >= 70 ? '#7be08a' : x.moral >= 50 ? '#ffc94d' : '#ff8a7a'};color:#2b1d14">Moral ${x.moral} %</span><span class="chip">Fatigue ${Math.round(x.fatigue)}</span><span class="chip" title="Moral × conditions de travail × trait">Efficacité ${x.efficacite} %</span>${x.chef ? '<span class="chip" style="background:#ffc94d;color:#2b1d14" title="+8 % de production et moins de défauts pour son équipe">Chef de projet</span>' : ''}</div>${btns}`,
     });
   }).join('');
   h += `<div class="section">Candidats${libres ? '' : ' · placez un bureau de plus (Locaux) pour recruter'}</div>`;
   h += e.candidats.map((c) => {
-    const t = CAT.traits[c.trait];
     return ligne({
       avatar: sprite(c), t1: `${esc(c.nom)} — ${esc(c.poste)}`, t2: repartition(c), t3: `${eur(c.salaire)} / mois`,
-      extra: `<div class="chips" style="margin-top:4px"><span class="chip" title="${esc(t.desc)}">${esc(t.nom)} · ${esc(t.desc)}</span></div>`,
+      extra: `${profil(c)}<div class="btns">${c.entretien_fait ? '' : bouton('entretien', c.id, `Entretien · ${eur(CAT.cout_entretien)}`, e.argent >= CAT.cout_entretien, 'petit secondaire')}${aDecouvrir(c) ? bouton('specialiste', c.id, `Spécialiste · ${eur(e.cout_specialiste)}`, e.argent >= e.cout_specialiste, 'petit secondaire') : ''}</div>`,
       btn: bouton('embaucher', c.id, libres ? 'Embaucher' : 'Pas de bureau', libres > 0),
     });
   }).join('') || '<div class="vide">Nouveaux candidats le mois prochain.</div>';
@@ -657,7 +690,7 @@ const AIDE = [
   ['Méga-projets', "Dès 10 de renommée, de rares projets géants apparaissent : ils occupent deux places, demandent une grande équipe et plusieurs technos."],
   ['Produits maison', "Lancez vos produits, puis leurs suites : une v2 se vend d'autant mieux que la v1 a été bien notée."],
   ['Missions', "Trois missions sont proposées à la fois sur le tableau de bord. Chacune rapporte une prime, parfois de la renommée."],
-  ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware), un trait, un moral et une fatigue. Formez-les, envoyez-les en congés."],
+  ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware) et des compétences métier, une séniorité, plusieurs traits, une motivation, un moral et une fatigue. Le CV ne dit pas tout : l'entretien et le spécialiste en révèlent plus, le reste se découvre avec le temps. Gare au burn-out, et soignez les entretiens annuels."],
   ['Conditions de travail', "Décoration, café, climatisation, isolation et horaires changent la production (vue Productivité)."],
   ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Quittez le garage pour le bâtiment, puis louez ses pièces une à une : plus de projets en parallèle, jusqu'au hangar de production."],
   ['Plan', "Sur téléphone, faites glisser le plan au doigt et pincez pour zoomer. Les boutons + / − / ⌖ zooment et recentrent."],

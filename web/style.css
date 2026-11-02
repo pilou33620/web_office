@@ -32,7 +32,9 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #devant { pointer-events: none; }
 #dyn g.cliquable { cursor: pointer; }
 #dyn g.cliquable:hover { filter: brightness(1.08); }
-#persos { pointer-events: none; }
+#persos { pointer-events: none; isolation: isolate; }  /* personnages sous la pluie et les cartes « à louer » */
+#persos .masque { position: absolute; width: 36px; height: 56px; }
+#persos .masque > svg { display: block; }
 /* Lumière : soleil le jour, éclairage chaud le soir ou la nuit, ni l'un ni l'autre par mauvais temps */
 #monde .lum-soir { display: none; }
 #monde[data-soir="soir"] .lum-soir, #monde[data-soir="nuit"] .lum-soir { display: inline; }

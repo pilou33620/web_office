@@ -2,15 +2,15 @@
 import random
 
 from .extensions import ErreurJeu, Extensions, borne, requis_liste
+from .personnel import Personnel
 
 from .donnees import (CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
                       EMPLACEMENTS, ETABLIS, GRILLE, HORAIRES, OBSTACLES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
                       PHASES, PIECES, POSTE, POSTES, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
-                      DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS)
+                      DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS,
+                      JOURS_AN, SALAIRE_BASE, SALAIRE_POINT, SENIORITES)
 
 JOURS_MOIS = 30
-SALAIRE_BASE, SALAIRE_POINT = 800, 230  # €/mois : base et prix d'un point de compétence
-JOURS_AN = 360
 SEUIL_FAILLITE = -5000
 NB_OFFRES = 4
 NB_CANDIDATS = 4
@@ -40,7 +40,7 @@ def nom_propre(v, defaut):
     return v or defaut
 
 
-class Jeu(Extensions):
+class Jeu(Personnel, Extensions):
     def __init__(self, etat=None, graine=None, scenario="garage", difficulte="normal", entreprise=None, directeur=None):
         self.rng = random.Random(graine)
         if etat is None:
@@ -74,6 +74,7 @@ class Jeu(Extensions):
             "xp": {"e": 0, "m": 0, "f": 0}, "fatigue": 0, "humeur": 3, "absent": 0, "formation": None,
             "bureau": bureaux[0], "fondateur": True, "tache": None, "gain": 0, "projet": None,
         })
+        self._completer_personnel(self.etat["employes"][0])
         for _ in range(NB_CANDIDATS):
             self.etat["candidats"].append(self._candidat())
         for _ in range(NB_OFFRES):
@@ -127,25 +128,6 @@ class Jeu(Extensions):
         self.etat["prochain_id"] += 1
         return self.etat["prochain_id"] - 1
 
-    def _candidat(self):
-        rep = self.etat["renommee"]
-        r = self.rng
-        if r.random() < 0.15:
-            poste, poids, total = "Stagiaire", {"e": 0.4, "m": 0.3, "f": 0.3}, r.uniform(2, 4)
-        else:
-            p = r.choice(POSTES)
-            poste, poids, total = p["nom"], p["poids"], min(24, r.uniform(4, 7) + rep * 0.7)
-        stats = {d: max(0, round(total * poids[d] + r.uniform(-0.6, 0.6))) for d in DOMAINES}
-        if sum(stats.values()) < 2:
-            stats[max(poids, key=poids.get)] += 2
-        somme = sum(stats.values())
-        salaire = 600 if poste == "Stagiaire" else SALAIRE_BASE + SALAIRE_POINT * somme
-        return {
-            "id": self._id(), "nom": r.choice(PRENOMS), "poste": poste, **stats,
-            "trait": r.choice(list(TRAITS)), "salaire": salaire, "couleur": r.choice(COULEURS),
-            "cheveux": r.choice(CHEVEUX), "peau": r.choice(PEAUX),
-        }
-
     def _offre(self, bonus_rep=0):
         rep = self.etat["renommee"] + bonus_rep
         r = self.rng
@@ -165,7 +147,7 @@ class Jeu(Extensions):
         taille = sum(total.values())
         return {
             "id": self._id(), "nom": nom, "client": client, "taille": taille, "total": total,
-            "paie": int(round(taille * r.uniform(68, 82) * (1 + 0.01 * min(rep, 20)) * (1 + 0.03 * fid), -2)),
+            "paie": int(round(taille * r.uniform(68, 82) * (1 + 0.01 * min(rep, 20)) * (1 + 0.03 * fid) * (1 + 0.015 * min(10, self.meilleur_metier("commercial"))), -2)),
             "delai": 14 + round(taille * (0.5 - min(0.3, taille / 1500))),
             "gain": 1 + taille // 200, "expire": r.randint(18, 40) + (15 if fid else 0),
             "requis": list(requis) if isinstance(requis, tuple) else requis, "secteur": secteur, "fidele": fid,
@@ -204,6 +186,7 @@ class Jeu(Extensions):
                "bureau": bureau, "fondateur": False, "tache": None, "gain": 0, "projet": None, **modifs}
         self._completer_employe(emp)
         self.etat["employes"].append(emp)
+        self._arrivee(emp)
         return emp
 
     # ------------------------------------------------------------------ aménagement libre
@@ -370,7 +353,7 @@ class Jeu(Extensions):
     def moral_global(self):
         e = self.etat
         m = 60 + sum(DECO[d]["moral"] for d in e["deco"]) + self.horaires()["moral"] + 5 * ("pause" in e["locaux"])
-        m += sum(TRAITS[x["trait"]].get("moral", 0) for x in e["employes"])
+        m += sum(self._trait(x, "moral") for x in e["employes"])
         m -= max(0, len(e["employes"]) - 4) * 1.5
         return borne(m, 20, 95)
 
@@ -398,8 +381,8 @@ class Jeu(Extensions):
         return [{"nom": a, "pct": b} for a, b in f], total
 
     def efficacite(self, emp):
-        trait = TRAITS[emp["trait"]]
-        return borne(self.moral(emp) / 70, 0.4, 1.4) * self.conditions()[1] * trait.get("vitesse", 1.0)
+        anciennete = 1 + min(0.1, 0.02 * self.anciennete(emp))  # on connaît la maison : +2 % par an, jusqu'à +10 %
+        return borne(self.moral(emp) / 70, 0.4, 1.4) * self.conditions()[1] * self._trait(emp, "vitesse") * anciennete
 
     def loyer(self):
         return LOYER_BASE + sum(LOCAUX[l]["loyer"] for l in self.etat["locaux"])
@@ -415,12 +398,12 @@ class Jeu(Extensions):
     def _production(self, emp, dom, bon):
         if emp[dom] <= 0:
             return 0.0
-        return emp[dom] * self.efficacite(emp) * (1 + 0.06 * bon[dom])
+        logiciel = 1 + 0.03 * emp["metier"]["logiciel"] if dom == "f" else 1
+        return emp[dom] * self.efficacite(emp) * (1 + 0.06 * bon[dom]) * logiciel
 
     def _detection(self, emp, bon):
-        trait = TRAITS[emp["trait"]]
         fm = borne(self.moral(emp) / 70, 0.4, 1.4) * self.conditions()[1]
-        return (emp["e"] + emp["f"]) / 2 * fm * 0.2 * (1 + 0.15 * bon["debug"]) * trait.get("detection", 1.0)
+        return (emp["e"] + emp["f"]) / 2 * fm * 0.2 * (1 + 0.15 * bon["debug"]) * self._trait(emp, "detection")
 
     def frais_cem(self, p):
         base = 600 + p["taille"] * 5
@@ -433,7 +416,7 @@ class Jeu(Extensions):
     def proba_cem(self, p):
         bon = self.bonus()
         norm = p["defauts"] / max(1, p["taille"] / 40)
-        pr = 0.6 + bon["cem"] + self._cem_bonus(p) - min(0.25, p["taille"] / 2000) - 0.04 * norm + 0.2 * p["echecs_cem"]
+        pr = 0.6 + bon["cem"] + self._cem_bonus(p) + min(0.15, 0.015 * self.meilleur_metier("qualif")) - min(0.25, p["taille"] / 2000) - 0.04 * norm + 0.2 * p["echecs_cem"]
         return round(borne(pr, 0.1, 0.95), 2)
 
     def note(self, p):
@@ -549,7 +532,7 @@ class Jeu(Extensions):
         else:
             if len(doms) >= 2:
                 actifs.append("trio")
-        traits = {x["trait"] for x in equipe}
+        traits = {t for x in equipe for t in x["traits"]}
         if {"perfectionniste", "debug"} <= traits:
             actifs.append("qualite")
         if any(x[d] >= 9 for x in equipe for d in DOMAINES) and any(x["e"] + x["m"] + x["f"] <= 6 for x in equipe):
@@ -567,7 +550,8 @@ class Jeu(Extensions):
             if c not in e["combos_vus"]:
                 e["combos_vus"].append(c)
                 self._log(f"Combo débloqué sur « {p['nom']} » : {COMBOS[c]['nom']} !", "bon")
-        mult = (1.1 if "trio" in combos else 1.0) * (1.05 if "soudee" in combos else 1.0) * self._mult_chef(actifs)
+        mult = (1.1 if "trio" in combos else 1.0) * (1.05 if "soudee" in combos else 1.0) * self._mult_chef(actifs) * self._affinites(actifs)
+        pedagogues = [x for x in actifs if "pedagogue" in x["traits"]]
         taux_defauts = 0.07 * self.horaires()["defauts"] * (0.7 if "qualite" in combos else 1.0) * self._facteur_defauts()
         if self._mult_chef(actifs) > 1:
             taux_defauts *= 0.9  # un chef de projet relit et organise
@@ -582,14 +566,14 @@ class Jeu(Extensions):
                 doms = [d for d, r in reste.items() if r > 1e-6 and emp[d] > 0]
                 if doms:
                     d = max(doms, key=lambda k: emp[k])
-                    pts = min(self._production(emp, d, bon) * mult, reste[d])
+                    pts = min(self._production(emp, d, bon) * mult * self._contexte(emp, p, actifs), reste[d])
                     ph["fait"][d] += pts
-                    trait = TRAITS[emp["trait"]]
-                    p["defauts"] += pts * taux_defauts * trait.get("defauts", 1.0)
-                    p["qualite"] += pts * trait.get("qualite", 0.0)
+                    p["defauts"] += pts * taux_defauts * self._facteur_defauts_emp(emp, p)
+                    p["qualite"] += pts * self._trait(emp, "qualite")
                     emp["tache"], emp["gain"] = d, round(pts, 1)
                     junior = "mentor" in combos and emp["e"] + emp["m"] + emp["f"] <= 6
-                    self._experience(emp, d, pts * (2 if junior else 1))
+                    pedagogie = 1.5 if any(x is not emp for x in pedagogues) else 1
+                    self._experience(emp, d, pts * (2 if junior else 1) * pedagogie)
                 else:
                     retire = min(p["defauts"], self._detection(emp, bon))
                     p["defauts"] -= retire
@@ -685,7 +669,7 @@ class Jeu(Extensions):
         return "Inacceptable. Ce client ne reviendra pas."
 
     def _experience(self, emp, dom, pts):
-        emp["xp"][dom] += pts
+        emp["xp"][dom] += pts * SENIORITES[emp["seniorite"]]["xp"] * (1.3 if "ambitieux" in emp["traits"] else 1)
         seuil = 60 + 6 * emp[dom] ** 2
         if emp["xp"][dom] >= seuil and emp[dom] < 15:
             emp["xp"][dom] -= seuil
@@ -801,7 +785,6 @@ class Jeu(Extensions):
         e.pop("reunion", None)
         h = self.horaires()
         for emp in e["employes"]:
-            trait = TRAITS[emp["trait"]]
             if emp["absent"] > 0:
                 emp["absent"] -= 1
                 emp["fatigue"] = max(0, emp["fatigue"] - 3)
@@ -813,9 +796,10 @@ class Jeu(Extensions):
                     emp["formation"] = None
                     self._log(f"{emp['nom']} revient de formation : {NOM_DOMAINE[d]} {emp[d]}.", "bon")
             elif emp["tache"]:
-                emp["fatigue"] = min(50, emp["fatigue"] + 1.2 * trait.get("fatigue", 1.0) * h["fatigue"])
+                emp["fatigue"] = min(50, emp["fatigue"] + 1.2 * self._trait(emp, "fatigue") * h["fatigue"])
             else:
                 emp["fatigue"] = max(0, emp["fatigue"] - (5 if "pause" in e["locaux"] else 3))
+        self._jour_personnel()
         for pid in list(e["pannes"]):
             e["pannes"][pid] -= 1
             if e["pannes"][pid] <= 0:
@@ -907,6 +891,7 @@ class Jeu(Extensions):
             e["candidats"].append(self._candidat())
         for emp in e["employes"]:
             emp["humeur"] = borne(emp["humeur"] + self.rng.randint(-2, 2), -8, 8)
+        self._mois_personnel()
         if e["argent"] < 0:
             self._log("Trésorerie négative ! Sous −5 000 €, c'est la faillite.", "mauvais")
 
@@ -961,6 +946,7 @@ class Jeu(Extensions):
             possibles.append({"type": "recommandation", "titre": "Bouche-à-oreille",
                               "texte": "Un ancien client vous recommande à son réseau.", "options": ["Merci !"]})
         self._evenements_extensions(possibles)
+        self._evenements_personnel(possibles)
         vus = e.setdefault("derniers_ev", {})
         possibles = [x for x in possibles if e["jours_total"] - vus.get(x["type"], -999) >= 60]
         if possibles:
@@ -976,7 +962,7 @@ class Jeu(Extensions):
             raise ErreurJeu("Choix invalide.")
         t = ev["type"]
         p = next((x for x in e["projets"] if x["id"] == ev.get("projet")), None)
-        if self._resoudre_extension(ev, choix):
+        if self._resoudre_extension(ev, choix) or self._resoudre_personnel(ev, choix):
             pass
         elif t == "penurie" and p:
             if choix == 0:
@@ -1044,7 +1030,7 @@ class Jeu(Extensions):
         elif genre == "fermer_fin":
             if e.get("fin"):
                 e["fin"]["vue"] = True
-        elif self._action_extension(genre, p):
+        elif self._action_extension(genre, p) or self._action_personnel(genre, p):
             pass
         elif genre == "signer":
             o = next((x for x in e["offres"] if x["id"] == p.get("id")), None)
@@ -1155,6 +1141,7 @@ class Jeu(Extensions):
                 raise ErreurJeu(f"{emp['nom']} est déjà absent.")
             self._payer(self.cout_formation(emp))
             emp["absent"], emp["formation"], emp["absence"] = DUREE_FORMATION, d, "formation"
+            emp["derniere_formation"] = e["jours_total"]
             self._log(f"{emp['nom']} part {DUREE_FORMATION} jours en formation {NOM_DOMAINE[d]}.", "info")
         elif genre == "conges":
             emp = self.employe(p.get("id"))
@@ -1237,4 +1224,4 @@ class Jeu(Extensions):
         v["conditions"], v["facteur_conditions"] = self.conditions()
         v["projets"] = [{**p, "note_estimee": self.note(p), "proba_cem": self.proba_cem(p), "frais_cem": self.frais_cem(p)}
                         for p in e["projets"]]
-        return self.vue_extensions(v)
+        return self.vue_personnel(self.vue_extensions(v))

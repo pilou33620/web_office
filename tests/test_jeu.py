@@ -219,7 +219,7 @@ class TestJeu(unittest.TestCase):
     def test_combos(self):
         j = Jeu(graine=18)
         p = j._creer_projet({"nom": "x", "taille": 100, "total": {"e": 40, "m": 30, "f": 30}}, "contrat")
-        equipe = [dict(j.etat["employes"][0], id=i, e=a, m=b, f=c, trait=t)
+        equipe = [dict(j.etat["employes"][0], id=i, e=a, m=b, f=c, traits=[t])
                   for i, (a, b, c, t) in enumerate([(9, 0, 0, "perfectionniste"), (0, 6, 0, "debug"), (0, 0, 6, "rapide"), (1, 1, 1, "rapide")])]
         self.assertEqual(set(j._combos(p, equipe)) & {"trio", "qualite", "mentor"}, {"trio", "qualite", "mentor"})
 

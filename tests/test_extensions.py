@@ -137,7 +137,7 @@ class TestExtensions(unittest.TestCase):
         fondateur["e"] = 8
         j.action("promouvoir", id=fondateur["id"])
         self.assertTrue(fondateur["chef"])
-        self.assertEqual(j._mult_chef([fondateur]), 1.08)
+        self.assertEqual(j._mult_chef([fondateur]), 1.06)
         j.action("seminaire")
         self.assertEqual(fondateur["absence"], "seminaire")
         with self.assertRaises(ErreurJeu):

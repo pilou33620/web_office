@@ -139,6 +139,7 @@ CATALOGUE = {
     "technos": donnees.TECHNOS, "certifs": donnees.CERTIFS, "fournisseurs": donnees.FOURNISSEURS, "prets": donnees.PRETS,
     "scenarios": donnees.SCENARIOS, "difficultes": donnees.DIFFICULTES, "entretien_certif": donnees.ENTRETIEN_CERTIF,
     "secteurs": donnees.SECTEURS, "nb_missions": len(donnees.MISSIONS),
+    "metiers": donnees.METIERS, "seniorites": donnees.SENIORITES, "motivations": donnees.MOTIVATIONS, "cout_entretien": donnees.COUT_ENTRETIEN,
 }
 
 

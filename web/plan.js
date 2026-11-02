@@ -4,11 +4,13 @@
 'use strict';
 
 const PLAN = (() => {
-  const C = Math.cos(Math.PI / 6), S = 0.5, OX = 790, OY = 80, W = 1560, H = 980;
+  const C = Math.cos(Math.PI / 6), S = 0.5, OX = 790, OY = 80, W = 1960, H = 1220;
+  // Étage affiché du bâtiment : chaque étage occupe sa bande du monde (y0), ramenée au même endroit de l'écran
+  let ETAGE = 'rdc', DY = 0;
   const T = '#2b1d14';
   const n1 = (v) => Math.round(v * 10) / 10;
-  const iso = (x, y, z = 0) => [OX + (x - y) * C, OY + (x + y) * S - z];
-  const versMonde = (X, Y) => { const a = (X - OX) / C, b = (Y - OY) / S; return [(b + a) / 2, (b - a) / 2]; };
+  const iso = (x, y, z = 0) => [OX + (x - y + DY) * C, OY + (x + y - DY) * S - z];
+  const versMonde = (X, Y) => { const a = (X - OX) / C, b = (Y - OY) / S; return [(b + a) / 2, (b - a) / 2 + DY]; };
   const pts = (...p) => p.map((q) => iso(...q).map(n1).join(',')).join(' ');
   const poly = (points, f, sw = 1.2) => `<polygon points="${points}" fill="${f}"${sw ? ` stroke="${T}" stroke-width="${sw}" stroke-linejoin="round"` : ''}/>`;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -54,8 +56,11 @@ const PLAN = (() => {
 <pattern id="i-beton" width="26" height="26" patternUnits="userSpaceOnUse"><rect width="26" height="26" fill="#d6d3cc"/><circle cx="6" cy="8" r="1.2" fill="#c2beb5"/><circle cx="18" cy="19" r="1.5" fill="#c2beb5"/></pattern>
 <pattern id="i-couloir" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#efe6d2"/><rect width="40" height="1" fill="#e0d5bd"/><rect width="1" height="40" fill="#e0d5bd"/></pattern>
 <pattern id="i-pave" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#cfc8b8"/><rect width="16" height="1" fill="#bdb5a3"/><rect x="8" width="1" height="16" fill="#bdb5a3"/></pattern>
-<pattern id="i-hachures" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="12" height="12" fill="#9aa39a"/><rect width="5" height="12" fill="#8a938a"/></pattern>
+
 <pattern id="i-pyramides" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#2f3a46"/><path d="M0 0 L5 5 L10 0 M0 10 L5 5 L10 10" stroke="#46566a" stroke-width="1.5" fill="none"/></pattern>
+<pattern id="i-jaune" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#ffe08a"/><circle cx="6" cy="6" r="1.4" fill="#f2c95c"/></pattern>
+<pattern id="i-violet" width="10" height="10" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#c3b0ea"/><circle cx="5" cy="5" r="1.1" fill="#ab95dc"/></pattern>
+<pattern id="i-marches" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#d7dde3"/><rect width="16" height="3" fill="#aeb8c2"/></pattern>
 <linearGradient id="i-bois" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2b277"/><stop offset=".6" stop-color="#cf9a5e"/><stop offset="1" stop-color="#b8814a"/></linearGradient>
 <linearGradient id="i-ecran" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#3b78b8"/></linearGradient>
 <radialGradient id="i-reflet" cx=".3" cy=".3" r=".9"><stop offset="0" stop-color="#ffffff" stop-opacity=".35"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
@@ -65,7 +70,7 @@ const PLAN = (() => {
 <linearGradient id="i-soleil-d" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff4c8" stop-opacity=".55"/><stop offset="1" stop-color="#fff4c8" stop-opacity="0"/></linearGradient>
 </defs>`;
   // Sol : le plan de dessus projeté par une matrice (motifs de sol réutilisés tels quels)
-  const sol = (contenu) => `<g transform="matrix(${n1(C * 1e4) / 1e4},${S},${-n1(C * 1e4) / 1e4},${S},${OX},${OY})">${contenu}</g>`;
+  const sol = (contenu) => `<g transform="matrix(${n1(C * 1e4) / 1e4},${S},${-n1(C * 1e4) / 1e4},${S},${OX},${OY})"><g transform="translate(0 ${-DY})">${contenu}</g></g>`;
 
   // ---------------------------------------------------------------- personnages
   const PEAUX = ['#f6cfa6', '#eab994', '#c98e5e', '#a86b45', '#f8d8b8', '#7a4a2e'];
@@ -297,16 +302,21 @@ const PLAN = (() => {
   };
 
   // ---------------------------------------------------------------- arbres, voitures, extérieur
+  let SAISON = 'printemps';
+  const FEUILLES = { printemps: ['#3e8f33', '#4fa043', '#2f6e3a', '#3f8a4a', '#4f9a5a'], ete: ['#2f7a2a', '#3e8f33', '#245e2c', '#2f7a3a', '#3f8a4a'],
+    automne: ['#d9822b', '#e8a33a', '#b8562a', '#cf6f2c', '#e0932e'], hiver: ['#9fb0a6', '#c4d2ca', '#8a9a90', '#a9b8ae', '#dfe7e2'] };
+  const HERBE = { printemps: ['#7cc46a', '#68b357'], ete: ['#93c45a', '#7fb04a'], automne: ['#a9b45e', '#c2873a'], hiver: ['#e3ece8', '#ffffff'] };
   const arbre = (x, y, r = 22, espece = 0) => {
-    if (espece === 1) return boite(x - 3, y - 3, 6, 6, 10, '#7a5236') + boule(x, y, 22, r * 0.9, '#2f6e3a') + boule(x, y, 34, r * 0.65, '#3f8a4a') + boule(x, y, 44, r * 0.4, '#4f9a5a');
-    let s = boite(x - 3, y - 3, 6, 6, 18, '#7a5236') + boule(x, y, 30, r, '#3e8f33') + boule(x - r * 0.3, y, 38, r * 0.6, '#4fa043');
-    if (espece === 2) for (let k = 0; k < 9; k++) { const a = k * 2.399, d = r * 0.7 * Math.sqrt((k + 0.5) / 9), [X, Y] = iso(x + Math.cos(a) * d, y + Math.sin(a) * d, 34 + (k % 3) * 3); s += `<circle cx="${n1(X)}" cy="${n1(Y)}" r="2" fill="${k % 2 ? '#ffffff' : '#ffb3d1'}"/>`; }
+    const [f1, f2, f3, f4, f5] = FEUILLES[SAISON] || FEUILLES.printemps;
+    if (espece === 1) return boite(x - 3, y - 3, 6, 6, 10, '#7a5236') + boule(x, y, 22, r * 0.9, f3) + boule(x, y, 34, r * 0.65, f4) + boule(x, y, 44, r * 0.4, f5);
+    let s = boite(x - 3, y - 3, 6, 6, 18, '#7a5236') + boule(x, y, 30, r, f1) + boule(x - r * 0.3, y, 38, r * 0.6, f2);
+    if (espece === 2 && SAISON !== 'hiver') for (let k = 0; k < 9; k++) { const a = k * 2.399, d = r * 0.7 * Math.sqrt((k + 0.5) / 9), [X, Y] = iso(x + Math.cos(a) * d, y + Math.sin(a) * d, 34 + (k % 3) * 3); s += `<circle cx="${n1(X)}" cy="${n1(Y)}" r="2" fill="${k % 2 ? '#ffffff' : '#ffb3d1'}"/>`; }
     return s;
   };
-  const voiture = (x, y, c, horizontal = true) => {
-    const [w, dp] = horizontal ? [56, 28] : [28, 56];
+  const voiture = (x, y, c, horizontal = true, recule = false) => {
+    const [w, dp] = horizontal ? [56, 28] : [28, 56], av = horizontal && recule ? 0 : w;  // phares côté sens de la marche
     return ombre(x, y, w, dp) + boite(x, y, w, dp, 10, c) + boite(x + (horizontal ? 14 : 3), y + (horizontal ? 3 : 14), w - (horizontal ? 24 : 6), dp - (horizontal ? 6 : 24), 9, '#bfe6ff', 10, c)
-      + bouton(x + (horizontal ? w : 6), y + (horizontal ? 6 : dp), 6, 1.6, '#ffe08a') + bouton(x + (horizontal ? w : 22), y + (horizontal ? 22 : dp), 6, 1.6, '#ffe08a');
+      + bouton(x + (horizontal ? av : 6), y + (horizontal ? 6 : dp), 6, 1.6, '#ffe08a') + bouton(x + (horizontal ? av : 22), y + (horizontal ? 22 : dp), 6, 1.6, '#ffe08a');
   };
   const lampadaire = (x, y) => boite(x - 2, y - 2, 4, 4, 50, '#3d3d3d') + boule(x, y + 2, 54, 5, '#ffe08a');
   const velo = (x, y, c) => boite(x, y, 3, 24, 8, c) + bouton(x + 1.5, y + 2, 6, 3.5, 'none') + bouton(x + 1.5, y + 22, 6, 3.5, 'none');
@@ -317,174 +327,206 @@ const PLAN = (() => {
   const rueVolumes = () => {
     const v = [];
     for (const lx of [120, 470, 790]) v.push([lx + 812, lampadaire(lx, 810)]);
-    v.push([150 + 846, voiture(150, 838, '#ffc94d')], [560 + 860, voiture(560, 856, '#4a8ad8')]);
-    v.push([330 + 852, boite(330, 842, 110, 22, 22, '#2e8b57', 0, null, '#3a9b67') + faceAvant(330, 842, 22, 0, 6, 104, 10, 18, '#bfe6ff', 0.6)]);  // bus
-    [[240, '#ef6f9a', 'marche', 1], [420, '#6aa8f0', 'telephone', 0], [720, '#b08af0', 'marche', 2]].forEach(([px, c, pose, i]) => v.push([px + 822, personne(px, 822, 0, c, T, PEAUX[i + 1], false, i, pose)]));
+    v.push([420 + 822, personne(420, 822, 0, '#6aa8f0', T, PEAUX[1], false, 0, 'telephone')]);
     v.push([760 + 810, boite(760, 812, 60, 12, 26, 'rgba(191,230,255,.55)', 0, null, 'rgba(191,230,255,.4)') + boite(764, 816, 52, 4, 6, '#8a5a36')]);  // abribus
     v.push([60 + 816, boite(58, 814, 6, 6, 12, '#d9534f') + bouton(61, 817, 13, 2.5, '#d9534f')]);  // borne incendie
     return v;
   };
 
-  // ---------------------------------------------------------------- carte du bâtiment
-  const BX = 40, BY = 60, B = 600, P = 170, C2 = 40, I = B - 2 * P - 2 * C2;
-  const SOLS = { atelier: [0, 0, P, P, 'beton', 'atelier'], plateau: [P, 0, B - 2 * P, P, 'moquette', 'plateau'], cem: [B - P, 0, P, P, 'lino', 'cem'],
-    labo: [0, P, P, B - 2 * P, 'vert', 'bureau'], openspace: [B - P, P, P, B - 2 * P, 'bleue', 'openspace'], etudes: [0, B - P, P, P, 'parquet', 'bureau'],
-    accueil: [P, B - P, B - 2 * P, P, 'carrelage', 'bureau'], pause: [B - P, B - P, P, P, 'chaud', 'pause'], reunion: [P + C2, P + C2, 110, I, 'parquet', 'bureau'],
-    wc: [P + C2 + 110, P + C2, I - 110, 90, 'carrelage', 'bureau'], serveur: [P + C2 + 110, P + C2 + 90, I - 110, I - 90, 'beton', 'bureau'] };
-  const NOMS = { atelier: 'Atelier 3D', plateau: 'Plateau R&D', cem: 'Labo CEM', labo: 'Labo élec', openspace: 'Open space', etudes: "Bureau d'études",
-    accueil: 'Accueil', pause: 'Salle de pause', reunion: 'Réunion', wc: 'Sanitaires', serveur: 'Serveurs' };
-  // Portes dans les murs intérieurs (repère du bâtiment) : [x, y, horizontale]
-  const PORTES = [[P, P - 50, false], [P + (B - 2 * P) / 2 - 18, P, true], [B - P, P - 50, false], [P, P + (B - 2 * P) / 2 - 18, false], [B - P, P + (B - 2 * P) / 2 - 18, false],
-    [P, B - P + 14, false], [P + (B - 2 * P) / 2 - 18, B - P, true], [B - P, B - P + 14, false], [P + C2 + 110, P + C2 + I / 2 - 18, false]];
-  const ouvert = (e, local) => e.locaux.includes(local);
+  // ---------------------------------------------------------------- bâtiment de bureaux, un étage à la fois
+  const MOTIF = { bureau: 'parquet', res: 'moquette', rd: 'violet', dg: 'bleue', reunion: 'jaune', bulle: 'jaune', cantine: 'chaud', cafet: 'chaud', labo: 'vert',
+    atelier: 'beton', stock: 'beton', sav: 'lino', etuves: 'carrelage', indus: 'lino', reception: 'lino', accueil: 'carrelage' };
+  const piecesEtage = (cat) => Object.entries(cat.pieces).filter(([, pc]) => pc.etage === ETAGE);
+  const dansEtage = (cat, y) => y >= cat.etages[ETAGE].y0 && y < cat.etages[ETAGE].y0 + 1000;
+  // Côtés extérieurs de l'étage (union des coques), moins les parts collées à une autre coque et les ouvertures (entrée, terrasse) :
+  // nord et ouest = murs du fond (on voit leur face intérieure, avec les fenêtres), sud et est = façade basse ; segments [x1, y1, x2, y2]
+  const bords = (cat) => {
+    const C = cat.coques[ETAGE], O = cat.ouvertures[ETAGE], b = { nord: [], ouest: [], sud: [], est: [] };
+    const moins = (a1, a2, trous) => trous.reduce((parts, [t1, t2]) => parts.flatMap(([p1, p2]) => (t2 <= p1 || t1 >= p2 ? [[p1, p2]] : [[p1, t1], [t2, p2]].filter(([u, v]) => v - u > 1))), [[a1, a2]]);
+    for (const [x, y, w, h] of C) {
+      for (const [cote, yy, d] of [['nord', y, -0.5], ['sud', y + h, 0.5]]) {
+        const trous = C.filter(([, cy, , ch]) => cy < yy + d && yy + d < cy + ch).map(([cx, , cw]) => [cx, cx + cw]).concat(O.filter(([, y1, , y2]) => y1 === yy && y2 === yy).map(([x1, , x2]) => [x1, x2]));
+        for (const [p1, p2] of moins(x, x + w, trous)) b[cote].push([p1, yy, p2, yy]);
+      }
+      for (const [cote, xx, d] of [['ouest', x, -0.5], ['est', x + w, 0.5]]) {
+        const trous = C.filter(([cx, , cw]) => cx < xx + d && xx + d < cx + cw).map(([, cy, , ch]) => [cy, cy + ch]).concat(O.filter(([x1, , x2]) => x1 === xx && x2 === xx).map(([, y1, , y2]) => [y1, y2]));
+        for (const [p1, p2] of moins(y, y + h, trous)) b[cote].push([xx, p1, xx, p2]);
+      }
+    }
+    return b;
+  };
+  // cloisons intérieures relevées sur le plan (un trou = une porte) : segments [x1, y1, x2, y2]
+  const cloisonsEtage = (cat) => ({ restants: cat.cloisons[ETAGE].map((m) => m.slice()), el: [] });
 
-  const fondBatiment = (e, cat) => {
-    let plat = `<rect x="0" y="0" width="860" height="900" fill="url(#i-herbe)"/>` + rueEtTrottoir();
-    plat += `<rect x="${BX + P + 40}" y="${BY + B + 8}" width="${B - 2 * P - 80}" height="${810 - BY - B - 8}" fill="url(#i-pave)"/>`;
-    plat += `<rect x="${BX + B - P + 30}" y="${BY + B + 14}" width="330" height="128" rx="6" fill="#6e7378"/>` + Array.from({ length: 9 }, (_, k) => `<rect x="${BX + B - P + 40 + k * 36}" y="${BY + B + 20}" width="2" height="54" fill="#f4f1e8"/>`).join('');
-    plat += `<rect x="${BX + B - P + 44}" y="${BY + B + 30}" width="26" height="30" fill="#4a8ad8"/><rect x="${BX + 10}" y="${BY + B + 16}" width="${P - 10}" height="104" rx="24" fill="#68b357"/>`;
-    plat += `<rect x="${BX}" y="${BY}" width="${B}" height="${B}" fill="url(#i-couloir)"/>`;
-    for (const [k, [x, y, w, h, motif, local]] of Object.entries(SOLS)) {
-      const X = BX + x, Y = BY + y;
-      if (!ouvert(e, local)) { plat += `<rect x="${X}" y="${Y}" width="${w}" height="${h}" fill="url(#i-hachures)"/>`; continue; }
-      plat += `<rect x="${X}" y="${Y}" width="${w}" height="${h}" fill="url(#i-${motif})"/>`;
-      let soleil = '';
-      for (let f = 0; f < 9; f++) {
-        const fx = BX + 18 + f * 64, fy = BY + 18 + f * 64;
-        if (y === 0 && X + 4 < fx && fx < X + w - 40) soleil += `<polygon points="${fx},${Y} ${fx + 36},${Y} ${fx + 64},${Y + 80} ${fx + 28},${Y + 80}" fill="url(#i-soleil)"/>`;
-        if (x === 0 && Y + 4 < fy && fy < Y + h - 40) soleil += `<polygon points="${X},${fy} ${X},${fy + 36} ${X + 80},${fy + 64} ${X + 80},${fy + 28}" fill="url(#i-soleil-d)"/>`;
-      }
-      plat += `<g class="soleil">${soleil}<rect x="${X}" y="${Y}" width="${w}" height="${h}" fill="url(#i-reflet)"/></g>`;
-      plat += `<circle cx="${X + w / 2}" cy="${Y + h / 2}" r="${Math.round(Math.min(w, h) * 0.45)}" fill="url(#i-halo)"/><g class="lum-soir"><rect x="${X}" y="${Y}" width="${w}" height="${h}" fill="url(#i-soir)"/></g>`;
-      if (k === 'accueil') plat += `<rect x="${X + 40}" y="${Y + 92}" width="${w - 80}" height="44" rx="6" fill="#c0392b" opacity=".85"/><rect x="${X + 46}" y="${Y + 98}" width="${w - 92}" height="32" rx="4" fill="none" stroke="#ffc94d" stroke-width="2" stroke-dasharray="6 4"/>`;
-    }
-    if (ouvert(e, 'pause')) plat += `<rect x="${BX + B + 16}" y="${BY + B - 166}" width="130" height="150" rx="8" fill="url(#i-parquet)"/>`;
-    if (ouvert(e, 'cms')) plat += `<rect x="680" y="120" width="150" height="380" fill="url(#i-beton)"/><rect x="${BX + B}" y="280" width="40" height="44" fill="url(#i-couloir)"/>`;
-    else plat += `<rect x="680" y="120" width="150" height="380" fill="url(#i-hachures)" opacity=".7"/>`;
-    // murs du fond avec fenêtres à stores et décoration
-    let fond = murFond(BX, BY, B, 70, '#c9a77e', true) + murFond(BX, BY, B, 70, '#b8946a', false);
-    for (let k = 0; k < 8; k++) {
-      const u = BX + 58 + k * 64, m = k % 4;
-      if (m === 0) fond += faceAvant(u, BY - 8, 8, 0, -1, 12, 34, 46, '#7a5236', 1) + faceAvant(u, BY - 8, 8, 0, 1, 10, 36, 44, ['#ffc94d', '#ef6f9a', '#7be08a'][k % 3], 0.6);
-      else if (m === 1) { const [X, Y] = iso(u + 5, BY, 50); fond += `<ellipse cx="${n1(X)}" cy="${n1(Y)}" rx="5" ry="6" fill="#ffffff" stroke="${T}" stroke-width="1.2"/><path d="M${n1(X)} ${n1(Y)} v-4 M${n1(X)} ${n1(Y)} l3 1" stroke="${T}" stroke-width="1"/>`; }
-      else if (m === 2) fond += faceAvant(u, BY - 8, 8, 0, -2, 13, 22, 50, '#ffffff', 1) + faceAvant(u, BY - 8, 8, 0, 0, 11, 40, 46, '#4a8ad8', 0) + faceAvant(u, BY - 8, 8, 0, 0, 7, 30, 36, '#ffb3d1', 0);
-      else fond += faceAvant(u, BY - 8, 8, 0, 0, 11, 28, 46, '#3d6a8a', 1) + faceAvant(u, BY - 8, 8, 0, 2, 9, 31, 38, '#ffe08a', 0);
-      fond += faceAvant(u, BY - 8, 8, 0, 4, 7, 8, 11, '#f4f1e8', 0.5);  // prise électrique
-    }
-    for (let k = 0; k < 8; k++) {
-      const v = BY + 58 + k * 64;
-      if (k % 3 === 0) fond += faceDroite(BX - 8, v, 8, 0, -1, 12, 34, 46, '#7a5236', 1) + faceDroite(BX - 8, v, 8, 0, 1, 10, 36, 44, ['#b08af0', '#ffc94d'][k % 2], 0.6);
-      else if (k % 3 === 1) fond += faceDroite(BX - 8, v, 8, 0, 0, 11, 28, 46, '#2e8b57', 1) + faceDroite(BX - 8, v, 8, 0, 2, 9, 40, 44, '#ffffff', 0);
-    }
-    // volumes triés : murs intérieurs (percés de portes), mobilier fixe
-    const el = [];
+  // ---------------------------------------------------------------- trajets : les personnages contournent les murs et passent par les portes
+  const PAS = 8;  // côté d'une case de la grille de marche
+  let GRILLE = { cle: null };
+  const grilleMurs = (e, cat) => {
+    const cle = (batiment(e) ? ETAGE : 'garage');
+    if (GRILLE.cle === cle) return GRILLE;
+    const g = { cle, x0: -40, y0: DY - 40, nx: Math.ceil(1400 / PAS), ny: Math.ceil(940 / PAS) };
+    g.mur = new Uint8Array(g.nx * g.ny);
+    g.c = (x, y) => { const i = Math.floor((x - g.x0) / PAS), j = Math.floor((y - g.y0) / PAS); return i >= 0 && j >= 0 && i < g.nx && j < g.ny ? j * g.nx + i : -1; };
     const segs = [];
-    for (const [x, y, w, h] of Object.values(SOLS)) { const X = BX + x, Y = BY + y; segs.push([X + w, Y, X + w, Y + h], [X, Y + h, X + w, Y + h]); }
-    const restants = [];
+    if (batiment(e)) {
+      const b = bords(cat);
+      segs.push(...cat.cloisons[ETAGE], ...b.nord, ...b.ouest, ...b.sud, ...b.est);
+      const dans = (x, y, r) => r.some(([rx, ry, rw, rh]) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh);
+      for (let k = 0; k < g.mur.length; k++) {  // hors du bâtiment : seulement le parvis et la terrasse
+        const x = g.x0 + (k % g.nx + 0.5) * PAS, y = g.y0 + (Math.floor(k / g.nx) + 0.5) * PAS;
+        if (!dans(x, y, cat.coques[ETAGE]) && !dans(x, y, cat.dehors[ETAGE])) g.mur[k] = 1;
+      }
+    } else {  // garage : murs du fond, mur est, mur sud ouvert sur la porte basculante
+      const gx = 430, gy = 400, gw = 250;
+      segs.push([gx, gy, gx + gw, gy], [gx, gy, gx, gy + gw], [gx + gw, gy, gx + gw, gy + gw], [gx, gy + gw, gx + 50, gy + gw], [gx + 200, gy + gw, gx + gw, gy + gw]);
+    }
     for (const [x1, y1, x2, y2] of segs) {
-      if (x1 === BX + B && x2 === BX + B) continue;
-      if (y1 === BY + B && y2 === BY + B) continue;
-      const porte = PORTES.find(([px, py, horiz]) => (horiz ? y1 === y2 && Math.abs(BY + py - y1) < 1 && BX + px >= x1 && BX + px + 36 <= x2 : x1 === x2 && Math.abs(BX + px - x1) < 1 && BY + py >= y1 && BY + py + 36 <= y2));
-      if (!porte) { restants.push([x1, y1, x2, y2]); continue; }
-      const [px, py, horiz] = porte;
-      if (horiz) {
-        restants.push([x1, y1, BX + px, y1], [BX + px + 36, y1, x2, y1]);
-        el.push([BX + px + BY + py + 16, boite(BX + px, BY + py - 1, 2, 30, 26, '#d8c0a0') + boite(BX + px - 2, BY + py - 3, 40, 6, 2, '#a8703f', 30)]);
-      } else {
-        restants.push([x1, y1, x1, BY + py], [x1, BY + py + 36, x1, y2]);
-        el.push([BX + px + BY + py + 16, boite(BX + px - 1, BY + py, 30, 2, 26, '#d8c0a0') + boite(BX + px - 3, BY + py - 2, 6, 40, 2, '#a8703f', 30)]);
+      const n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 4));
+      for (let k = 0; k <= n; k++) {
+        const i = g.c(x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n);
+        if (i >= 0) g.mur[i] = 1;
       }
     }
+    return (GRILLE = g);
+  };
+  // Points de passage de (ax, ay) à (bx, by), sans le départ, coordonnées du monde ; plus court chemin sur la grille puis lissé
+  const trajet = (e, cat, ax, ay, bx, by) => {
+    const g = grilleMurs(e, cat), N = g.nx * g.ny;
+    const proche = (x, y) => {  // case libre la plus proche d'un point collé au mur
+      for (let r = 0; r <= 2 * PAS; r += PAS) for (const [dx, dy] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { const k = g.c(x + dx, y + dy); if (k >= 0 && !g.mur[k]) return k; }
+      return -1;
+    };
+    const s = proche(ax, ay), t = proche(bx, by);
+    if (s < 0 || t < 0) return [[bx, by]];
+    const de = new Int32Array(N).fill(-1), file = [s];
+    de[s] = s;
+    for (let q = 0; q < file.length && de[t] < 0; q++) {
+      const k = file[q], i = k % g.nx;
+      for (const n of [i > 0 ? k - 1 : -1, i < g.nx - 1 ? k + 1 : -1, k - g.nx, k + g.nx]) if (n >= 0 && n < N && de[n] < 0 && !g.mur[n]) { de[n] = k; file.push(n); }
+    }
+    if (de[t] < 0) return [[bx, by]];  // pas de chemin (point dans un mur ou hors du bâtiment) : tout droit
+    const cases = [];
+    for (let k = t; k !== s; k = de[k]) cases.push(k);
+    const centre = (k) => [g.x0 + (k % g.nx + 0.5) * PAS, g.y0 + (Math.floor(k / g.nx) + 0.5) * PAS];
+    const p = [[ax, ay], ...cases.reverse().slice(0, -1).map(centre), [bx, by]];
+    const vue = ([x1, y1], [x2, y2]) => {
+      const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / (PAS / 4));
+      for (let m = 1; m < n; m++) { const k = g.c(x1 + (x2 - x1) * m / n, y1 + (y2 - y1) * m / n); if (k >= 0 && g.mur[k]) return false; }
+      return true;
+    };
+    const out = [];
+    for (let i = 0; i < p.length - 1;) { let j = i + 1; while (j + 1 < p.length && vue(p[i], p[j + 1])) j++; out.push(p[j]); i = j; }
+    return out;
+  };
+
+  const fondEtage = (e, cat) => {
+    const y0 = cat.etages[ETAGE].y0, rdc = ETAGE === 'rdc';
+    let plat = `<rect x="-400" y="${y0 - 400}" width="2100" height="1700" fill="${rdc ? 'url(#i-herbe)' : '#c6dbea'}"/>`;
+    if (rdc) {
+      plat += `<rect x="-400" y="${y0 + 776}" width="2100" height="24" fill="url(#i-pave)"/><rect x="-400" y="${y0 + 800}" width="2100" height="64" fill="#565b60"/>`;
+      plat += Array.from({ length: 40 }, (_, k) => `<rect x="${-380 + k * 50}" y="${y0 + 830}" width="26" height="4" fill="#ffe08a"/>`).join('');
+    } else {
+      for (const [cx, cy, r] of [[-150, 200, 60], [1450, 120, 80], [1400, 760, 50], [-120, 820, 70]]) plat += `<ellipse cx="${cx}" cy="${y0 + cy}" rx="${r * 1.6}" ry="${r}" fill="#e4eef6"/>`;
+    }
+    for (const [x, y, w, h] of cat.coques[ETAGE]) plat += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#i-couloir)"/>`;
+    // R2 : toit vert sur le reste du bâtiment et dalle technique avec son passage vers l'escalier
+    if (ETAGE === 'r2') plat += `<rect x="20" y="${y0 + 20}" width="540" height="720" fill="#8fbf73"/><rect x="350" y="${y0 + 20}" width="210" height="260" fill="#c9ced4"/><rect x="20" y="${y0 + 232}" width="540" height="48" fill="#c9ced4"/>`;
+    for (const [x, y, w, h] of cat.dehors[ETAGE]) plat += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#i-${rdc ? 'pave' : 'parquet'})"/>`;
+    for (const [k, pc] of piecesEtage(cat)) {
+      const [x, y, w, h] = pc.rect;
+      plat += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#i-${MOTIF[pc.genre] || 'parquet'})"/>`;
+      plat += `<circle cx="${x + w / 2}" cy="${y + h / 2}" r="${Math.round(Math.min(w, h) * 0.45)}" fill="url(#i-halo)"/><g class="lum-soir"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#i-soir)"/></g>`;
+      if (k === 'accueil') plat += `<rect x="${x + 70}" y="${y + 80}" width="${w - 140}" height="${h - 90}" rx="6" fill="#c0392b" opacity=".85"/>`;
+    }
+    for (const [t, x, y, w, h] of cat.communs[ETAGE]) plat += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#i-${t === 'wc' || t === 'douches' ? 'carrelage' : t === 'escalier' ? 'marches' : 'lino'})"/>`;
+    // murs du fond avec fenêtres à stores
+    const b = bords(cat), fond = b.nord.map(([x1, y, x2]) => murFond(x1, y, x2 - x1, 70, '#c9a77e', true)).concat(b.ouest.map(([x, y1, , y2]) => murFond(x, y1, y2 - y1, 70, '#b8946a', false))).join('');
+    const { restants, el } = cloisonsEtage(cat);
     el.push(...murs(restants, 14, '#d8c0a0'));
-    // accueil : banque, écran, réceptionniste, canapés, table basse, plantes
-    const ax = BX + P, ay = BY + B - P;
-    let accueil = ombre(ax + 64, ay + 40, 132, 26) + boite(ax + 64, ay + 40, 132, 26, 22, '#8a5a36', 0, 'url(#i-bois)') + boite(ax + 64, ay + 40, 132, 4, 30, '#7a5236');
-    accueil += faceAvant(ax + 64, ay + 40, 26, 0, 40, 92, 8, 16, '#ffc94d', 1) + txtIso(ax + 130, ay + 66, 10.5, esc(String(e.entreprise || '').toUpperCase().slice(0, 14)), 4.2, T);
-    accueil += boite(ax + 104, ay + 44, 24, 3, 14, '#1f2a3a', 22, null, 'url(#i-ecran)') + boite(ax + 140, ay + 48, 8, 6, 3, '#3d3d3d', 22) + plantePot(ax + 180, ay + 44, 14, 14, 'plantes');
-    el.push([ax + ay + 120, accueil], [ax + ay + 112, personne(ax + 130, ay + 30, 0, '#ef6f9a', '#e0703a', PEAUX[4], true, 1)]);
-    for (const cx of [ax + 14, ax + B - 2 * P - 92]) el.push([cx + ay + 160, canape(cx, ay + 100, 76, 26)]);
-    el.push([ax + ay + 240, boiteBois(ax + 108, ay + 104, 44, 22, 10, 0, '#c48a52') + dessus(ax + 108, ay + 104, 10.1, 6, 18, 5, 15, '#ffffff') + dessus(ax + 108, ay + 104, 10.2, 24, 36, 7, 15, '#ef6f9a')]);
-    el.push([ax + 40 + ay + 118, personne(ax + 40, ay + 118, 6, '#3d3d3d', '#9a9a9a', PEAUX[1], true, 0, 'portable')]);
-    el.push([ax + 8 + ay + 140, plantePot(ax + 4, ay + 130, 22, 22, 'ficus')], [ax + B - 2 * P + ay + 130, plantePot(ax + B - 2 * P - 24, ay + 128, 20, 20, 'plantes')]);
-    // salle de réunion : table, chaises, écran mural
-    const rx = BX + P + C2, ry = BY + P + C2;
-    el.push([rx + ry + 2, boite(rx + 20, ry - 2, 70, 3, 26, '#1f2a3a', 20, null, 'url(#i-ecran)')]);
-    el.push([rx + ry + 140, ombre(rx + 30, ry + 30, 50, I - 60) + boiteBois(rx + 30, ry + 30, 50, I - 60, 4, 14) + boite(rx + 52, ry + 80, 6, 6, 14, '#7a5236') + dessus(rx + 30, ry + 30, 18.1, 18, 32, 50, 58, '#2a3a56') + dessus(rx + 30, ry + 30, 18.1, 8, 18, 20, 30, '#ffffff')]);
-    for (let k = 0; k < 5; k++) {
-      el.push([rx + ry + 20 + 44 + k * 26, boite(rx + 10, ry + 40 + k * 26, 12, 12, 8, '#3d3d3d') + boite(rx + 8, ry + 40 + k * 26, 3, 12, 16, '#3d3d3d', 4)]);
-      el.push([rx + ry + 100 + 44 + k * 26, boite(rx + 88, ry + 40 + k * 26, 12, 12, 8, '#3d3d3d') + boite(rx + 99, ry + 40 + k * 26, 3, 12, 16, '#3d3d3d', 4)]);
+    // parties communes : sanitaires, escalier, cagibis, reprographie, local technique
+    for (const [t, x, y, w, h] of cat.communs[ETAGE]) {
+      if (t === 'wc') for (let k = 0; k < Math.min(3, Math.floor(w / 40)); k++) el.push([x + y + 20 + k * 30, boite(x + 10 + k * 36, y + 8, 16, 22, 12, '#ffffff', 0, '#f4f8fb') + boite(x + 10 + k * 36, y + 6, 16, 4, 22, '#ffffff')]);
+      else if (t === 'escalier') {
+        let m = '';
+        for (let k = 0; k < 8; k++) m += boite(x + 12 + k * ((w - 24) / 8), y + 14, (w - 24) / 8, h / 2 - 20, 4 + k * 7, '#c9ced4', 0, '#dfe3e8');
+        for (let k = 0; k < 8; k++) m += boite(x + w - 12 - (k + 1) * ((w - 24) / 8), y + h / 2 + 6, (w - 24) / 8, h / 2 - 20, 60 - k * 7, '#c9ced4', 0, '#dfe3e8');
+        el.push([x + y + w / 2 + h / 2, m + boite(x + 12, y + h / 2 - 6, w - 24, 4, 34, '#9aa1a8')]);
+      } else if (t === 'cagibi') el.push([x + y + 30, boite(x + 6, y + 6, Math.min(26, w - 12), h - 12, 44, '#a8703f') + boite(x + 8, y + 10, Math.min(22, w - 16), 16, 10, '#d8b07a', 20)]);
+      else if (t === 'imprimante') el.push([x + y + 60, boiteMetal(x + 20, y + 30, 50, 34, 28, '#e8e8e0') + boite(x + 26, y + 34, 38, 22, 3, '#3d3d3d', 28) + boite(x + 20, y + 120, 70, 24, 22, '#c48a52', 0, 'url(#i-bois)')]);
+      else if (t === 'technique') for (let k = 0; k < Math.min(4, Math.floor(w / 30)); k++) {
+        let baie = boite(x + 8 + k * 28, y + 8, 22, 22, 50, '#2b3442', 0, '#3d4a5c');
+        for (let j = 0; j < 6; j++) baie += bouton(x + 26 + k * 28, y + 30, 8 + j * 7, 0.8, ['#7be08a', '#ffc94d', '#ff6b5a'][j % 3]);
+        el.push([x + y + 20 + k * 28, baie]);
+      }
+      const ic = { wc: 'WC', escalier: '', cagibi: '', imprimante: 'COPIE', technique: 'SERVEURS' }[t];
+      if (ic) el.push([x + y + w + h, txtIso(x + w / 2, y + h - 12, 2, ic, 9, '#2f3a4a', 'Nunito, sans-serif')]);
     }
-    // serveurs, sanitaires
-    const sx = BX + P + C2 + 110, sy = BY + P + C2 + 90;
-    for (let k = 0; k < 2; k++) {
-      let baie = boite(sx + 6 + k * 26, sy + 8, 22, 22, 50, '#2b3442', 0, '#3d4a5c');
-      for (let j = 0; j < 8; j++) baie += faceAvant(sx + 6 + k * 26, sy + 8, 22, 0, 2, 20, 4 + j * 5.5, 8 + j * 5.5, '#3d4a5c', 0.5) + bouton(sx + 24 + k * 26, sy + 30, 6 + j * 5.5, 0.8, ['#7be08a', '#ffc94d', '#7be08a', '#ff6b5a'][j % 4]);
-      el.push([sx + sy + 20 + k * 26, baie]);
-    }
-    const wx = BX + P + C2 + 110, wy = BY + P + C2;
-    for (let k = 0; k < 2; k++) el.push([wx + wy + 20 + k * 28, boite(wx + 8 + k * 28, wy + 6, 16, 22, 12, '#ffffff', 0, '#f4f8fb') + boite(wx + 8 + k * 28, wy + 4, 16, 4, 22, '#ffffff')]);
-    el.push([wx + wy + 80, boite(wx + 6, wy + 68, 50, 14, 20, '#ffffff') + boite(wx + 14, wy + 70, 10, 8, 2, '#bfe6ff', 20) + boite(wx + 34, wy + 70, 10, 8, 2, '#bfe6ff', 20)]);
-    // couloir : fontaine, extincteur, panneau d'affichage, portemanteau, plantes
-    el.push([BX + P + C2 + 4 + BY + B - P - 30, boite(BX + P + C2 + 4, BY + B - P - 30, 14, 14, 28, '#e8e8e0') + boite(BX + P + C2 + 5, BY + B - P - 29, 12, 12, 12, '#8fd4ff', 28)]);
-    el.push([BX + B - P - C2 - 20 + BY + P + 8, boite(BX + B - P - C2 - 20, BY + P + 6, 6, 6, 18, '#d9534f') + boite(BX + B - P - C2 - 26, BY + P + 4, 20, 3, 10, '#d9534f', 30)]);
-    el.push([BX + P + 6 + BY + P + C2 + 80, boite(BX + P + 4, BY + P + C2 + 60, 3, 40, 26, '#c9a26a', 14) + ['#ffffff', '#ffe08a', '#ffb3d1', '#bfe6ff'].map((c, k) => faceDroite(BX + P + 4, BY + P + C2 + 60, 3, 14, 3 + k * 9, 9 + k * 9, 6, 20, c, 0.4)).join('')]);
-    el.push([BX + B - P - 26 + BY + B - P - C2 + 20, boite(BX + B - P - 27, BY + B - P - C2 + 19, 2, 2, 40, '#7a5236') + boule(BX + B - P - 30, BY + B - P - C2 + 16, 36, 3, '#d9534f') + boule(BX + B - P - 22, BY + B - P - C2 + 17, 38, 3, '#4a8ad8')]);
-    for (const [px, py, es] of [[BX + P + 16, BY + P + 16, 'ficus'], [BX + B - P - 30, BY + P + 4, 'plantes']]) el.push([px + py + 10, plantePot(px - 8, py - 8, 20, 20, es)]);
-    // hangar : mur du fond, convoyeur, rayonnages garnis, camion à quai
-    if (ouvert(e, 'cms')) {
-      fond += boite(680, 112, 150, 8, 60, '#7d8792');
-      el.push([700 + 70, boite(710, 66, 70, 34, 26, '#e8e8e8') + boite(762, 70, 16, 26, 22, '#4a8ad8')]);
+    // R2 : toit-terrasse (parasols, tables, jardinières)
+    if (ETAGE === 'r2') {
+      const [tx, ty, tw, th] = cat.dehors.r2[0];
+      for (const [px, py] of [[tx + 40, 60], [tx + 130, 150]]) el.push([px + ty + py, boite(px, ty + py, 32, 32, 16, '#f4f1e8') + boite(px + 14, ty + py + 14, 4, 4, 30, '#9aa1a8', 16) + boule(px + 16, ty + py + 16, 50, 26, '#ff8f7a')]);
+      for (const [px, py] of [[tx + 6, 6], [tx + tw - 26, 6], [tx + tw - 26, th - 26]]) el.push([px + ty + py, plantePot(px, ty + py, 20, 20, 'plantes')]);
     }
     return { plat, fond, el };
   };
-  // Mobilier fixe des pièces qui reçoivent aussi des objets : trié avec eux par profondeur
-  const fixesBatiment = (e, cat) => {
+  // Mobilier fixe des pièces (et établi du labo) : trié avec les objets par profondeur
+  const fixesEtage = (e, cat) => {
     const out = [];
-    for (const [bx, by, bw, bh] of cat.etablis.batiment) out.push([-5e3, boite(bx, by, bw, bh, 20, '#4f93b8', 0, '#5aa0c8') + boite(bx, by, 4, bh, 8, '#4f93b8', 20)]);  // toujours derrière ce qu'on y pose
-    const [cuisine, hangar] = cat.obstacles.batiment;
-    if (ouvert(e, 'pause')) {
-      const [cx, cy, cw, ch] = cuisine;
-      let k2 = boite(cx, cy, cw - 30, ch - 6, 22, '#d8d0c0', 0, '#ece6da') + boite(cx + 6, cy + 4, 20, 14, 0.5, '#9aa1a8', 22) + boite(cx + 34, cy + 4, 12, 10, 14, '#3d3d3d', 22);
-      k2 += boite(cx + 52, cy + 4, 20, 12, 10, '#e8e8e0', 22, null, '#1f2a3a') + boite(cx + 80, cy + 6, 6, 6, 6, '#ef6f9a', 22) + boite(cx + 92, cy + 6, 8, 5, 7, '#7be08a', 22);
-      for (let k = 0; k < 3; k++) k2 += faceAvant(cx, cy, ch - 6, 0, 4 + k * 40, 38 + k * 40, 3, 19, '#c8bea8', 0.6);
-      out.push([cx + cy + ch - 30, k2], [cx + cw - 28 + cy, boiteMetal(cx + cw - 28, cy, 28, ch, 46, '#f4f4f4') + faceAvant(cx + cw - 28, cy, ch, 0, 2, 4, 20, 40, '#9aa1a8', 0.5)]);
-    }
-    if (ouvert(e, 'cms')) {
-      const [hx, hy, hw, hh] = hangar;
-      for (let k = 0; k < Math.floor(hh / 30); k++) out.push([hx + 8 + hy + k * 30 + 15, boite(hx, hy + k * 30, 16, 30, 10, '#3d3d3d', 0, '#2e8b57') + boite(hx + 2, hy + k * 30 + 10, 12, 10, 3, '#2e8b57', 10)]);  // convoyeur en tronçons
-      for (let k = 0; k < Math.floor(hh / 90); k++) {
-        let r = boite(hx + 20, hy + 4 + k * 90, hw - 22, 72, 40, '#c48a52');
-        for (let j = 0; j < 3; j++) r += boite(hx + 24, hy + 8 + k * 90 + j * 22, hw - 30, 18, 12, '#d8b07a', 6 + (j % 2) * 14);
-        out.push([hx + hw / 2 + hy + 40 + k * 90, r]);
+    for (const [bx, by, bw, bh] of cat.etablis.batiment) if (dansEtage(cat, by)) out.push([-5e3, boite(bx, by, bw, bh, 20, '#4f93b8', 0, '#5aa0c8') + boite(bx, by, bw, 4, 8, '#4f93b8', 20)]);
+    for (const [t, x, y, w, h] of cat.meubles.batiment) {
+      if (!dansEtage(cat, y)) continue;
+      let m = '';
+      if (t === 'cuisine') {
+        m = boite(x, y, w - 30, h - 6, 22, '#d8d0c0', 0, '#ece6da') + boite(x + 6, y + 4, 20, 14, 0.5, '#9aa1a8', 22) + boite(x + 34, y + 4, 12, 10, 14, '#3d3d3d', 22) + boite(x + 52, y + 4, 20, 12, 10, '#e8e8e0', 22, null, '#1f2a3a');
+        for (let j = 0; j < Math.floor((w - 30) / 40); j++) m += faceAvant(x, y, h - 6, 0, 4 + j * 40, 38 + j * 40, 3, 19, '#c8bea8', 0.6);
+        m += boiteMetal(x + w - 28, y, 28, h, 46, '#f4f4f4');
+      } else if (t === 'comptoir') {
+        m = ombre(x, y, w, h) + boite(x, y, w, h, 22, '#8a5a36', 0, 'url(#i-bois)') + boite(x, y, w, 4, 30, '#7a5236') + faceAvant(x, y, h, 0, w / 2 - 26, w / 2 + 26, 8, 16, '#ffc94d', 1);
+        m += txtIso(x + w / 2, y + h, 10.5, esc(String(e.entreprise || '').toUpperCase().slice(0, 14)), 4.2, T) + boite(x + 40, y + 4, 24, 3, 14, '#1f2a3a', 22, null, 'url(#i-ecran)');
+        out.push([x + y + h - 12, personne(x + w / 2, y - 12, 0, '#ef6f9a', '#e0703a', PEAUX[4], true, 1)]);
+      } else if (t === 'rayonnage' || t === 'rayonnage_v') {
+        const horiz = t === 'rayonnage', n = Math.floor((horiz ? w : h) / 90);
+        for (let j = 0; j < n; j++) {
+          const rx = horiz ? x + j * 90 : x, ry = horiz ? y : y + j * 90, rw = horiz ? 84 : w, rh = horiz ? h : 84;
+          let r = boite(rx, ry, rw, rh, 40, '#c48a52');
+          for (let q = 0; q < 3; q++) r += boite(rx + 4, ry + 4, rw - 8, rh - 8, 10, ['#d8b07a', '#c9a26a', '#e2c08a'][q], 6 + q * 12);
+          out.push([rx + ry + rw / 2 + rh / 2, r]);
+        }
+        continue;
+      } else if (t === 'etuve') {
+        for (let j = 0; j < Math.floor(w / 52); j++) out.push([x + j * 52 + y + 26, boiteMetal(x + j * 52, y, 48, h, 44, '#9aa1a8') + faceAvant(x + j * 52, y, h, 0, 8, 40, 14, 34, '#ff9a4a', 1) + bouton(x + j * 52 + 44, y + h, 38, 1.5, '#7be08a')]);
+        continue;
+      } else if (t === 'ligne') {
+        for (let j = 0; j < Math.floor(h / 30); j++) out.push([x + w / 2 + y + j * 30 + 15, boite(x, y + j * 30, w, 30, 10, '#3d3d3d', 0, '#2e8b57') + boite(x + 4, y + j * 30 + 10, w - 8, 10, 3, '#2e8b57', 10)]);
+        continue;
+      } else if (t === 'table_reunion') {
+        m = ombre(x, y, w, h) + boiteBois(x, y, w, h, 4, 14) + dessus(x, y, 18.1, 10, 26, 8, 18, '#ffffff') + dessus(x, y, 18.1, w - 30, w - 12, h - 18, h - 8, '#2a3a56');
+        for (let j = 0; j < Math.floor(w / 30); j++) {
+          out.push([x + 10 + j * 30 + y - 6, boite(x + 8 + j * 30, y - 16, 12, 12, 8, '#3d3d3d') + boite(x + 8 + j * 30, y - 18, 12, 3, 16, '#3d3d3d', 4)]);
+          if (h >= 40) out.push([x + 10 + j * 30 + y + h + 14, boite(x + 8 + j * 30, y + h + 4, 12, 12, 8, '#3d3d3d') + boite(x + 8 + j * 30, y + h + 15, 12, 3, 16, '#3d3d3d', 4)]);
+        }
       }
+      out.push([x + y + w / 2 + h / 2, m]);
     }
     return out;
   };
-  const devantBatiment = (e) => {
-    const v = rueVolumes();
-    v.push(...murs([[BX, BY + B, BX + B / 2 - 34, BY + B], [BX + B / 2 + 34, BY + B, BX + B, BY + B], [BX + B, BY, BX + B, BY + B]], 18, '#c9a77e'));
-    v.push([BX + B / 2 + BY + B, boite(BX + B / 2 - 32, BY + B - 2, 2, 4, 30, '#9aa1a8') + boite(BX + B / 2 + 30, BY + B - 2, 2, 4, 30, '#9aa1a8') + boite(BX + B / 2 - 32, BY + B - 2, 64, 4, 3, '#9aa1a8', 30)]);
-    if (ouvert(e, 'cms')) v.push(...murs([[830, 120, 830, 500], [680, 500, 830, 500]], 16, '#7d8792'));
-    if (ouvert(e, 'pause')) {
-      const tx = BX + B + 16, ty = BY + B - 166;
-      v.push([tx + ty + 100, boite(tx + 30, ty + 34, 32, 32, 16, '#f4f1e8') + boite(tx + 44, ty + 48, 4, 4, 30, '#9aa1a8', 16) + boule(tx + 46, ty + 50, 50, 26, '#ff8f7a')]);
-      v.push([tx + ty + 80, boite(tx + 10, ty + 40, 12, 12, 8, '#7a5236') + boite(tx + 70, ty + 40, 12, 12, 8, '#7a5236')]);
-      v.push([tx + 110 + ty + 20, plantePot(tx + 100, ty + 10, 20, 20, 'plantes')], [tx + 110 + ty + 126, plantePot(tx + 100, ty + 116, 20, 20, 'ficus')]);
+  const devantEtage = (e, cat) => {
+    const v = [], y0 = cat.etages[ETAGE].y0;
+    // façades sud et est (basses, pour voir l'intérieur), percées de l'entrée au RDC
+    const b = bords(cat);
+    v.push(...murs([...b.sud, ...b.est], 18, '#c9a77e'));
+    for (const [x1, y1, x2, y2] of cat.ouvertures[ETAGE]) if (y1 === y2 && b.sud.some(([, y]) => y === y1)) {
+      v.push([(x1 + x2) / 2 + y1, boite(x1, y1 - 2, 2, 4, 30, '#9aa1a8') + boite(x2 - 2, y1 - 2, 2, 4, 30, '#9aa1a8') + boite(x1, y1 - 2, x2 - x1, 4, 3, '#9aa1a8', 30)]);
     }
-    // parvis : vélos, banc, jardinières, totem ; parking ; arbres et haie de devant ; un employé qui arrive
-    ['#d9534f', '#4a8ad8', '#ffc94d'].forEach((c, k) => v.push([BX + P + 46 + k * 14 + BY + B + 130, velo(BX + P + 46 + k * 14, BY + B + 118, c)]));
-    v.push([BX + B - P - 60 + BY + B + 124, boiteBois(BX + B - P - 60, BY + B + 118, 46, 10, 3, 8, '#8a5a36') + boite(BX + B - P - 56, BY + B + 120, 3, 6, 8, '#3d3d3d') + boite(BX + B - P - 22, BY + B + 120, 3, 6, 8, '#3d3d3d')]);
-    for (const jx of [BX + B / 2 - 70, BX + B / 2 + 46]) {
-      let j = boite(jx, BY + B + 46, 24, 14, 10, '#8a8f94');
-      ['#ef6f9a', '#ffc94d', '#b08af0'].forEach((c, k) => { j += boule(jx + 5 + k * 7, BY + B + 53, 13, 3, c); });
-      v.push([jx + BY + B + 60, j]);
+    if (ETAGE === 'rdc') {
+      for (const lx of [60, 320, 880, 1200]) v.push([lx + y0 + 776, lampadaire(lx, y0 + 776)]);
+      ['#d9534f', '#4a8ad8', '#ffc94d'].forEach((c, k) => v.push([561 + k * 12 + y0 + 770, velo(561 + k * 12, y0 + 748, c)]));
+      for (const [ax, ay, r, es] of [[-40, 300, 24, 0], [-60, 620, 20, 2], [1330, 200, 22, 1], [1340, 560, 24, 0]]) v.push([ax + y0 + ay, arbre(ax, y0 + ay, r, es)]);
     }
-    v.push([BX + P + 10 + BY + B + 50, boite(BX + P + 10, BY + B + 40, 8, 18, 40, '#2b3442') + faceAvant(BX + P + 10, BY + B + 40, 18, 0, 1, 7, 10, 34, '#ffc94d', 0.6)]);
-    [[1, '#d9534f'], [2, '#ffc94d'], [4, '#7be08a'], [5, '#e8e8e8'], [7, '#3d3d3d']].forEach(([k, c]) => v.push([BX + B - P + 43 + k * 36 + BY + B + 58, voiture(BX + B - P + 43 + k * 36, BY + B + 18, c, false)]));
-    for (const [ax, ay, r, es] of [[660, 690, 18, 0], [150, 760, 18, 2], [40, 740, 20, 1], [BX + 130, BY + B + 90, 16, 2]]) v.push([ax + ay, arbre(ax, ay, r, es)]);
-    for (let k = 0; k < 5; k++) v.push([BX + 20 + k * 30 + BY + B + 18, boule(BX + 20 + k * 30, BY + B + 20, 6, 7, '#4fa043')]);
     return v;
   };
+  const etiquettesEtage = (e, cat) => piecesEtage(cat).filter(([k]) => k !== 'stock2')
+    .map(([, pc]) => { const [x, y, w, h] = pc.rect; return etiquette(x + w / 2, y + h - 12, pc.nom); }).join('');
 
   // ---------------------------------------------------------------- carte du garage
   const fondGarage = (e, cat) => {
@@ -543,12 +585,62 @@ const PLAN = (() => {
     return v;
   };
 
-  const etiquettes = (e) => {
-    if (!batiment(e)) return etiquette(556, 628, 'Garage') + etiquette(230, 640, 'Maison');
-    let s = '';
-    for (const [k, [x, y, w, h, , local]] of Object.entries(SOLS)) s += etiquette(BX + x + w / 2, BY + y + h - 14, NOMS[k] + (e.locaux.includes(local) ? '' : ' · à louer'));
-    return s + (e.locaux.includes('cms') ? etiquette(755, 480, 'Ligne de production CMS') : '');
+  // ---------------------------------------------------------------- rue animée : voitures, bus, passants, nuages (calque animé en CSS)
+  // Chaque mobile est un petit SVG posé à son point de départ ; il glisse de (dx, dy) à l'écran, en boucle.
+  const mobile = (contenu, x, y, x2, gauche, haut, w, h, duree, retard, classe = '') => {
+    const [X, Y] = iso(x, y, 0), [X2, Y2] = iso(x2, y, 0), l = n1(X + gauche), t = n1(Y + haut);
+    return `<div class="mobile ${classe}" style="left:${l}px;top:${t}px;--dx:${n1(X2 - X)}px;--dy:${n1(Y2 - Y)}px;--t:${duree}s;--d:${retard}s"><svg viewBox="${l} ${t} ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">${contenu}</svg></div>`;
   };
+  const OISEAU = '<svg width="14" height="8" viewBox="0 0 14 8" aria-hidden="true"><path d="M1 2 Q4 6 7 3 Q10 6 13 2" fill="none" stroke="#2b1d14" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  const oiseaux = () => [[-200, 200, 34, -6], [-260, 230, 34, -7.5], [-150, 520, 47, -30]].map(([x, y, t, d]) => {
+    const [X, Y] = iso(x, DY + y, 160);
+    return `<div class="mobile oiseau" style="left:${n1(X)}px;top:${n1(Y)}px;--dx:1700px;--dy:420px;--t:${t}s;--d:${d}s">${OISEAU}</div>`;
+  }).join('');
+  const chat = (x, y, x2) => mobile(boite(x, y, 14, 6, 6, '#e8913a', 0) + boite(x + 12, y, 6, 6, 6, '#e8913a', 6) + boite(x - 4, y + 2, 5, 2, 2, '#e8913a', 10)
+    + bouton(x + 16, y + 3, 13, 1, T), x, y, x2, -16, -24, 34, 34, 26, -4, 'chat');
+  const rue = (e) => {
+    const bat = batiment(e);
+    if (bat && ETAGE !== 'rdc') {  // aux étages : des nuages et des oiseaux qui passent dans le ciel
+      return oiseaux() + [[-300, 260, 70, 90, -20], [-500, 640, 55, 120, -75]].map(([x, y, r, t, d]) => {
+        const [X, Y] = iso(x, DY + y, 0);
+        return `<div class="mobile nuage" style="left:${n1(X)}px;top:${n1(Y)}px;--dx:1500px;--dy:0px;--t:${t}s;--d:${d}s"><svg width="${n1(r * 3.4)}" height="${n1(r * 1.6)}" viewBox="0 0 ${n1(r * 3.4)} ${n1(r * 1.6)}" aria-hidden="true"><ellipse cx="${n1(r * 1.7)}" cy="${n1(r * 0.8)}" rx="${n1(r * 1.6)}" ry="${n1(r * 0.7)}" fill="#f4f8fb" opacity=".85"/></svg></div>`;
+      }).join('');
+    }
+    const [x0, x1, voie1, voie2, trottoir] = bat ? [-400, 1640, DY + 804, DY + 832, DY + 788] : [0, 804, 835, 857, 822];
+    const auto = (y, c, retour, t, d) => mobile(voiture(retour ? x1 : x0, y, c, true, retour), retour ? x1 : x0, y, retour ? x0 : x1, -32, -30, 90, 80, t, d);
+    const bus = (y, t, d) => mobile(boite(x0, y, 110, 22, 22, '#2e8b57', 0, null, '#3a9b67') + faceAvant(x0, y, 22, 0, 6, 104, 10, 18, '#bfe6ff', 0.6), x0, y, x1 - 50, -22, -48, 130, 100, t, d);
+    const pieton = (c, i, retour, t, d) => mobile(personne(retour ? x1 : x0, trottoir, 0, c, T, PEAUX[i % PEAUX.length], false, i, 'marche'), retour ? x1 : x0, trottoir, retour ? x0 : x1, -16, -50, 32, 58, t, d, 'pieton');
+    const v = bat ? 2.4 : 1;  // la rue du bâtiment est plus longue : même vitesse à l'écran
+    return oiseaux() + (bat ? chat(-120, DY + 420, 10) : chat(120, 560, 360)) + [pieton('#ef6f9a', 1, false, 38 * v, -5), pieton('#b08af0', 2, true, 44 * v, -27), pieton('#7be08a', 3, false, 52 * v, -40),
+      // même vitesse sur une voie, départs décalés : les véhicules ne se rentrent pas dedans
+      auto(voie1, '#ffc94d', false, 12 * v, -1), auto(voie1, '#d9534f', false, 12 * v, -5 * v), bus(voie1, 12 * v, -9 * v),
+      auto(voie2, '#4a8ad8', true, 14 * v, -3 * v), auto(voie2, '#e8e8e8', true, 14 * v, -10 * v)].join('');
+  };
+
+  // Passage ponctuel : un véhicule s'arrête devant le bâtiment puis repart, ou une personne va jusqu'à la porte (et revient, ou entre)
+  const camion = (x, y) => boite(x, y, 58, 24, 30, '#f4f4f4', 0, null, '#e8e8e8') + txtIso(x + 29, y + 24, 16, 'PCB EXPRESS', 3.4, '#2f8a3a')
+    + boite(x + 58, y + 2, 18, 20, 20, '#2f8a3a') + boite(x + 64, y + 4, 10, 16, 8, '#bfe6ff', 12, '#2f8a3a') + bouton(x + 76, y + 6, 6, 1.6, '#ffe08a') + bouton(x + 76, y + 18, 6, 1.6, '#ffe08a');
+  const passage = (e, genre) => {
+    const bat = batiment(e);
+    if (bat && ETAGE !== 'rdc') return '';
+    const [x0, x1, voie, trottoir, porte, seuil] = bat ? [-400, 1640, DY + 804, DY + 788, 636, DY + 744] : [0, 804, 835, 822, 555, 660];
+    if (genre === 'camion') {
+      const arret = bat ? 300 : 500, [X, Y] = iso(x0, voie, 0), [Xa, Ya] = iso(arret, voie, 0), [X2, Y2] = iso(x1, voie, 0), l = n1(X - 32), t = n1(Y - 40);
+      return `<div class="mobile ponctuel camion" style="left:${l}px;top:${t}px;--dx1:${n1(Xa - X)}px;--dy1:${n1(Ya - Y)}px;--dx2:${n1(X2 - X)}px;--dy2:${n1(Y2 - Y)}px;--t:${bat ? 14 : 9}s"><svg viewBox="${l} ${t} 120 90" width="120" height="90" aria-hidden="true">${camion(x0, voie)}</svg></div>`;
+    }
+    const xs = porte - (bat ? 260 : 220), [X, Y] = iso(xs, trottoir, 0), [Xc, Yc] = iso(porte, trottoir, 0), [Xp, Yp] = iso(porte, seuil, 0), l = n1(X - 16), t = n1(Y - 50);
+    const habit = genre === 'client' ? ['#3a4a6a', 3] : ['#ffc94d', 1], colis = genre === 'client' ? boite(xs + 6, trottoir + 2, 6, 2, 6, '#5a3a22', 6) : boite(xs - 6, trottoir + 3, 12, 8, 8, '#c48a52', 10);
+    return `<div class="mobile ponctuel ${genre}" style="left:${l}px;top:${t}px;--dx1:${n1(Xc - X)}px;--dy1:${n1(Yc - Y)}px;--dx2:${n1(Xp - X)}px;--dy2:${n1(Yp - Y)}px;--t:${genre === 'client' ? 7 : 8}s"><svg viewBox="${l} ${t} 32 58" width="32" height="58" aria-hidden="true">${personne(xs, trottoir, 0, habit[0], T, PEAUX[habit[1]], false, habit[1], 'marche') + colis}</svg></div>`;
+  };
+  // Point d'écran (centre du dessus d'un appareil, ou de l'écran d'un poste) : pour y poser un effet animé
+  const pointEffet = (o, f, etablis) => {
+    if (o.type === 'poste') return iso(o.x + 39, o.y + 9, 34);
+    const [rw0, rd0, rh] = REEL[o.type] || [f.w, f.h, 20];
+    const z = etablis.some(([ex, ey, ew, eh]) => ex <= o.x && ey <= o.y && o.x + f.w <= ex + ew + 1 && o.y + f.h <= ey + eh + 1) ? 20 : 0;
+    return iso(o.x + f.w / 2, o.y + f.h / 2, z + Math.min(rh, 30) + (o.type === 'station' || o.type === 'micro' ? -2 : 2));
+  };
+
+  const etiquettes = (e, cat) => (batiment(e) ? etiquettesEtage(e, cat) : etiquette(556, 628, 'Garage') + etiquette(230, 640, 'Maison'));
 
   // ---------------------------------------------------------------- API utilisée par jeu.js
   const triees = (liste) => liste.sort((a, b) => a[0] - b[0]).map((x) => x[1]).join('');
@@ -556,16 +648,26 @@ const PLAN = (() => {
   const batiment = (e) => e.locaux.includes('bureau');
   return {
     W, H, PEAUX, iso, versMonde, empreinte, figure, objet, profondeur,
+    // Étage du bâtiment à dessiner (le garage n'a qu'un niveau)
+    etage: (k, cat) => { ETAGE = k; DY = k === 'garage' ? 0 : cat.etages[k].y0; },
     // Calque du fond : sol, murs du fond, mobilier fixe
     fond: (e, cat) => {
-      const f = batiment(e) ? fondBatiment(e, cat) : fondGarage(e, cat);
-      return svgEnveloppe(DEFS + sol(f.plat) + f.fond + triees(f.el));
+      SAISON = e.saison || 'printemps';
+      const [h1, h2] = HERBE[SAISON] || HERBE.printemps, defs = DEFS.replace('fill="#7cc46a"/><circle cx="5" cy="6" r="1.6" fill="#68b357"/><circle cx="16" cy="15" r="1.6" fill="#68b357"/>',
+        `fill="${h1}"/><circle cx="5" cy="6" r="1.6" fill="${h2}"/><circle cx="16" cy="15" r="1.6" fill="${h2}"/>`);
+      const f = batiment(e) ? fondEtage(e, cat) : fondGarage(e, cat);
+      return svgEnveloppe(defs + sol(f.plat) + f.fond + triees(f.el));
     },
     // Calque de devant : façade basse, extérieur (au-dessus des objets, sous les personnages)
-    devant: (e) => svgEnveloppe(triees(batiment(e) ? devantBatiment(e) : devantGarage()) + etiquettes(e)),
+    devant: (e, cat) => (SAISON = e.saison || 'printemps') && svgEnveloppe(triees(batiment(e) ? devantEtage(e, cat) : devantGarage()) + etiquettes(e, cat)),
+    // Calque animé : voitures, bus et passants dans la rue, nuages aux étages
+    rue: (e) => rue(e),
+    passage, pointEffet,
+    // Chemin d'un personnage sur l'étage affiché : points de passage sans le départ
+    trajet,
     // Mobilier fixe à trier avec les objets placés : [profondeur, svg]
-    fixes: (e, cat) => (batiment(e) ? fixesBatiment(e, cat) : fixesGarage(e, cat)),
-    centre: (e) => iso(...(batiment(e) ? [380, 380] : [556, 524])),
-    cadreMoral: (e) => (batiment(e) ? empreinte(BX - 10, BY - 10, B + 20, B + 20) : empreinte(430, 400, 250, 250)),
+    fixes: (e, cat) => (batiment(e) ? fixesEtage(e, cat) : fixesGarage(e, cat)),
+    centre: (e) => iso(...(batiment(e) ? (ETAGE === 'r2' ? [880, DY + 360] : [650, DY + 380]) : [556, 524])),
+    cadreMoral: (e) => (batiment(e) ? (ETAGE === 'r2' ? empreinte(440, DY + 10, 850, 740) : empreinte(10, DY + 10, 1280, 740)) : empreinte(430, 400, 250, 250)),
   };
 })();

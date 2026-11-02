@@ -3,44 +3,118 @@
 DOMAINES = ("e", "m", "f")
 NOM_DOMAINE = {"e": "Élec", "m": "Méca 3D", "f": "Firmware"}
 
-# Deux cartes : le garage du fondateur au départ, puis le bâtiment carré (local « bureau » = déménagement).
-# Pièces : intérieur utilisable (coordonnées du monde, en px, calées sur la grille) et local à louer.
-# carte "garage" : seulement avant le déménagement ; carte "batiment" : seulement après.
-PIECES = {
-    "garage":    {"nom": "Garage", "rect": (440, 408, 232, 232), "local": None, "carte": "garage"},
-    "etudes":    {"nom": "Bureau d'études", "rect": (48, 496, 156, 156), "local": "bureau", "carte": "batiment"},
-    "labo":      {"nom": "Labo élec", "rect": (48, 236, 156, 248), "local": "bureau", "carte": "batiment"},
-    "atelier":   {"nom": "Atelier 3D", "rect": (48, 68, 156, 156), "local": "atelier", "carte": "batiment"},
-    "plateau":   {"nom": "Plateau R&D", "rect": (216, 68, 248, 156), "local": "plateau", "carte": "batiment"},
-    "cem":       {"nom": "Labo CEM", "rect": (476, 68, 156, 156), "local": "cem", "carte": "batiment"},
-    "openspace": {"nom": "Open space", "rect": (476, 236, 156, 248), "local": "openspace", "carte": "batiment"},
-    "pause":     {"nom": "Salle de pause", "rect": (476, 496, 156, 156), "local": "pause", "carte": "batiment"},
-    "cms":       {"nom": "Ligne CMS", "rect": (688, 128, 136, 364), "local": "cms", "carte": "batiment"},
+# Deux cartes : le garage du fondateur au départ, puis le bâtiment de bureaux (local « bureau » = déménagement).
+# Le bâtiment a trois étages ; chacun occupe sa bande du monde (y0), l'interface en montre un à la fois.
+# Le garage et le RDC se recouvrent mais ne servent jamais ensemble (cartes exclusives).
+ETAGES = {
+    "rdc": {"nom": "RDC", "y0": 0, "w": 1300, "h": 880},
+    "r1": {"nom": "R1", "y0": 1000, "w": 1300, "h": 770},
+    "r2": {"nom": "R2", "y0": 2000, "w": 840, "h": 720},
 }
-# Ordre de placement automatique de la déco (la salle de pause a ses emplacements prévus, voir EMPLACEMENTS)
-INTERIEUR = ["garage", "openspace", "plateau", "labo", "atelier", "etudes", "pause", "cem", "cms"]
-TRAVAIL = ["garage", "etudes", "openspace", "plateau"]
-# Par carte (les deux cartes partagent les coordonnées) :
-# établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
-ETABLIS = {"garage": [(440, 408, 232, 44)], "batiment": [(48, 236, 36, 248)]}
-# mobilier fixe : rien ne peut y être posé (étagère du garage ; cuisine, convoyeur et rayonnages du hangar).
-# plan.js dessine ces meubles à partir de ces rectangles, dans cet ordre.
-OBSTACLES = {"garage": [(636, 468, 32, 112)], "batiment": [(476, 496, 156, 30), (752, 128, 72, 364)]}
+
+
+def _p(etage, nom, x, y, w, h, local, genre="bureau", **extra):
+    return {"nom": nom, "rect": (x, y + ETAGES[etage]["y0"], w, h), "local": local, "carte": "batiment", "etage": etage,
+            "genre": genre, **extra}
+
+
+# Pièces : intérieur utilisable (coordonnées du monde, en px), entrée côté rue en bas ; tout s'ouvre à l'emménagement.
+# fonction : pièce où s'installent les gens d'un métier (bureau indus, labo de qualif, chefs de projet, commerciaux)
+# genre : bureau (postes de travail), res (bureau individuel de responsable), rd (direction R&D), dg (direction générale),
+# reunion, bulle, cantine, cafet, labo, atelier, sav, stock, etuves, indus, reception, accueil ; service : domaine du service
+PIECES = {
+    "garage":      {"nom": "Garage", "rect": (440, 408, 232, 232), "local": None, "carte": "garage", "etage": "garage", "genre": "garage"},
+    # RDC
+    "supply":       _p("rdc", "Supply chain", 1128, 274, 146, 170, "bureau"),
+    "sav":          _p("rdc", "SAV", 980, 274, 98, 206, "bureau", "sav"),
+    "stock":        _p("rdc", "Stock", 24, 26, 402, 710, "bureau", "stock"),
+    "stock2":       _p("rdc", "Stock", 436, 26, 422, 254, "bureau", "stock"),
+    "atlas":        _p("rdc", "Salle Atlas", 1088, 26, 186, 238, "bureau", "reunion"),
+    "reception":    _p("rdc", "Contrôle réception", 868, 26, 210, 178, "bureau", "reception"),
+    "labo_indus":   _p("rdc", "Ligne pilote", 1128, 454, 146, 282, "bureau", "indus"),
+    "atelier":      _p("rdc", "Atelier", 1028, 550, 90, 186, "bureau", "atelier"),
+    "etuves":       _p("rdc", "Étuves", 680, 550, 338, 186, "bureau", "etuves"),
+    "accueil":      _p("rdc", "Accueil", 436, 490, 234, 246, "bureau", "accueil"),
+    # R1 (les pièces sans nom sur le plan accueillent la direction R&D et les responsables)
+    "rd":           _p("r1", "Direction R&D", 1076, 26, 198, 150, "bureau", "rd"),
+    "res1":         _p("r1", "Responsable", 24, 222, 154, 130, "bureau", "res"),
+    "res2":         _p("r1", "Responsable", 32, 362, 146, 130, "bureau", "res"),
+    "res3":         _p("r1", "Responsable", 1116, 318, 158, 126, "bureau", "res"),
+    "orion":        _p("r1", "Salle Orion", 1132, 186, 142, 122, "bureau", "reunion"),
+    "cdp":          _p("r1", "Chefs de projet", 1132, 454, 142, 282, "bureau", fonction="cdp"),
+    "fw1":          _p("r1", "Firmware 1", 796, 546, 270, 190, "bureau", service="f"),
+    "meca":         _p("r1", "Méca", 328, 546, 150, 190, "bureau", service="m"),
+    "fw2":          _p("r1", "Firmware 2", 340, 26, 286, 186, "bureau", service="f"),
+    "qualif":       _p("r1", "Labo de qualification", 32, 546, 286, 190, "bureau", fonction="qualif"),
+    "bulle1":       _p("r1", "Bulle", 248, 282, 82, 94, "bureau", "bulle"),
+    "bulle2":       _p("r1", "Bulle", 248, 386, 82, 98, "bureau", "bulle"),
+    "cafet1":       _p("r1", "Coin café", 948, 282, 118, 202, "bureau", "cafet"),
+    "hw":           _p("r1", "HW", 796, 26, 270, 186, "bureau", service="e"),
+    "labo":         _p("r1", "Laboratoire", 488, 546, 298, 190, "bureau", "labo"),
+    "dt":           _p("r1", "DT", 636, 26, 150, 186, "bureau"),
+    "indus":        _p("r1", "Bureau indus", 24, 26, 306, 186, "bureau", fonction="indus"),
+    # R2
+    "vega":         _p("r2", "Salle Véga", 1080, 24, 194, 330, "bureau", "reunion"),
+    "cantine":      _p("r2", "Salle de pause", 872, 364, 198, 370, "bureau", "cantine"),
+    "opensp":       _p("r2", "Commerciaux", 1080, 364, 194, 370, "bureau", fonction="commerciaux"),
+    "bulle3":       _p("r2", "Bulle", 872, 280, 134, 74, "bureau", "bulle"),
+    "lyra":         _p("r2", "Salle Lyra", 564, 24, 198, 190, "bureau", "reunion"),
+    "direction":    _p("r2", "Responsable", 772, 24, 90, 190, "bureau", "res"),
+    "dg":           _p("r2", "Direction générale", 872, 24, 198, 190, "bureau", "dg"),
+}
+# Pièces où poser un poste, dans l'ordre de remplissage ; bureaux individuels et direction : seulement à la main
+TRAVAIL = ["garage", "hw", "fw1", "meca", "fw2", "supply", "cdp", "qualif", "dt", "indus", "opensp",
+           "res1", "res2", "res3", "direction", "rd", "dg"]
+# Ordre de placement automatique de la déco (toutes les pièces)
+INTERIEUR = ["garage", "hw", "fw1", "meca", "fw2", "supply", "cdp", "qualif", "dt", "indus", "opensp", "accueil", "cantine", "cafet1",
+             "labo", "atelier", "rd", "dg", "res1", "res2", "res3", "direction", "atlas", "orion", "vega", "lyra",
+             "sav", "stock", "stock2", "etuves", "labo_indus", "reception", "bulle1", "bulle2", "bulle3"]
+assert sorted(INTERIEUR) == sorted(PIECES)
+assert sorted(TRAVAIL) == sorted(k for k, p in PIECES.items() if p["genre"] in ("garage", "bureau", "res", "rd", "dg"))
+# Murs extérieurs (rectangles dont l'union fait l'étage ; le R2 a une terrasse et l'escalier qui dépasse sur le toit),
+# parties communes non louables, cloisons intérieures [x1, y1, x2, y2] (un trou = une porte), ouvertures dans les murs
+# extérieurs (entrée, portes de la terrasse) et lieux dehors où l'on peut aller (parvis, terrasse), par étage
+COQUES = {"rdc": [(20, 20, 1260, 720)], "r1": [(20, 1020, 1260, 720)], "r2": [(448, 2276, 112, 208), (560, 2020, 720, 464), (768, 2484, 512, 256)]}
+COMMUNS = {
+    "rdc": [("escalier", 432, 336, 164, 148), ("technique", 432, 276, 128, 60), ("wc", 668, 276, 164, 208), ("wc", 832, 276, 92, 60), ("douches", 832, 336, 92, 148)],
+    "r1": [("technique", 336, 1296, 112, 100), ("cagibi", 336, 1396, 112, 92), ("escalier", 448, 1276, 184, 212), ("wc", 692, 1276, 176, 212), ("cagibi", 868, 1380, 76, 108)],
+    "r2": [("escalier", 448, 2276, 180, 208), ("wc", 688, 2276, 180, 208)],
+}
+CLOISONS = {
+    "rdc": [(864, 20, 864, 208), (1084, 20, 1084, 208), (832, 208, 864, 208), (1084, 208, 1124, 208), (1124, 208, 1124, 224), (976, 268, 976, 448), (976, 268, 1084, 268), (1084, 268, 1084, 484), (1124, 268, 1280, 268), (432, 276, 432, 516), (432, 276, 880, 276), (560, 276, 560, 336), (668, 276, 668, 352), (832, 276, 832, 484), (924, 276, 924, 484), (432, 336, 560, 336), (832, 336, 924, 336), (668, 392, 668, 484), (1124, 448, 1124, 504), (1124, 448, 1280, 448), (432, 484, 596, 484), (676, 484, 832, 484), (832, 484, 880, 484), (1024, 484, 1084, 484), (676, 544, 676, 740), (676, 544, 924, 544), (976, 544, 1024, 544), (1024, 544, 1024, 740), (1060, 544, 1124, 544), (1124, 544, 1124, 740), (432, 552, 432, 740)],
+    "r1": [(336, 1020, 336, 1216), (632, 1020, 632, 1216), (792, 1020, 792, 1216), (1072, 1020, 1072, 1216), (1128, 1180, 1280, 1180), (20, 1216, 184, 1216), (184, 1216, 184, 1312), (244, 1216, 336, 1216), (516, 1216, 632, 1216), (676, 1216, 792, 1216), (944, 1216, 1072, 1216), (1128, 1216, 1128, 1312), (244, 1276, 244, 1312), (244, 1276, 336, 1276), (336, 1276, 336, 1488), (448, 1276, 448, 1488), (448, 1276, 632, 1276), (692, 1276, 868, 1276), (692, 1276, 692, 1356), (868, 1276, 868, 1488), (944, 1276, 944, 1488), (944, 1276, 980, 1276), (1028, 1276, 1072, 1276), (1072, 1276, 1072, 1488), (336, 1296, 360, 1296), (396, 1296, 448, 1296), (1128, 1312, 1280, 1312), (244, 1344, 244, 1416), (28, 1356, 184, 1356), (244, 1380, 336, 1380), (868, 1380, 944, 1380), (184, 1396, 184, 1488), (336, 1396, 448, 1396), (692, 1432, 692, 1488), (244, 1448, 244, 1488), (1112, 1448, 1280, 1448), (1128, 1448, 1128, 1540), (244, 1488, 280, 1488), (336, 1488, 408, 1488), (448, 1488, 632, 1488), (692, 1488, 868, 1488), (868, 1488, 904, 1488), (944, 1488, 980, 1488), (1028, 1488, 1072, 1488), (28, 1496, 184, 1496), (244, 1540, 324, 1540), (324, 1540, 324, 1740), (360, 1540, 484, 1540), (484, 1540, 484, 1740), (516, 1540, 752, 1540), (792, 1540, 792, 1740), (944, 1540, 1072, 1540), (1072, 1540, 1072, 1740)],
+    "r2": [(768, 2020, 768, 2220), (868, 2020, 868, 2220), (1076, 2020, 1076, 2220), (560, 2220, 724, 2220), (796, 2220, 868, 2220), (904, 2220, 1076, 2220), (560, 2276, 628, 2276), (688, 2276, 868, 2276), (688, 2276, 688, 2328), (868, 2276, 868, 2484), (868, 2276, 972, 2276), (1012, 2276, 1012, 2360), (868, 2360, 1028, 2360), (1076, 2360, 1076, 2524), (1136, 2360, 1280, 2360), (688, 2412, 688, 2484), (688, 2484, 868, 2484), (1076, 2588, 1076, 2632), (1076, 2696, 1076, 2740)],
+}
+OUVERTURES = {"rdc": [(596, 740, 676, 740)], "r1": [], "r2": [(768, 2536, 768, 2572), (628, 2484, 688, 2484)]}
+DEHORS = {"rdc": [(560, 740, 148, 48)], "r1": [], "r2": [(560, 2484, 208, 256)]}
+# Mobilier fixe des pièces : rien ne peut y être posé ; plan.js le dessine d'après son type
+MEUBLES = {
+    "garage": [("etagere", 636, 468, 32, 112)],
+    "batiment": [("cuisine", 878, 2364, 186, 30), ("comptoir", 470, 600, 130, 26), ("ligne", 1236, 460, 34, 264), ("etuve", 702, 550, 214, 34),
+                 ("rayonnage_v", 30, 30, 48, 664), ("rayonnage_v", 182, 30, 48, 664), ("rayonnage_v", 236, 30, 48, 664),
+                 ("rayonnage_v", 380, 280, 40, 440)]
+                + [("table_reunion", x + w // 2 - min(110, w - 60) // 2, y + h // 2 - min(70, h - 40) // 2 - 6, min(110, w - 60), min(70, h - 40))
+                   for x, y, w, h in (PIECES[k]["rect"] for k in ("atlas", "orion", "vega", "lyra"))],
+}
+OBSTACLES = {c: [m[1:] for m in liste] for c, liste in MEUBLES.items()}
+# Établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
+ETABLIS = {"garage": [(440, 408, 232, 44)], "batiment": [(520, 1546, 228, 44)]}
 GRILLE = 4
 
+
+def _grille_postes(k):
+    x, y, w, h = PIECES[k]["rect"]
+    x0, y0 = x + 4 - x % 4, y + 4 - y % 4
+    return [(x0 + i * 80, y0 + j * 68) for j in range((h - 28) // 68) for i in range((w - 8) // 80)]
+
+
 # Emplacements prévus du rangement automatique, essayés avant la règle générale : type -> [(x, y), ...]
-# Postes : une grille par pièce (garage, bureau d'études, open space, plateau R&D) ; la déco ne s'y pose pas d'elle-même.
+# Postes : une grille par pièce de travail (pas les bureaux individuels ni la direction) ; la déco ne s'y pose pas d'elle-même.
 EMPLACEMENTS = {
-    "poste": [(444, 456), (548, 456), (444, 524), (548, 524),
-              (48, 496), (128, 496), (48, 560), (128, 560),
-              (476, 236), (556, 236), (476, 300), (556, 300), (476, 364), (556, 364),
-              (216, 68), (296, 68), (376, 68), (216, 132), (296, 132), (376, 132)],
-    # salle de pause : canapé en bas, baby-foot au centre, jeux et boissons contre le mur de droite
-    "canape": [(480, 612)], "babyfoot": [(500, 548)], "cafe": [(478, 532)], "arcade": [(598, 532)],
-    "distrib": [(598, 566)], "fontaine": [(610, 594)], "aquarium": [(588, 624)],
-    # plantes : coins libres des pièces de travail
-    "plantes": [(476, 452), (604, 452), (48, 624), (176, 624), (216, 196), (436, 196), (604, 620)],
-    "ficus": [(596, 448), (476, 448)],
+    "poste": [(444, 456), (548, 456), (444, 524), (548, 524)] + [p for k in TRAVAIL if PIECES[k]["genre"] == "bureau" for p in _grille_postes(k)],
+    # salle de pause du R2 : cuisine contre le mur du haut, canapé en bas, baby-foot au centre, jeux et boissons contre les murs
+    "canape": [(960, 2668)], "babyfoot": [(946, 2518)], "cafe": [(1040, 2400)], "arcade": [(878, 2400)],
+    "distrib": [(878, 2438)], "fontaine": [(878, 2472)], "aquarium": [(880, 2674)],
 }
 
 # Poste de travail : l'emprise inclut la chaise et la place de l'employé devant le meuble
@@ -48,35 +122,28 @@ POSTE = {"nom": "Bureau de travail", "prix": 400, "w": 76, "h": 64, "pieces": TR
 
 # Matériel : bonus de production (6 % par point), debug (détection des défauts), cem (chance aux tests)
 # w, h : taille sur le plan (le rangement automatique choisit l'emplacement)
-_FW = ["garage", "labo", "etudes", "openspace", "plateau"]  # le labo d'abord : outils firmware sur l'établi
+_FW = ["garage", "labo"] + [k for k in TRAVAIL if PIECES[k]["genre"] == "bureau"]  # le labo d'abord : outils firmware sur l'établi
 MATERIEL = {
-    # Labo électronique
+    # Labo électronique (préqualif CEM pour les sondes et l'analyseur)
     "multi":    {"nom": "Multimètre", "dom": "e", "prix": 150, "bonus": 1, "piece": "labo", "w": 28, "h": 36},
     "station":  {"nom": "Station de soudage", "dom": "e", "prix": 300, "bonus": 1, "piece": "labo", "w": 28, "h": 36},
     "alim":     {"nom": "Alimentation de labo", "dom": "e", "prix": 450, "bonus": 1, "piece": "labo", "w": 32, "h": 32},
     "micro":    {"nom": "Microscope de soudure", "dom": "e", "prix": 1800, "bonus": 1, "debug": 1, "piece": "labo", "w": 32, "h": 36},
     "oscillo":  {"nom": "Oscilloscope 4 voies", "dom": "e", "prix": 2800, "bonus": 2, "debug": 1, "piece": "labo", "w": 36, "h": 44},
-    "sonde":    {"nom": "Sondes champ proche", "dom": "e", "prix": 1200, "bonus": 0, "cem": 0.10, "piece": "labo", "w": 28, "h": 30},
+    "sonde":    {"nom": "Sondes champ proche", "dom": "e", "prix": 1200, "bonus": 0, "cem": 0.10, "piece": "labo", "pieces": ["labo", "reception"], "w": 28, "h": 30},
     "four":     {"nom": "Four de refusion", "dom": "e", "prix": 6500, "bonus": 3, "piece": "labo", "w": 74, "h": 56},
-    "spectre":  {"nom": "Analyseur de spectre", "dom": "e", "prix": 14000, "bonus": 2, "cem": 0.10, "piece": "labo", "w": 74, "h": 44},
-    # Atelier méca / 3D
-    "fdm":      {"nom": "Imprimante 3D FDM", "dom": "m", "prix": 650, "bonus": 2, "piece": "atelier", "w": 46, "h": 46},
-    "resine":   {"nom": "Imprimante résine", "dom": "m", "prix": 2400, "bonus": 2, "piece": "atelier", "w": 38, "h": 42},
-    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier", "w": 84, "h": 32},
-    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier", "w": 92, "h": 72},
-    # Firmware (établi du bureau, ou labo)
-    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "etudes", "pieces": _FW, "w": 20, "h": 20},
-    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 34, "h": 20},
-    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 28, "h": 20},
-    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "etudes", "pieces": _FW, "w": 40, "h": 24},
-    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "etudes", "pieces": _FW, "w": 90, "h": 24},
-    # Labo CEM
-    "esd":      {"nom": "Générateur ESD", "dom": "c", "prix": 3500, "bonus": 0, "cem": 0.08, "piece": "cem", "w": 40, "h": 40},
-    "chambre":  {"nom": "Chambre CEM de pré-conformité", "dom": "c", "prix": 22000, "bonus": 0, "cem": 0.25, "piece": "cem", "w": 104, "h": 104},
-    # Ligne de production CMS (hangar voisin)
-    "pickplace": {"nom": "Machine pick-and-place", "dom": "e", "prix": 30000, "bonus": 3, "piece": "cms", "w": 56, "h": 96},
-    "rayonx":   {"nom": "Inspection par rayons X", "dom": "e", "prix": 24000, "bonus": 1, "debug": 3, "piece": "cms", "w": 56, "h": 80},
-    "aoi":      {"nom": "Inspection optique automatique", "dom": "e", "prix": 12000, "bonus": 1, "debug": 1, "cem": 0.05, "piece": "cms", "w": 56, "h": 60},
+    "spectre":  {"nom": "Analyseur de spectre", "dom": "e", "prix": 14000, "bonus": 2, "cem": 0.10, "piece": "labo", "pieces": ["labo", "reception"], "w": 74, "h": 44},
+    # Atelier méca / 3D (l'atelier du RDC est petit : aussi dans le bureau Méca du R1)
+    "fdm":      {"nom": "Imprimante 3D FDM", "dom": "m", "prix": 650, "bonus": 2, "piece": "atelier", "pieces": ["atelier", "meca"], "w": 46, "h": 46},
+    "resine":   {"nom": "Imprimante résine", "dom": "m", "prix": 2400, "bonus": 2, "piece": "atelier", "pieces": ["atelier", "meca"], "w": 38, "h": 42},
+    "cao":      {"nom": "Poste CAO 3D + licence", "dom": "m", "prix": 3500, "bonus": 3, "piece": "atelier", "pieces": ["atelier", "meca"], "w": 84, "h": 32},
+    "cnc":      {"nom": "Fraiseuse CNC", "dom": "m", "prix": 16000, "bonus": 4, "piece": "atelier", "pieces": ["atelier", "meca"], "w": 88, "h": 72},
+    # Firmware (établi du labo, ou bureaux)
+    "stlink":   {"nom": "Programmateur ST-Link", "dom": "f", "prix": 40, "bonus": 1, "piece": "hw", "pieces": _FW, "w": 20, "h": 20},
+    "logique":  {"nom": "Analyseur logique", "dom": "f", "prix": 350, "bonus": 1, "debug": 1, "piece": "hw", "pieces": _FW, "w": 34, "h": 20},
+    "jlink":    {"nom": "Sonde J-Link", "dom": "f", "prix": 950, "bonus": 2, "debug": 1, "piece": "hw", "pieces": _FW, "w": 28, "h": 20},
+    "ci":       {"nom": "Serveur d'intégration continue", "dom": "f", "prix": 2200, "bonus": 2, "debug": 1, "piece": "hw", "pieces": _FW, "w": 40, "h": 24},
+    "banc":     {"nom": "Banc de test automatisé", "dom": "f", "prix": 9000, "bonus": 2, "debug": 2, "piece": "hw", "pieces": _FW, "w": 90, "h": 24},
 }
 for _m in MATERIEL.values():
     _m.setdefault("pieces", [_m["piece"]])
@@ -102,9 +169,9 @@ DECO = {
     "lampe":    {"nom": "Lampadaire", "prix": 150, "moral": 1, "w": 16, "h": 16, "multiple": True},
     "poster":   {"nom": "Affiche de circuit vintage", "prix": 120, "moral": 1, "w": 30, "h": 10, "multiple": True, "libre": True},
     "tapis":    {"nom": "Tapis", "prix": 200, "moral": 1, "w": 60, "h": 40, "multiple": True, "libre": True},
-    "canape":   {"nom": "Canapé", "prix": 900, "moral": 6, "w": 90, "h": 36, "pieces": ["pause", "openspace"]},
-    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "w": 54, "h": 44, "pieces": ["pause", "openspace"]},
-    "arcade":   {"nom": "Borne d'arcade", "prix": 2000, "moral": 6, "w": 30, "h": 30, "pieces": ["pause", "openspace"]},
+    "canape":   {"nom": "Canapé", "prix": 900, "moral": 6, "w": 90, "h": 36, "pieces": ["cantine"]},
+    "babyfoot": {"nom": "Baby-foot", "prix": 1200, "moral": 8, "w": 54, "h": 44, "pieces": ["cantine"]},
+    "arcade":   {"nom": "Borne d'arcade", "prix": 2000, "moral": 6, "w": 30, "h": 30, "pieces": ["cantine"]},
     "sieges":   {"nom": "Sièges ergonomiques", "prix": 1500, "moral": 3, "prod": 8, "global": True, "effet": "+8 % de productivité"},
     "eclairage": {"nom": "Éclairage LED", "prix": 800, "moral": 2, "prod": 4, "global": True, "effet": "+4 % de productivité"},
     "isolation": {"nom": "Isolation phonique", "prix": 3000, "moral": 2, "global": True, "effet": "Supprime le malus de bruit"},
@@ -112,17 +179,27 @@ DECO = {
 for _d in DECO.values():
     _d.setdefault("pieces", INTERIEUR)
 
-# Locaux : prix d'achat, loyer mensuel ajouté, renommée requise
+# Le seul local à louer : l'emménagement dans le bâtiment, qui ouvre tous les étages
 LOCAUX = {
-    "bureau":    {"nom": "Emménager dans le bâtiment", "desc": "Accueil, bureau d'études (4 postes), labo élec, salle de réunion : tout le garage déménage", "prix": 6000, "loyer": 500, "rep": 0},
-    "atelier":   {"nom": "Atelier méca / 3D", "desc": "Débloque impression 3D et usinage", "prix": 8000, "loyer": 400, "rep": 0},
-    "openspace": {"nom": "Open space", "desc": "Place pour 6 bureaux, coin détente possible", "prix": 20000, "loyer": 700, "rep": 3},
-    "pause":     {"nom": "Salle de pause", "desc": "Pauses plus reposantes (fatigue −5 par jour au lieu de −3), moral +5", "prix": 5000, "loyer": 300, "rep": 1},
-    "cem":       {"nom": "Labo CEM", "desc": "Tests CEM gratuits et équipements dédiés", "prix": 15000, "loyer": 600, "rep": 4},
-    "plateau":   {"nom": "Plateau R&D", "desc": "Place pour 6 bureaux, un projet de plus en parallèle", "prix": 45000, "loyer": 1500, "rep": 7},
-    "cms":       {"nom": "Hangar de production CMS", "desc": "Prototypes assemblés en 1 jour, séries +50 %, machines de production", "prix": 80000, "loyer": 2200, "rep": 10},
+    "bureau": {"nom": "Emménager dans le bâtiment", "desc": "Les trois étages s'ouvrent : tout le garage déménage, on grandit ensuite en embauchant", "prix": 8000, "loyer": 900, "rep": 0, "etage": "r1", "piece": "hw"},
 }
 LOYER_BASE = 400
+KICKOFF = 0.05  # part d'une phase faite d'avance grâce à la réunion de lancement (salles de réunion du bâtiment)
+
+# Rôles : responsables de service (bureau individuel), direction R&D et innovation (bureau R&D)
+ROLES = {
+    "resp_e": {"nom": "Responsable Élec", "dom": "e", "min": 8, "salaire": 800, "genre": "res"},
+    "resp_m": {"nom": "Responsable Méca", "dom": "m", "min": 8, "salaire": 800, "genre": "res"},
+    "resp_f": {"nom": "Responsable Firmware", "dom": "f", "min": 8, "salaire": 800, "genre": "res"},
+    "dir_rd": {"nom": "Directeur·rice R&D", "total": 20, "salaire": 1500, "genre": "rd"},
+    "innov":  {"nom": "Chargé·e d'innovation", "total": 12, "salaire": 700, "genre": "rd"},
+}
+SERVICE_SANS_RESP = 4  # au-delà, un service sans responsable perd en efficacité
+BREVET = {"cout": 3000, "mois": 36, "revenu": (400, 900)}
+IDEES_BREVET = ["Antenne imprimée auto-accordée", "Algorithme de recharge rapide", "Connecteur magnétique étanche",
+                "Capteur capacitif sans contact", "Boîtier clipsable sans vis", "Bootloader sécurisé sans fil",
+                "Dissipateur imprimé en 3D", "Filtre CEM intégré au PCB"]
+
 
 TRAITS = {
     "perfectionniste": {"nom": "Perfectionniste", "desc": "Moins de défauts, un peu plus lent", "vitesse": 0.9, "defauts": 0.5},
@@ -167,6 +244,7 @@ MOTIVATIONS = {
 }
 COUT_ENTRETIEN = 300
 SALAIRE_BASE, SALAIRE_POINT = 800, 230  # €/mois : base et prix d'un point de compétence
+HAUSSE_POINT = 115  # €/mois par point gagné en travaillant : la moitié du prix du marché (sinon les salaires dépassent le chiffre d'affaires en fin de partie)
 JOURS_AN = 360
 
 PRENOMS = ["Léa", "Hugo", "Inès", "Sami", "Marc", "Chloé", "Yanis", "Camille", "Lucas", "Nora", "Théo",
@@ -177,6 +255,9 @@ CHEVEUX = ["#2b1d14", "#5a3a22", "#e0703a", "#f2d06b", "#1a1a1a", "#9a9a9a", "#8
 PEAUX = ["#f8d8b8", "#f6cfa6", "#eab994", "#c98e5e", "#a86b45", "#7a4a2e"]
 
 # Profils de recrutement : poids de répartition des compétences
+COMMISSION = 0.06  # part de chaque contrat signé reversée à chaque commercial (leur salaire fixe ×0,6)
+PRIME_COMMERCIAL = 0.02  # offres mieux payées : +2 % par commercial (3 au plus), en plus de la compétence commerciale
+PRIME_CHEF = 0.08  # prime du client : 8 % du contrat suivi par un chef de projet, livré à l'heure et bien noté (× suivi)
 POSTES = [
     {"nom": "Technicien·ne élec", "poids": {"e": 0.7, "m": 0.1, "f": 0.2}},
     {"nom": "Dessinateur·rice 3D", "poids": {"e": 0.05, "m": 0.85, "f": 0.1}},
@@ -186,8 +267,8 @@ POSTES = [
     {"nom": "Dév logiciel", "poids": {"e": 0.05, "m": 0.0, "f": 0.6}, "metier": "logiciel"},
     {"nom": "Ingé industrialisation", "poids": {"e": 0.35, "m": 0.35, "f": 0.05}, "metier": "indus"},
     {"nom": "Technicien·ne qualification", "poids": {"e": 0.5, "m": 0.15, "f": 0.1}, "metier": "qualif"},
-    {"nom": "Ingé commercial·e", "poids": {"e": 0.25, "m": 0.05, "f": 0.1}, "metier": "commercial"},
-    {"nom": "Ingé chef de projet", "poids": {"e": 0.3, "m": 0.15, "f": 0.25}, "metier": "gestion"},
+    {"nom": "Ingé commercial·e", "poids": {"e": 0.25, "m": 0.05, "f": 0.1}, "metier": "commercial", "commercial": True},
+    {"nom": "Ingé chef de projet", "poids": {"e": 0.3, "m": 0.15, "f": 0.25}, "metier": "gestion", "chef": True},
 ]
 
 # Secteurs : chaque client appartient à un secteur ; les clients bien servis reviennent (fidélité)
@@ -297,6 +378,30 @@ CHOIX_TECH = {
         "usine": {"nom": "Usiné", "desc": "Solide et standard"},
         "injection": {"nom": "Moule d'injection", "desc": "Moule 3 000 €, méca +25 %, note +0,5", "m": 1.25, "note": 0.5, "cout": 3000},
     }},
+    # étapes optionnelles et payantes entre le prototype et la série (bureau indus et labo de qualification, au R1)
+    "indus": {"nom": "Industrialisation", "defaut": "aucune", "options": {
+        "aucune": {"nom": "Aucune", "desc": "Moins cher ; sur un gros projet, plus de défauts en série et de retours"},
+        "carte": {"nom": "Carte", "desc": "≈ 4 % du contrat : coût unitaire −15 %, défauts et retours −40 %, séries plus fréquentes et rentables", "cout_point": 3, "indus": 1},
+        "produit": {"nom": "Produit fini", "desc": "≈ 7 % : carte, logiciel et boîtier ; coût unitaire −30 %, défauts et retours −70 %, encore plus de séries", "cout_point": 6, "indus": 2},
+    }},
+    "qualif": {"nom": "Qualification", "defaut": "aucune", "options": {
+        "aucune": {"nom": "Aucune", "desc": "Pas d'essais : interdit aux marchés exigeants (auto, aéro, médical, spatial)"},
+        "carte": {"nom": "Carte", "desc": "≈ 4 %, 4 jours d'essais (température, vibrations) : note +0,3, pannes −40 %", "cout_point": 3, "qualif": 1, "note": 0.3},
+        "produit": {"nom": "Produit fini", "desc": "≈ 6 %, 7 jours : qualification complète, note +0,5, pannes −70 %", "cout_point": 5, "qualif": 2, "note": 0.5},
+    }},
+}
+EXIGEANTS = ("mobilite", "aero", "medical", "spatial")  # secteurs qui exigent une qualification
+# Produits maison : fabriqués par lots chez un sous-traitant, stockés au RDC, puis vendus
+LOTS = {50: (1.0, 15), 200: (0.85, 25), 500: (0.7, 35)}  # unités : coefficient sur le coût unitaire, jours de fabrication
+STOCK_GARAGE, STOCK_BATIMENT = 200, 1000  # unités
+AGRANDIR_STOCK = (5000, 1000)  # prix, unités en plus
+STOCKAGE = 0.3  # € par unité et par mois
+# Investissements de fin de partie : de grosses dépenses qui rapportent (onglet Société)
+INVESTISSEMENTS = {
+    "campagne": {"nom": "Campagne de communication nationale", "desc": "Renommée +2. Une par an, chacune 50 % plus chère que la précédente.", "prix": 100000, "rep": 8},
+    "formation": {"nom": "Centre de formation interne", "desc": "Toute l'équipe progresse 25 % plus vite ; formations à moitié prix.", "prix": 250000, "rep": 8},
+    "filiale": {"nom": "Filiale à Toulouse", "desc": "Une place de projet et deux appels d'offres de plus ; loyer +5 000 € par mois.", "prix": 600000, "rep": 10, "loyer": 5000},
+    "rachat": {"nom": "Racheter un concurrent", "desc": "Le concurrent le plus connu disparaît du marché et vous apporte sa renommée (+3). Deux rachats au plus ; le prix suit sa renommée.", "prix": 200000, "par_rep": 40000, "rep": 10},
 }
 # Négociation : prix et délai proposés au client (multiplicateurs)
 PRIX_PROPOSES = {"1.0": "Prix affiché", "1.1": "+10 %", "1.2": "+20 %", "1.3": "+30 %"}
@@ -382,6 +487,9 @@ PRODUITS = [
     {"id": "sdr", "nom": "Radio logicielle amateur", "rep": (0.55, 0.1, 0.35), "taille": 560, "cout": 20000, "potentiel": 27000, "rep_min": 12, "requis": "fpga"},
     {"id": "robot3", "nom": "Robot éducatif 3", "rep": (0.35, 0.35, 0.3), "taille": 600, "cout": 20000, "potentiel": 28000, "rep_min": 12, "suite": "robot2"},
     {"id": "drone2", "nom": "Autopilote de drone pro", "rep": (0.45, 0.15, 0.4), "taille": 700, "cout": 25000, "potentiel": 34000, "rep_min": 13, "suite": "drone"},
+    # idées du chargé d'innovation : il faut l'avoir nommé
+    {"id": "eolienne", "nom": "Capteur prédictif pour éoliennes", "rep": (0.4, 0.15, 0.45), "taille": 360, "cout": 12000, "potentiel": 18000, "rep_min": 6, "innovation": True},
+    {"id": "patch", "nom": "Patch de santé connecté", "rep": (0.4, 0.3, 0.3), "taille": 420, "cout": 14000, "potentiel": 22000, "rep_min": 8, "innovation": True},
 ]
 
 # Phases d'un projet : part des points de chaque domaine
@@ -421,7 +529,7 @@ TROPHEES = {
     "equipe_10":       {"nom": "Plateau complet", "desc": "Avoir 10 employés"},
     "parallele":       {"nom": "Chef d'orchestre", "desc": "Mener 3 projets en même temps"},
     "trio":            {"nom": "Dream team", "desc": "Activer le combo Équipe complète"},
-    "labo_cem":        {"nom": "Indépendance CEM", "desc": "Ouvrir son propre labo CEM"},
+    "siege":           {"nom": "Siège social", "desc": "Installer votre bureau en direction générale"},
     "trois_produits":  {"nom": "Fabricant", "desc": "Lancer 3 produits maison"},
     "produit_star":    {"nom": "Produit star", "desc": "Un produit maison noté 8,5 ou plus"},
     "vingt_contrats":  {"nom": "Habitué des appels d'offres", "desc": "Livrer 20 contrats"},
@@ -429,8 +537,8 @@ TROPHEES = {
     "renommee_25":     {"nom": "Référence nationale", "desc": "Atteindre 25 de renommée"},
     "cent_mille":      {"nom": "Coussin de sécurité", "desc": "Avoir 100 000 € en trésorerie"},
     "million":         {"nom": "Millionnaire", "desc": "Avoir 1 000 000 € en trésorerie"},
-    "batiment_b":      {"nom": "Deuxième bâtiment", "desc": "Ouvrir le plateau R&D"},
-    "usine":           {"nom": "On fabrique !", "desc": "Ouvrir la ligne de production CMS"},
+    "batiment_b":      {"nom": "Tout l'immeuble", "desc": "Avoir des bureaux occupés aux trois étages"},
+    "usine":           {"nom": "On industrialise !", "desc": "Industrialiser un produit fini"},
     "partenaire":      {"nom": "Partenaire de confiance", "desc": "Un client atteint le niveau Partenaire"},
     "gamme":           {"nom": "Gamme complète", "desc": "Lancer la suite d'un de vos produits"},
     "mega":            {"nom": "Démesure", "desc": "Livrer un méga-projet"},
@@ -454,7 +562,7 @@ MISSIONS = [
     ("m_fidele", "Rendre un client fidèle", "fideles", 1, 5000, 1),
     ("m_certif", "Obtenir une certification", "certifs", 1, 5000, 0),
     ("m_livres15", "Livrer 15 contrats", "livres", 15, 8000, 0),
-    ("m_openspace", "Ouvrir l'open space", "local:openspace", 1, 6000, 0),
+    ("m_openspace", "Industrialiser un projet", "indus", 1, 6000, 0),
     ("m_agri", "Livrer 4 contrats Agriculture", "secteur:agri", 4, 7000, 0),
     ("m_serie", "Décrocher une production en série", "series", 1, 6000, 0),
     ("m_suite", "Lancer la suite d'un produit", "suites", 1, 8000, 0),
@@ -462,14 +570,14 @@ MISSIONS = [
     ("m_equipe8", "Avoir une équipe de 8 personnes", "employes", 8, 10000, 0),
     ("m_energie", "Livrer 4 contrats Énergie", "secteur:energie", 4, 12000, 0),
     ("m_technos4", "Maîtriser 4 technologies", "technos", 4, 15000, 0),
-    ("m_plateau", "Ouvrir le plateau R&D", "local:plateau", 1, 15000, 0),
+    ("m_plateau", "Avoir un chef de projet", "chefs", 1, 15000, 0),
     ("m_note9", "Obtenir une note de 9 ou plus", "note", 9, 12000, 0),
     ("m_fideles3", "Avoir 3 clients fidèles", "fideles", 3, 15000, 0),
     ("m_mobilite", "Livrer 5 contrats Mobilité", "secteur:mobilite", 5, 18000, 0),
     ("m_livres40", "Livrer 40 contrats", "livres", 40, 25000, 1),
     ("m_produits6", "Lancer 6 produits maison", "produits", 6, 20000, 0),
     ("m_medical", "Livrer 3 contrats Médical", "secteur:medical", 3, 25000, 0),
-    ("m_cms", "Ouvrir la ligne de production CMS", "local:cms", 1, 30000, 0),
+    ("m_cms", "Qualifier un produit fini", "qualif", 1, 30000, 0),
     ("m_rep15", "Atteindre 15 de renommée", "renommee", 15, 30000, 0),
     ("m_mega", "Livrer un méga-projet", "megas", 1, 50000, 2),
     ("m_certifs4", "Obtenir 4 certifications", "certifs", 4, 40000, 0),

@@ -43,7 +43,7 @@ class TestPersonnel(unittest.TestCase):
         j = Jeu(graine=4)
         for _ in range(200):
             c = j._candidat()
-            if c["poste"] != "Stagiaire":
+            if c["poste"] != "Stagiaire" and not c["commercial"] and not c.get("role_propose"):  # commerciaux et chefs d'équipe : salaire à part
                 self.assertEqual(c["salaire"], j.prix_marche(c, c["annonce"]))
                 self.assertIn(c["annonce"] - c["seniorite"], (0, 1))
 
@@ -79,8 +79,7 @@ class TestPersonnel(unittest.TestCase):
         j.etat["affinites"]["%d-999" % a["id"]] = -1
         self.assertAlmostEqual(j._affinites([a, b]), 0.95)
         self.assertIn("%d-999" % a["id"], j.etat["affinites_connues"])
-        b["chef"] = True
-        self.assertAlmostEqual(j._affinites([a, b]), 0.975)
+        self.assertAlmostEqual(j._affinites([a, b], {"chef": b["id"]}), 0.975)  # un chef de projet suit le projet
 
     def test_ancienne_sauvegarde(self):
         j = Jeu(graine=8)

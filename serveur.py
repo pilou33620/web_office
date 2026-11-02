@@ -2,6 +2,7 @@
 """Serveur de Circuit Story : sert l'interface web et l'API JSON du moteur.
 
 Usage : python3 serveur.py [--port 8793] [--local] [--sans-navigateur] [--sans-pause] [--sans-maj]
+Mode démo : python3 demo.py (partie jouée toute seule, sauvegardes à part dans sauvegardes/demo).
 
 PAS « /usr/bin/env python3 » en première ligne : sous Windows, py.exe ne
 reconnaît que « /usr/bin/python3 » (voir REGLES-NOUVEAU-WEB-TOOL.md §3.4).
@@ -29,7 +30,8 @@ from moteur import donnees
 
 RACINE = Path(__file__).resolve().parent
 WEB = RACINE / "web"
-DOSSIER = RACINE / "sauvegardes"
+DEMO = os.environ.get("CIRCUIT_STORY_DEMO") == "1"   # lancé par demo.py : le pilote automatique joue, vos sauvegardes ne sont pas touchées
+DOSSIER = RACINE / "sauvegardes" / "demo" if DEMO else RACINE / "sauvegardes"
 EMPLACEMENTS = (1, 2, 3)
 VERROU = threading.Lock()
 JOURS_ENTRE_SAUVEGARDES = 10   # en jeu, on n'écrit pas la carte SD à chaque jour simulé
@@ -73,7 +75,7 @@ def sauver(jeu):
 
 
 def ecrire_json(fichier, data):
-    DOSSIER.mkdir(exist_ok=True)
+    DOSSIER.mkdir(parents=True, exist_ok=True)
     tmp = fichier.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, fichier)  # écriture atomique : pas de fichier corrompu si coupure
@@ -130,6 +132,8 @@ try:
 except (OSError, ValueError, AssertionError):
     EMPLACEMENT = 1
 JEU = lire_partie(EMPLACEMENT) or Jeu()
+if DEMO:  # chaque démo repart d'une société déjà installée, pour voir tout de suite la vie du bureau
+    EMPLACEMENT, JEU = 1, Jeu(scenario="reprise", difficulte="facile", entreprise="Circuit Démo", directeur="Pilote automatique")
 CATALOGUE = {
     "materiel": donnees.MATERIEL, "deco": donnees.DECO, "locaux": donnees.LOCAUX, "traits": donnees.TRAITS,
     "produits": donnees.PRODUITS, "domaines": donnees.NOM_DOMAINE,
@@ -140,6 +144,12 @@ CATALOGUE = {
     "scenarios": donnees.SCENARIOS, "difficultes": donnees.DIFFICULTES, "entretien_certif": donnees.ENTRETIEN_CERTIF,
     "secteurs": donnees.SECTEURS, "nb_missions": len(donnees.MISSIONS),
     "metiers": donnees.METIERS, "seniorites": donnees.SENIORITES, "motivations": donnees.MOTIVATIONS, "cout_entretien": donnees.COUT_ENTRETIEN,
+    "etages": donnees.ETAGES, "coques": donnees.COQUES, "communs": donnees.COMMUNS, "cloisons": donnees.CLOISONS,
+    "ouvertures": donnees.OUVERTURES, "dehors": donnees.DEHORS, "meubles": donnees.MEUBLES,
+    "roles": donnees.ROLES, "kickoff": donnees.KICKOFF, "brevet": donnees.BREVET, "service_sans_resp": donnees.SERVICE_SANS_RESP,
+    "exigeants": donnees.EXIGEANTS, "lots": donnees.LOTS, "agrandir_stock": donnees.AGRANDIR_STOCK, "stockage": donnees.STOCKAGE,
+    "commission": donnees.COMMISSION, "prime_commercial": donnees.PRIME_COMMERCIAL,
+    "investissements": donnees.INVESTISSEMENTS,
 }
 
 
@@ -531,8 +541,8 @@ def main():
         return 1
 
     GARDE.brancher(serveur)             # en mode réseau : HTTPS sur le même port
-    url = f"http://127.0.0.1:{port}/"
-    print("Circuit Story", flush=True)
+    url = f"http://127.0.0.1:{port}/" + ("?demo=1" if DEMO else "")
+    print("Circuit Story" + (" — mode démo : la partie se joue toute seule" if DEMO else ""), flush=True)
     print(f"  adresse : {url}", flush=True)
     if port != args.port:
         print(f"  (le port {args.port} était occupé)", flush=True)

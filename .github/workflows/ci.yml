@@ -9,6 +9,8 @@ jobs:
         with: { python-version: '3.12' }
       - name: Moteur — tests unitaires
         run: python -m unittest -q
+      - name: Trajets — les personnages passent par les portes
+        run: node tests/test_trajets.js
       - name: Serveur — fichiers servis, Host, CSRF, tailles
         run: python tests/banc-serveur.py
       - name: Appairage — code, jeton et cookie partagés

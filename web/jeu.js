@@ -5,7 +5,6 @@ const $ = (s) => document.querySelector(s);
 const DN = { e: 'Élec', m: 'Méca 3D', f: 'Firmware', c: 'CEM' };
 const COURT = { e: 'élec', m: '3D', f: 'fw' };
 const DC = { e: '#ffc94d', m: '#f08a6c', f: '#7cc0f2', c: '#b08af0' };
-const PIECE = { labo: 'Labo élec', atelier: 'Atelier 3D', etudes: "Bureau d'études", cem: 'Labo CEM', cms: 'Ligne CMS' };
 const PCT_BONUS = 6;  // % de production par point de matériel (moteur : _production)
 const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', equipe: 'Équipe', materiel: 'Matériel', locaux: 'Locaux', journal: 'Journal', societe: 'Société' };
 const ABSENCE = { formation: 'En formation', conges: 'En congés', seminaire: 'Séminaire', burnout: 'Burn-out', maladie: 'Malade', naissance: 'Congé naissance' };
@@ -16,8 +15,11 @@ let ETAT = null, CAT = null;
 let onglet = 'accueil', vue = 'bureau', catMat = 'e';
 let joue = false, vitesse = 'normal', minuteur = null, envoi = false, nbTrophees = null;
 // Durée réelle d'une journée de jeu (ms) selon la vitesse choisie
-const VITESSES = { lent: ['Lent', 16000], normal: ['Normal', 8000], rapide: ['Rapide', 3000], tresrapide: ['Très rapide', 1000] };
+const VITESSES = { lent: ['Lent', 24000], normal: ['Normal', 18000], rapide: ['Rapide', 4500], tresrapide: ['Très rapide', 1500], demo: ['Démo', 3000] };
+const DEMO = new URLSearchParams(location.search).has('demo');  // ouvert par demo.py : le pilote automatique joue
+let pilotage = DEMO;
 let amenage = false, selection = null, placement = null;  // mode aménagement, objet choisi, objet en cours de placement
+let etage = 'garage', NB = {};  // étage affiché (le garage avant le déménagement), personnes par étage
 const cache = {};
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -30,21 +32,24 @@ const fiche = (type) => (type === 'poste' ? CAT.poste : CAT.materiel[type] || CA
 const carte = () => (ETAT.locaux.includes('bureau') ? 'batiment' : 'garage');
 // Pièces utilisables maintenant (carte courante, local loué)
 const pieceDispo = (k) => { const pc = CAT.pieces[k]; return pc.carte === carte() && (!pc.local || ETAT.locaux.includes(pc.local)); };
+// Étages du bâtiment : chacun dans sa bande de 1000 px du monde ; le garage est une carte à part
+const ORDRE_ETAGES = ['r2', 'r1', 'rdc'];
+const bande = (y) => Math.floor(y / 1000);
+const etageDe = (y) => (carte() === 'garage' ? 'garage' : ORDRE_ETAGES.find((k) => bande(CAT.etages[k].y0) === bande(y)) || 'rdc');
+const surEtage = (y) => etageDe(y) === etage;
+const pieceDe = (o) => Object.keys(CAT.pieces).find((k) => { const pc = CAT.pieces[k], [x, y, w, h] = pc.rect; return pc.carte === carte() && o.x >= x && o.y >= y && o.x < x + w && o.y < y + h; });
+// Pièce qui regroupe le plus d'appareils d'un domaine (là où l'on travaille, où s'affiche le bonus)
+function pieceMateriel(dom) {
+  const n = {};
+  for (const o of ETAT.objets) { const m = CAT.materiel[o.type]; if (m && m.dom === dom) { const k = pieceDe(o); if (k) n[k] = (n[k] || 0) + 1; } }
+  return Object.keys(n).sort((a, b) => n[b] - n[a])[0] || (carte() === 'garage' ? 'garage' : dom === 'm' ? 'atelier' : 'labo');
+}
 // Emplacements debout (centre du personnage) par lieu, sur chaque carte
 const SPOTS = {
   garage: {
     labo: [[470, 462], [520, 462], [600, 462], [620, 600]],
     reunion: [[136, 717], [184, 717], [160, 695], [160, 742], [220, 712], [250, 726]],
     terrasse: [[280, 262], [304, 280], [330, 262], [240, 290], [350, 290]],
-  },
-  batiment: {
-    labo: [[100, 262], [100, 332], [100, 410], [150, 300], [160, 420], [110, 462]],
-    atelier: [[70, 204], [120, 204], [184, 132], [184, 190]],
-    cem: [[492, 210], [540, 210], [590, 210], [620, 150]],
-    terrasse: [[690, 522], [730, 522], [700, 600], [740, 590], [680, 570], [762, 540]],
-    salle: [[500, 570], [540, 592], [572, 570], [612, 612], [512, 632], [590, 632]],
-    accueil: [[245, 611], [275, 611], [405, 611], [435, 611], [330, 560], [370, 560]],
-    reunion: [[268, 320], [268, 346], [268, 372], [268, 398], [342, 320], [342, 346], [342, 372], [342, 398], [305, 300], [305, 436]],
   },
 };
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
@@ -60,55 +65,78 @@ const PERSOS = {};
 function rendrePersos() {
   const e = ETAT, p = e.projets.length > 0, cont = $('#persos'), vus = new Set(), groupes = {};
   const duree = Math.min(1.2, VITESSES[vitesse][1] / 2000);
-  const salle = e.locaux.includes('pause'), S = SPOTS[carte()];
+  const bat = carte() === 'batiment', salle = bat, S = bat ? spotsBatiment(e) : SPOTS.garage;
   const pos = {};
   const objs = Object.fromEntries(e.objets.map((o) => [o.id, o]));
-  // devant chaque appareil du labo, de l'atelier et du labo CEM
-  const spots = { labo: [], atelier: [], cem: [] };
+  // devant chaque appareil, dans la pièce où l'on travaille l'élec ou la 3D
+  const spots = { labo: [], atelier: [] };
   for (const o of e.objets) {
-    const m = CAT.materiel[o.type];
-    if (!m) continue;
-    const k = Object.keys(spots).find((cle) => { const [x, y, w, hh] = CAT.pieces[cle].rect; return o.x >= x && o.y >= y && o.x < x + w && o.y < y + hh; });
-    if (k) { const [x, , w] = CAT.pieces[k].rect; spots[k].push([Math.min(o.x + m.w + 12, x + w - 14), o.y + m.h / 2]); }
+    const m = CAT.materiel[o.type], k = m && pieceDe(o);
+    const lieu = k && bat && (k === pieceMateriel('e') ? 'labo' : k === pieceMateriel('m') ? 'atelier' : null);
+    if (lieu) { const [x, , w] = CAT.pieces[k].rect; spots[lieu].push([Math.min(o.x + m.w + 12, x + w - 14), o.y + m.h / 2]); }
   }
   const baby = salle && e.objets.find((o) => o.type === 'babyfoot');
   if (baby) { const f = fiche('babyfoot'); spots.babyfoot = [[baby.x - 10, baby.y + f.h / 2], [baby.x + f.w + 10, baby.y + f.h / 2]]; }
   const SP = (lieu) => (spots[lieu] && spots[lieu].length ? spots[lieu].concat(S[lieu] || []) : S[lieu]);
   const placer = (emp) => {
+    const v = vieBureau(emp, objs);
+    if (v) return v;
     const mauvais = ['pluie', 'neige', 'orage'].includes(e.meteo);
     let lieu = emp.lieu;
-    if (lieu === 'pause') lieu = salle ? 'salle' : carte() === 'batiment' ? 'accueil' : mauvais ? 'bureau' : 'terrasse';
-    if (lieu === 'fete') lieu = salle ? 'salle' : 'reunion';  // on fête à la salle de pause, sinon autour de la table
+    if (lieu === 'pause') lieu = salle ? 'salle' : mauvais ? (bat ? 'accueil' : 'bureau') : 'terrasse';
+    if (lieu === 'fete') lieu = salle ? 'salle' : 'reunion';  // on fête à la cantine, sinon en salle de réunion
     if (lieu === 'salle' && spots.babyfoot && (groupes.babyfoot || 0) < 2) lieu = 'babyfoot';
     if (lieu !== 'babyfoot' && !(S[lieu] || spots[lieu])) lieu = 'bureau';
     let x, y;
+    const esc_ = lieu === 'bureau' && ESCAPADES[emp.id];
+    if (esc_) return { lieu: 'escapade', x: esc_.x, y: esc_.y, texte: esc_.texte };
     if (lieu === 'bureau') { const o = objs[emp.bureau] || { x: 452, y: 468 }; x = o.x + 38; y = o.y + 46; }
     else { const liste = SP(lieu), g = groupes[lieu] = (groupes[lieu] || 0) + 1; [x, y] = liste[(g - 1) % liste.length]; }
     return { lieu, x, y };
   };
   const presents = e.employes.filter((x) => !x.absent);
   for (const emp of presents) if (emp.lieu !== 'visite') pos[emp.id] = placer(emp);
+  const maintenant = Date.now();
+  FANTOMES = FANTOMES.filter((f) => maintenant < f.debut + (f.duree || 4500));
+  for (const k in ARRIVEES) if (ARRIVEES[k].fin < maintenant) delete ARRIVEES[k];
+  if (VISITE && VISITE.fin < maintenant) VISITE = null;
+  if (REACTION && REACTION.fin < maintenant) REACTION = null;
   for (const emp of presents) {
     if (emp.lieu !== 'visite') continue;
     const cible = pos[emp.visite];
     // à côté du collègue qu'il vient voir, sinon à son propre bureau
     pos[emp.id] = cible ? { lieu: 'visite', x: cible.x + 22, y: cible.y + 4 } : placer({ ...emp, lieu: 'bureau' });
   }
-  for (const emp of presents) {
-    const { lieu, x: cx, y: cy } = pos[emp.id];
+  NB = {};
+  // les fantômes : celui qui part avec son carton, le burn-out affalé à son bureau, le client en visite
+  const fantomes = FANTOMES.filter((f) => maintenant >= f.debut).map((f) => {
+    const t = maintenant - f.debut, sortie = ENTREES[carte() === 'batiment' ? etageDe(f.y) : 'garage'];
+    const loin = !f.reste && t > (f.affale ? 2600 : 1200);
+    return { emp: { ...f.emp, id: 'f' + f.emp.id }, lieu: 'vie', x: loin ? sortie[0] : f.x, y: loin ? sortie[1] : f.y, texte: f.texte, carton: f.carton, affale: f.affale && !loin };
+  });
+  for (const f of fantomes) pos[f.emp.id] = f;
+  for (const emp of [...presents, ...fantomes.map((f) => f.emp)]) {
+    if (!pos[emp.id] || pos[emp.id].cache) continue;
+    const { lieu, x: cx, y: cy, texte } = pos[emp.id];
+    NB[etageDe(cy)] = (NB[etageDe(cy)] || 0) + 1;
+    if (!surEtage(cy)) continue;  // à un autre étage : retiré du plan affiché
     const [X, Y] = PLAN.iso(cx, cy, 0), x = Math.round(X - 18), y = Math.round(Y - 50);  // pieds de la figure au point du sol
     let t = '', c = '';
-    if (vue === 'moral') { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
+    const choc = REACTION && REACTION.ids.includes(emp.id);
+    if (vue === 'moral' && emp.moral !== undefined) { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
     else if (joue && e.fete && emp.lieu === 'fete') { t = e.fete.type === 'anniv' ? (emp.nom === e.fete.nom ? 'Merci !' : 'Joyeux anniversaire !') : 'Santé !'; c = '#ffc94d'; }
+    else if (choc) { t = ['Oh non !', 'Encore la CEM…', 'On reprend le routage'][emp.id % 3]; c = '#ffb3a8'; }
     else if (joue && lieu === 'reunion') { t = 'Réunion'; c = '#fff7e6'; }
     else if (joue && lieu === 'visite') { t = DEMANDES[(emp.id + e.jours_total) % DEMANDES.length]; c = '#fff7e6'; }
+    else if (joue && texte) { t = texte; c = '#fff7e6'; }
+    else if (joue && (lieu === 'escapade' || lieu === 'vie')) t = '';
     else if (joue && lieu === 'babyfoot') { t = (emp.id + e.jours_total) % 2 ? 'But !' : 'Allez !'; c = '#7be08a'; }
-    else if (joue && p && 'emf'.includes(emp.tache || '_')) { t = `+${dec(emp.gain)} ${COURT[emp.tache]}`; c = DC[emp.tache]; }
-    else if (joue && p && emp.tache === 'debug') { t = `−${dec(emp.gain)} bug`; c = '#ffb3a8'; }
-    else if (joue && p && emp.tache === 'cem') { t = 'CEM…'; c = DC.c; }
+    else if (joue && p && 'emf'.includes(emp.tache || '_')) { t = emp.gain >= 0.05 ? `+${dec(emp.gain)} ${COURT[emp.tache]}` : `${COURT[emp.tache]}…`; c = DC[emp.tache]; }
+    else if (joue && p && emp.tache === 'debug') { t = emp.gain >= 0.05 ? `−${dec(emp.gain)} bug` : 'Debug…'; c = '#ffb3a8'; }
+    else if (joue && p && emp.tache === 'cem') { t = 'Attente CEM'; c = DC.c; }
     else if (joue && ['salle', 'terrasse', 'accueil'].includes(lieu)) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
     else if (joue && !p) { t = 'zzz'; c = '#e8e8e8'; }
-    const html = corps(emp, lieu === 'bureau') + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
+    const html = corps(emp, lieu === 'bureau') + (pos[emp.id].carton || (ARRIVEES[emp.id] && maintenant < ARRIVEES[emp.id].fin) ? CARTON : '') + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' || lieu === 'escapade' || lieu === 'vie' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
     let el = PERSOS[emp.id];
     if (!el) {
       el = PERSOS[emp.id] = document.createElement('div');
@@ -118,14 +146,23 @@ function rendrePersos() {
       cont.appendChild(el);
     }
     if (el._html !== html) { el.innerHTML = html; el._html = html; }
-    el.style.transitionDuration = duree + 's';
     if (el._x !== x || el._y !== y) {
+      // il marche depuis là où il en est, en contournant les murs par les portes ; arrivé par l'escalier : pas de marche
+      const cs = getComputedStyle(el), depart = PLAN.versMonde(parseFloat(cs.left) + 18, parseFloat(cs.top) + 50);
+      if (el._anim) el._anim.cancel();
       el._x = x; el._y = y;
       el.style.left = x + 'px'; el.style.top = y + 'px';
-      el.classList.add('marche');
-      clearTimeout(el._t);
-      el._t = setTimeout(() => el.classList.remove('marche'), duree * 1000);
+      const pts = [depart, ...PLAN.trajet(e, CAT, depart[0], depart[1], cx, cy)], long = [0];
+      for (let k = 1; k < pts.length; k++) long.push(long[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
+      const L = long[long.length - 1], dt = Math.min(4 * duree, Math.max(duree, L / 200));
+      if (el._etage === etage && L > 0 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        el._anim = el.animate(pts.map(([a, b], k) => { const [X, Y] = PLAN.iso(a, b, 0); return { left: X - 18 + 'px', top: Y - 50 + 'px', offset: long[k] / L }; }), { duration: dt * 1000 });
+        el.classList.add('marche');
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove('marche'), dt * 1000);
+      }
     }
+    el._etage = etage;
     const assis = lieu === 'bureau', d = Math.round(cx + cy);
     el.style.zIndex = 2 * d;  // les plus proches devant
     // par-dessus le personnage : copie, découpée à sa taille, de ce qui est devant lui (armoire, plante, bureau de la rangée suivante…)
@@ -143,33 +180,384 @@ function rendrePersos() {
     const travaille = joue && (lieu === 'babyfoot' || (p && (assis || lieu === 'labo' || lieu === 'atelier' || lieu === 'cem' || lieu === 'visite') && emp.tache));
     el.classList.toggle('bob', !!travaille && emp.id % 2 === 0);
     el.classList.toggle('bob2', !!travaille && emp.id % 2 === 1);
+    el.classList.toggle('secoue', !!choc);
+    el.classList.toggle('affale', !!pos[emp.id].affale);
     vus.add(String(emp.id));
   }
+  effetsMateriel(pos);
   for (const id of Object.keys(PERSOS)) if (!vus.has(id)) { PERSOS[id].remove(); if (PERSOS[id]._m) PERSOS[id]._m.remove(); delete PERSOS[id]; }
 }
 
-// Pièce à louer -> pièce du plan où afficher le verrou
-const VERROUS = { atelier: 'atelier', plateau: 'plateau', cem: 'cem', openspace: 'openspace', pause: 'pause', cms: 'cms' };
-// Pastilles de la vue Productivité : [domaine, carte, x, y] (coordonnées du sol)
-const PUCES = [['f', 'garage', 560, 376], ['e', 'garage', 446, 376], ['e', 'batiment', 90, 242], ['f', 'batiment', 54, 502], ['m', 'batiment', 54, 74], ['c', 'batiment', 482, 74]];
+const CARTON = '<svg class="carton" viewBox="0 0 16 12" width="16" height="12" aria-hidden="true"><path d="M1 4 L8 1 L15 4 L15 10 L8 11.5 L1 10Z" fill="#c48a52" stroke="#2b1d14" stroke-width="1"/><path d="M1 4 L8 6 L15 4 M8 6 V11.5" fill="none" stroke="#2b1d14" stroke-width=".9"/></svg>';
+
+// Gestes de métier : soudure, oscillo, impression 3D, fraisage, four, code qui défile sur les écrans ; fumée après un échec CEM ; confettis au pot
+const EFFETS = new Map();
+const TYPE_EFFET = { station: 'etincelles', micro: 'etincelles', oscillo: 'onde', spectre: 'onde', logique: 'onde', fdm: 'tete', resine: 'tete', cnc: 'copeaux', four: 'four' };
+const DESSIN_EFFET = {
+  etincelles: '<i></i><i></i><i></i><i></i>', copeaux: '<i></i><i></i><i></i>', tete: '<i></i>', four: '', code: '',
+  onde: '<svg viewBox="0 0 16 8" width="16" height="8"><path d="M0 4 H3 L4 1 L6 7 L8 2 L10 6 L11 4 H16" fill="none" stroke="#7be08a" stroke-width="1.4"/></svg>',
+  fumee: '<i></i><i></i><i></i>', confettis: '<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>',
+};
+function effetsMateriel(pos) {
+  const e = ETAT, voulus = new Map(), actif = joue && e.projets.length > 0;
+  const labo = Object.values(pos).some((p) => p.lieu === 'labo' || p.lieu === 'cem'), atelier = Object.values(pos).some((p) => p.lieu === 'atelier');
+  const etablis = CAT.etablis[carte()], objs = Object.fromEntries(e.objets.map((o) => [o.id, o]));
+  if (actif) {
+    for (const o of e.objets) {
+      const t = TYPE_EFFET[o.type];
+      if (!t || !surEtage(o.y) || !(CAT.materiel[o.type].dom === 'm' ? atelier : labo)) continue;
+      voulus.set('o' + o.id, [t, ...PLAN.pointEffet(o, fiche(o.type), etablis)]);
+    }
+    for (const emp of e.employes) {
+      const p = pos[emp.id], o = objs[emp.bureau];
+      if (p && p.lieu === 'bureau' && emp.tache && o && surEtage(o.y)) voulus.set('p' + o.id, ['code', ...PLAN.pointEffet(o, CAT.poste, etablis)]);
+    }
+  }
+  const laboIci = carte() === 'garage' || CAT.pieces[pieceMateriel('e')].etage === etage;
+  if (REACTION && REACTION.fumee && laboIci) {
+    const [x, y, w, h] = CAT.pieces[pieceMateriel('e')].rect;
+    voulus.set('fumee', ['fumee', ...PLAN.iso(x + w / 2, y + h / 2, 40)]);
+  }
+  const fete = e.employes.filter((x) => x.lieu === 'fete' && pos[x.id] && !pos[x.id].cache && surEtage(pos[x.id].y)).map((x) => pos[x.id]);
+  if (joue && e.fete && fete.length) {
+    const cx = fete.reduce((t, p) => t + p.x, 0) / fete.length, cy = fete.reduce((t, p) => t + p.y, 0) / fete.length;
+    voulus.set('confettis', ['confettis', ...PLAN.iso(cx, cy, 70)]);
+  }
+  for (const [k, el] of EFFETS) if (!voulus.has(k) || el._type !== voulus.get(k)[0]) { el.remove(); EFFETS.delete(k); }
+  for (const [k, [t, X, Y]] of voulus) {
+    let el = EFFETS.get(k);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'fx ' + t;
+      el._type = t;
+      el.innerHTML = DESSIN_EFFET[t];
+      $('#effets').appendChild(el);
+      EFFETS.set(k, el);
+    }
+    el.style.left = Math.round(X) + 'px';
+    el.style.top = Math.round(Y) + 'px';
+  }
+}
+
+// Petites escapades pendant que le temps tourne : un café, une question à un collègue, un passage au labo… puis retour au bureau
+const ESCAPADES = {};
+const PROPOS = { cafe: ['Un café ?', 'Pause café', 'Je reviens'], labo: ['Une mesure', 'Petit essai', 'Je soude ça', 'Au labo !'], reunion: ['Point rapide', 'On cale ça ?'] };
+function escapades() {
+  if (!ETAT || !joue || amenage || document.hidden || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (vieDeBureau() && momentJour(fractionJour()).act !== 'travail') return;
+  const e = ETAT, maintenant = Date.now(), objs = Object.fromEntries(e.objets.map((o) => [o.id, o]));
+  let change = false;
+  for (const id in ESCAPADES) if (ESCAPADES[id].fin < maintenant) { delete ESCAPADES[id]; change = true; }
+  const assis = e.employes.filter((x) => !x.absent && x.lieu === 'bureau' && objs[x.bureau] && surEtage(objs[x.bureau].y));
+  const libres = assis.filter((x) => !ESCAPADES[x.id] && !PLANNING.ids[x.id]);
+  if (libres.length && Object.keys(ESCAPADES).length < Math.max(1, assis.length / 3) && Math.random() < 0.75) {
+    const emp = libres[Math.floor(Math.random() * libres.length)], bureau = objs[emp.bureau];
+    const S = carte() === 'batiment' ? spotsBatiment(e) : SPOTS.garage;
+    const cibles = [['labo', S.labo], ['labo', S.atelier], ['cafe', S.salle], ['cafe', S.accueil], ['cafe', S.terrasse], ['reunion', S.reunion]]
+      .flatMap(([genre, l]) => (l || []).filter(([, y]) => etageDe(y) === etageDe(bureau.y)).map(([x, y]) => [genre, x, y]))
+      .concat(assis.filter((x) => x !== emp).map((x) => ['visite', objs[x.bureau].x + 60, objs[x.bureau].y + 46]));
+    if (cibles.length) {
+      const [genre, x, y] = cibles[Math.floor(Math.random() * cibles.length)], l = genre === 'visite' ? DEMANDES : PROPOS[genre];
+      ESCAPADES[emp.id] = { x, y, texte: l[Math.floor(Math.random() * l.length)], fin: maintenant + 3000 + Math.random() * 3000 };
+      change = true;
+    }
+  }
+  if (change) rendrePersos();
+}
+setInterval(escapades, 1500);
+
+// ---------------------------------------------------------------- une journée de bureau : réunion du matin d'un service, cafés en groupe, déjeuner
+// Chaque jour de jeu est une journée (8 h 30 → 18 h) ; seulement aux vitesses Lent et Normal, sinon tout irait trop vite pour être vu.
+let debutJour = performance.now(), figee = 0;  // début du jour en cours ; avancée de la journée quand le temps est arrêté
+const journee = () => {  // [début (part du jour), moment, heure affichée] ; la fin de journée suit les horaires de travail
+  const fin = Math.max(16.6, 10 + (ETAT ? ETAT.heures : 8));
+  return [[0, 'arrivee', 8.5], [0.08, 'reunion', 9], [0.24, 'travail', 9.75], [0.34, 'cafe', 10.5], [0.46, 'travail', 10.9],
+    [0.52, 'dejeuner', 12], [0.75, 'travail', 13.6], [0.83, 'cafe', 15.75], [0.89, 'travail', 16.1], [0.92, 'depart', fin - 0.5], [1, 'fin', fin]];
+};
+const ESCALIERS = { rdc: [628, 402], r1: [659, 1380], r2: [656, 2381] };  // palier devant l'escalier de chaque étage
+const ENTREES = { garage: [555, 700], rdc: [633, 768], r1: ESCALIERS.r1, r2: ESCALIERS.r2 };  // par où l'on arrive et l'on repart
+const COULOIRS = { garage: [[455, 600], [660, 600]], rdc: [[700, 514], [1100, 514]], r1: [[360, 1246], [1240, 1246]], r2: [[660, 2248], [1080, 2248]] };
+const SALLES = { rdc: 'atlas', r1: 'orion', r2: 'vega' };
+const MOTS = {
+  reunion: { e: ['Point HW', 'Les schémas ?', 'Et le routage ?'], m: ['Revue méca', 'Les plans 3D ?', 'Le boîtier ?'], f: ['Daily soft', 'Le sprint ?', 'Ça compile ?'] },
+  cafe: ['Un café ?', 'Bla bla', 'Ha ha !', 'Et ton week-end ?', "T'as vu le match ?", 'Trop drôle'],
+  dejeuner: ['Bon appétit !', 'Miam', "C'est quoi le menu ?", 'Une pizza ?', 'On mange où ?'],
+};
+let PLANNING = { cle: null, ids: {} };
+const vieDeBureau = () => vitesse === 'lent' || vitesse === 'normal';
+const fractionJour = () => (joue ? Math.min(0.999, (performance.now() - debutJour) / VITESSES[vitesse][1]) : figee);
+function momentJour(f) {
+  const J = journee(), i = J.findIndex((_, k) => f < J[k + 1][0]), [a, act, h] = J[i], [b, , h2] = J[i + 1];
+  return { i, act, debut: a, fin: b, avance: (f - a) / (b - a), heure: h + (h2 - h) * (f - a) / (b - a) };
+}
+const texteHeure = () => { if (!vieDeBureau()) return ''; const h = momentJour(fractionJour()).heure; return ` · ${Math.floor(h)} h ${String(Math.floor((h % 1) * 12) * 5).padStart(2, '0')}`; };
+
+function planifier(m) {
+  const e = ETAT, cle = `${e.jours_total}|${m.i}|${vitesse}|${etage}`;
+  if (PLANNING.cle === cle) return false;
+  PLANNING = { cle, ids: {} };
+  if (!vieDeBureau()) return true;
+  let g = e.jours_total * 97 + m.i * 13 + 7;
+  const hasard = () => { g = (g * 1103515245 + 12345) % 2147483648; return g / 2147483648; };  // le même programme à chaque affichage
+  const pioche = (l) => l[Math.floor(hasard() * l.length)];
+  const objs = Object.fromEntries(e.objets.map((o) => [o.id, o])), bat = carte() === 'batiment', S = bat ? spotsBatiment(e) : SPOTS.garage;
+  // au déjeuner, tout le monde peut partir (même une réunion de phase s'arrête pour manger) ; sinon, ceux qui ne sont pas déjà en réunion
+  const dispo = e.employes.filter((x) => !x.absent && objs[x.bureau] && x.lieu !== 'cem' && (m.act === 'dejeuner' || x.lieu !== 'reunion'));
+  const etg = (x) => (bat ? etageDe(objs[x.bureau].y) : 'garage');
+  if (m.act === 'arrivee' || m.act === 'depart') {  // chacun à son heure ; avec les heures sup, certains restent tard
+    const reste = Math.min(0.85, Math.max(0, (e.heures - 8) / 4)) + (e.jours_total % 7 === 4 ? 0.25 : 0);
+    for (const x of e.employes.filter((x) => !x.absent && objs[x.bureau])) {
+      const [px, py] = ENTREES[etg(x)];
+      PLANNING.ids[x.id] = { seuil: hasard() * 0.6, x: px + (x.id % 4) * 8, y: py, reste: m.act === 'depart' && hasard() < reste, sens: m.act };
+    }
+    if (m.act === 'depart' && e.jours_total % 7 === 4) lancerCourse(e, objs, etg);  // le vendredi soir…
+    return true;
+  }
+  if (!(m.act in MOTS)) return true;
+  const aller = (membres, spots, mots, part = 1) => membres.forEach((x, k) => {
+    const [px, py] = spots[k % spots.length];
+    PLANNING.ids[x.id] = { x: px + (k >= spots.length ? 12 : 0), y: py, texte: hasard() < part ? pioche(mots) : null, ailleurs: bat && etageDe(py) !== etg(x) };
+  });
+  if (m.act === 'reunion') {  // un service par jour, à tour de rôle, dans la salle de réunion de son étage
+    const services = ['e', 'f', 'm'].map((d, k) => ['e', 'f', 'm'][(e.jours_total + k) % 3]);
+    const d = services.find((d) => dispo.filter((x) => x.service === d).length >= 2);
+    if (!d) return true;
+    const membres = dispo.filter((x) => x.service === d), compte = {};
+    for (const x of membres) compte[etg(x)] = (compte[etg(x)] || 0) + 1;
+    const et = Object.keys(compte).sort((a, b) => compte[b] - compte[a])[0];  // l'étage où la plupart du service travaille
+    aller(membres, bat ? S.piece(SALLES[et]) : S.reunion, MOTS.reunion[d], 0.6);
+    const chef = membres.find((x) => x.role === 'resp_' + d) || membres[0];
+    PLANNING.ids[chef.id].texte = 'Point du matin';
+  } else if (m.act === 'cafe') {  // de petits groupes de collègues du même étage
+    const etages = {};
+    for (const x of dispo) if (hasard() < 0.6) (etages[etg(x)] = etages[etg(x)] || []).push(x);
+    for (const [et, l] of Object.entries(etages)) {
+      if (l.length < 2) continue;
+      const tasse = e.objets.find((o) => o.type === 'cafe' && (!bat || etageDe(o.y) === et));
+      const spots = tasse ? [[tasse.x - 14, tasse.y + 40], [tasse.x + 30, tasse.y + 46], [tasse.x + 8, tasse.y + 62], [tasse.x + 44, tasse.y + 20]]
+        : !bat ? S.terrasse : et === 'r1' ? S.piece('cafet1') : et === 'r2' ? S.salle : S.accueil;
+      aller(l, spots, MOTS.cafe, 0.5);
+    }
+  } else {  // déjeuner : presque tout le monde part manger, quelques-uns restent avec un sandwich
+    const partent = dispo.filter(() => hasard() < 0.85);
+    aller(partent, bat ? S.salle : S.terrasse, MOTS.dejeuner, 0.5);
+    dispo.filter((x) => !partent.includes(x)).forEach((x) => { PLANNING.ids[x.id] = { reste: true, texte: hasard() < 0.5 ? 'Sandwich au bureau' : null }; });
+  }
+  return true;
+}
+
+// Position d'un employé selon le programme de la journée (null : rien de prévu, il suit sa journée de travail)
+function vieBureau(emp, objs) {
+  if (COURSE && COURSE.ids.includes(emp.id) && Date.now() < COURSE.fin) return { cache: true };
+  const arr = ARRIVEES[emp.id];
+  if (arr && Date.now() < arr.debut + 1800) { const [x, y] = ENTREES[etageDe(objs[emp.bureau].y)] || ENTREES.garage; return { lieu: 'vie', x, y, texte: 'Bonjour à tous !' }; }
+  const vis = VISITE && VISITE.emp === emp.id && Date.now() < VISITE.fin;
+  if (vis) return { lieu: 'vie', x: VISITE.x + 30, y: VISITE.y, texte: 'Bienvenue !' };
+  const pl = PLANNING.ids[emp.id];
+  if (!pl || emp.absent) return null;
+  if (pl.sens) {  // arrivée du matin ou départ du soir
+    const m = momentJour(fractionJour());
+    if (pl.sens === 'arrivee') return m.avance < pl.seuil ? { cache: true } : m.avance < pl.seuil + 0.25 ? { lieu: 'vie', x: pl.x, y: pl.y, texte: null } : null;
+    if (pl.reste || m.avance < pl.seuil) return null;
+    return m.avance < pl.seuil + 0.3 ? { lieu: 'vie', x: pl.x, y: pl.y, texte: null } : { cache: true };
+  }
+  if (pl.reste) { const o = objs[emp.bureau]; return emp.lieu === 'bureau' ? { lieu: 'bureau', x: o.x + 38, y: o.y + 46, texte: pl.texte } : null; }
+  const m = momentJour(fractionJour());
+  if (pl.ailleurs && (m.avance < 0.22 || m.avance > 0.88)) {  // il passe par l'escalier de son étage avant de changer d'étage
+    const [x, y] = ESCALIERS[etageDe(objs[emp.bureau].y)];
+    return { lieu: 'vie', x: x + (emp.id % 3) * 10, y, texte: null };
+  }
+  return { lieu: 'vie', x: pl.x, y: pl.y, texte: pl.texte };
+}
+
+// Lumière selon l'heure : matin doux, soir orangé avec les lampes, nuit bleutée (sans horloge : selon les horaires)
+function eclairage() {
+  if (!vieDeBureau()) return ETAT.heures >= 12 ? 'nuit' : ETAT.heures >= 10 ? 'soir' : '';
+  const h = momentJour(fractionJour()).heure;
+  return h < 9 ? 'matin' : h >= 20.5 ? 'nuit' : h >= 18.5 ? 'soir' : '';
+}
+
+let FANTOMES = [], ARRIVEES = {}, VISITE = null, REACTION = null, COURSE = null;
+const nouveauxTextes = (a, n) => { const k = n.journal.findIndex((x) => a.journal[0] && x.date === a.journal[0].date && x.texte === a.journal[0].texte); return n.journal.slice(0, k < 0 ? 4 : k).map((x) => x.texte); };
+function observer(a, n) {
+  if (!a || !n || a === n) return;
+  const maintenant = Date.now(), objs = Object.fromEntries(n.objets.map((o) => [o.id, o])), textes = nouveauxTextes(a, n);
+  if (n.argent - a.argent >= 100) gain(n.argent - a.argent);
+  const ids = new Set(n.employes.map((x) => x.id));
+  for (const x of a.employes) {
+    if (ids.has(x.id)) continue;  // il est parti (démission, licenciement, débauchage, fin de stage) : avec son carton
+    const o = a.objets.find((y) => y.id === x.bureau);
+    if (o) FANTOMES.push({ emp: x, x: o.x + 38, y: o.y + 46, debut: maintenant, carton: true, texte: 'Au revoir…' });
+  }
+  const anciens = new Set(a.employes.map((x) => x.id));
+  for (const x of n.employes) if (!anciens.has(x.id)) ARRIVEES[x.id] = { debut: maintenant, fin: maintenant + 7000 };
+  for (const t of textes) {
+    if (t.startsWith('Burn-out : ')) {
+      const x = n.employes.find((y) => t.startsWith(`Burn-out : ${y.nom} `)), o = x && objs[x.bureau];
+      if (o) FANTOMES.push({ emp: x, x: o.x + 38, y: o.y + 46, debut: maintenant, affale: true, texte: "Je n'en peux plus…" });
+    }
+    const cem = t.match(/^Échec aux tests CEM pour « (.+) »/);
+    if (cem) { const p = n.projets.find((y) => y.nom === cem[1]); REACTION = { ids: p ? p.equipe : [], fin: maintenant + 5000, fumee: true }; }
+    if (t.includes('reçu au stock')) passage('camion');
+    if (/phase « Firmware et bring-up »/.test(t) && a.projets.some((p) => p.phases[p.phase] && p.phases[p.phase].attente && !p.phases[p.phase].essais)) passage('coursier');
+    if (t.startsWith('Contrat signé avec ')) visite(n, objs);
+  }
+}
+function passage(genre) {
+  const html = PLAN.passage(ETAT, genre);
+  if (!html || document.hidden) return;
+  $('#rue').insertAdjacentHTML('beforeend', html);
+  const el = $('#rue').lastElementChild;
+  setTimeout(() => el.remove(), 15000);
+}
+function visite(n, objs) {  // le client arrive par la rue, puis s'installe en salle de réunion avec le commercial (ou un chef, ou vous)
+  passage('client');
+  const hote = n.employes.find((x) => x.commercial && !x.absent) || n.employes.find((x) => x.chef && !x.absent) || n.employes[0];
+  const bat = carte() === 'batiment', o = objs[hote.bureau];
+  const [x, y] = bat ? (spotsBatiment(n).piece(SALLES[etageDe(o.y)])[0]) : [520, 690];
+  VISITE = { emp: hote.id, x, y, fin: Date.now() + 9000 };
+  FANTOMES.push({ emp: { id: 9000 + n.jours_total, couleur: '#3a4a6a', cheveux: '#3a2a1a', peau: PLAN.PEAUX[3] }, x, y, debut: Date.now() + 2500, duree: 6500, reste: true, texte: 'Enchanté !' });
+}
+function gain(montant) {
+  const ref = $('#argent').getBoundingClientRect(), el = document.createElement('div');
+  el.className = 'gain';
+  el.textContent = '+' + eur(montant);
+  el.style.left = Math.round(ref.left + ref.width / 2) + 'px';
+  el.style.top = Math.round(ref.bottom) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1800);
+}
+// Course de fauteuils dans le couloir, le vendredi soir, entre ceux qui restent tard
+function lancerCourse(e, objs, etg) {
+  const ici = e.employes.filter((x) => !x.absent && objs[x.bureau] && etg(x) === (carte() === 'batiment' ? etage : 'garage'));
+  if (ici.length < 2 || COURSE) return;
+  const pilotes = ici.slice().sort((a, b) => (a.id * 7 + e.jours_total) % 5 - (b.id * 7 + e.jours_total) % 5).slice(0, 3);
+  COURSE = { ids: pilotes.map((x) => x.id), fin: Date.now() + 8000 };
+  const [[x1, y1], [x2, y2]] = COULOIRS[carte() === 'batiment' ? etage : 'garage'], [X1, Y1] = PLAN.iso(x1, y1, 0), [X2, Y2] = PLAN.iso(x2, y2, 0);
+  $('#effets').insertAdjacentHTML('beforeend', pilotes.map((x, k) => `<div class="pilote" style="left:${Math.round(X1 - 18)}px;top:${Math.round(Y1 - 46 + k * 10)}px;--dx:${Math.round(X2 - X1)}px;--dy:${Math.round(Y2 - Y1)}px;--t:${(2.1 + k * 0.45).toFixed(2)}s;z-index:${1000 + k}">
+    <svg class="fauteuil" viewBox="0 0 24 16" width="24" height="16" aria-hidden="true"><rect x="3" y="2" width="18" height="7" rx="2" fill="#3d3d3d" stroke="#2b1d14"/><path d="M12 9v4M6 14h12" stroke="#2b1d14" stroke-width="2"/></svg>
+    ${corps(x, true)}<div class="bulle parle" style="background:#ffc94d">${k ? 'J\'arrive !' : 'Vroum !'}</div></div>`).join(''));
+  setTimeout(() => { document.querySelectorAll('#effets .pilote').forEach((el) => el.remove()); COURSE = null; rendrePersos(); }, 8000);
+}
+
+// ---------------------------------------------------------------- mode démo : un pilote automatique joue, en accéléré avec des journées lentes
+// Un jour sur cinq, chaque vendredi et chaque jour où il se passe quelque chose, la journée se joue en Normal pour voir la vie du bureau.
+// seulement ce que le jour a apporté (pas les décisions du pilote), et pas deux journées lentes de suite pour un évènement
+const MOMENTS = /livré à|Échec aux tests CEM|reçu au stock|Burn-out|phase « Firmware|est en vente/;
+let dernierLent = -9;
+const jourLent = (a, n) => {
+  const lent = n.jours_total % 5 === 0 || n.jours_total % 7 === 4 || (n.jours_total - dernierLent >= 3 && nouveauxTextes(a, n).some((t) => MOMENTS.test(t)));
+  if (lent) dernierLent = n.jours_total;
+  return lent;
+};
+const MATERIEL_DEMO = ['multi', 'station', 'alim', 'stlink', 'oscillo', 'logique', 'jlink', 'four', 'fdm', 'micro', 'cao', 'ci', 'spectre'];
+async function piloter() {
+  const faire = async (genre, params = {}) => {
+    try { const r = await api('/api/action', { genre, ...params }); observer(ETAT, r.etat); ETAT = r.etat; return r.ok; } catch (err) { return false; }
+  };
+  let e = ETAT;
+  const charges = () => ETAT.loyer + ETAT.salaires + ETAT.frais_structure, reserve = () => 4 * charges();
+  for (let k = 0; k < 4 && ETAT.evenement; k++) {  // comme un joueur prudent : oui à ce qui aide, non aux défis et aux dépenses quand la caisse est juste
+    const ev = ETAT.evenement, serre = ETAT.argent < 6 * charges() && ['entretien', 'demission', 'debauche', 'obsolescence', 'salon', 'brevet'].includes(ev.type);
+    if (ev.type === 'presse' || serre || !(await faire('evenement', { choix: 0 }))) await faire('evenement', { choix: ev.options.length - 1 });
+  }
+  if (ETAT.dernier_livre) { toast(`« ${ETAT.dernier_livre.nom} » livré : ${ETAT.dernier_livre.note}/10`, true); await faire('fermer_note'); }
+  if (ETAT.bilan) await faire('fermer_bilan');
+  if (ETAT.victoire && !ETAT.victoire.vue) await faire('fermer_victoire');
+  if (ETAT.faillite || (ETAT.fin && !ETAT.fin.vue)) {  // on recommence une démo
+    const r = await api('/api/nouvelle', { emplacement: 1, scenario: 'reprise', difficulte: 'facile', entreprise: 'Circuit Démo', directeur: 'Pilote automatique' }).catch(() => null);
+    if (r && r.etat) ETAT = r.etat;
+    return;
+  }
+  e = ETAT;
+  if (e.places < e.capacite) {  // un contrat à la taille de l'équipe
+    const offres = e.offres.filter((o) => !o.mega && !(o.requis && requisListe(o.requis).some((x) => !e.technos.includes(x) && !e.certifs.includes(x))));
+    const o = offres.sort((a, b) => Math.abs(a.taille - 110 * e.employes.length) - Math.abs(b.taille - 110 * e.employes.length))[0];
+    if (o) await faire('signer', { id: o.id });
+  }
+  for (const p of ETAT.projets) if (p.etape === 'debug' && p.defauts < 1) await faire('tests_cem', { id: p.id });
+  e = ETAT;
+  if (!e.locaux.includes('bureau') && e.employes.length >= 3 && e.argent > reserve() + CAT.locaux.bureau.prix + 10000) await faire('local', { id: 'bureau' });
+  if (e.candidats.length && e.argent > reserve() + 20000 && e.employes.length < 3 + 2.5 * e.capacite) {
+    if (e.postes_ouverts.length <= e.employes.length) await faire('poser', { id: 'poste' });
+    const c = [...ETAT.candidats].sort((a, b) => (b.e + b.m + b.f) / b.salaire - (a.e + a.m + a.f) / a.salaire)[0];
+    if (c) await faire('embaucher', { id: c.id });
+  }
+  e = ETAT;
+  for (const prod of e.produits) {  // les lots au sous-traitant
+    const encours = e.commandes.filter((c) => c.produit === prod.id_produit).reduce((t, c) => t + c.qte, 0);
+    if (prod.stock + encours < 1.5 * prod.demande) await faire('commander', { id: prod.id_produit, qte: prod.demande * 4 >= 200 && e.stock_max - e.stock_total >= 200 ? 200 : 50 });
+  }
+  e = ETAT;
+  if (e.jours_total % 30 === 12 && e.places < e.capacite && e.argent > reserve() + 15000 && e.employes.length >= 3) {
+    const x = CAT.produits.find((x) => e.renommee >= x.rep_min && (!x.requis || e.technos.includes(x.requis)) && !x.innovation && !(x.id in e.gammes)
+      && (!x.suite || x.suite in e.gammes) && ![...e.produits, ...e.projets].some((y) => y.id_produit === x.id));
+    if (x) await faire('produit', { id: x.id });
+  }
+  e = ETAT;
+  if (e.jours_total % 20 === 3 && e.argent > reserve() + 20000) {
+    const m = MATERIEL_DEMO.find((m) => !e.materiel.includes(m));
+    if (m) await faire('acheter', { id: m });
+  }
+  if (e.employes.length >= 6 && !e.employes.some((x) => x.chef)) {
+    const x = e.employes.filter((x) => !x.fondateur && !x.stage).sort((a, b) => (b.e + b.m + b.f) - (a.e + a.m + a.f))[0];
+    if (x) await faire('promouvoir', { id: x.id });
+  }
+  for (const x of ETAT.employes) if (!x.absent && x.fatigue >= 44) await faire('conges', { id: x.id });
+}
+
+let etapeVue = '';
+setInterval(() => {
+  if (!ETAT || !CAT) return;
+  const m = momentJour(fractionJour()), detail = m.act === 'arrivee' || m.act === 'depart' ? Math.floor(m.avance * 20) : m.avance < 0.22 ? 0 : m.avance > 0.88 ? 2 : 1;
+  const etape = `${m.i}|${detail}`, anime = FANTOMES.length || COURSE || Object.keys(ARRIVEES).length || VISITE || REACTION;
+  const h = $('#heure');
+  if (h) h.textContent = texteHeure();
+  const lum = eclairage();
+  if ($('#monde').dataset.soir !== lum) $('#monde').dataset.soir = lum;
+  if (planifier(m) || etape !== etapeVue || anime) { etapeVue = etape; rendrePersos(); }
+}, 400);
+
+// Emplacements debout dans le bâtiment (centre du personnage) : grille libre de chaque pièce et de la terrasse du R2
+function spotsBatiment(e) {
+  const boites = e.objets.map((o) => { const f = fiche(o.type); return f && !f.libre ? [o.x, o.y, f.w, f.h] : null; }).filter(Boolean).concat(CAT.obstacles.batiment);
+  const libre = (x, y) => !boites.some(([bx, by, bw, bh]) => x > bx - 10 && x < bx + bw + 10 && y > by - 10 && y < by + bh + 10);
+  const grille = (k) => {
+    const [x, y, w, h] = typeof k === 'string' ? CAT.pieces[k].rect : k, pts = [];
+    for (let yy = y + 22; yy < y + h - 30; yy += 34) for (let xx = x + 20; xx < x + w - 16; xx += 34) if (libre(xx, yy)) pts.push([xx, yy]);
+    return pts.length ? pts : [[x + w / 2, y + h / 2]];
+  };
+  return {
+    labo: grille(pieceMateriel('e')), atelier: grille(pieceMateriel('m')), salle: grille('cantine'),
+    accueil: grille('accueil'), terrasse: grille(CAT.dehors.r2[0]),
+    reunion: grille('orion'),  // la salle du R1 : les bureaux y sont
+    piece: grille,
+  };
+}
+// Pastilles de la vue Productivité au garage : [domaine, x, y] (coordonnées du sol) ; dans le bâtiment, sur la pièce du matériel
+const PUCES = [['f', 560, 376], ['e', 446, 376]];
 
 const DESSINS = new Map();  // dessin SVG de chaque objet placé, recalculé seulement s'il bouge
 const BOITES = new Map();  // contour à l'écran de chaque élément du plan
 function rendreMonde() {
   const e = ETAT, h = [], svg = [];
-  const cle = carte() + '|' + [...e.locaux].sort().join(',') + '|' + e.entreprise;
+  if (carte() === 'garage') etage = 'garage';
+  else if (etage === 'garage') etage = etageDe((e.objets.find((o) => o.id === e.employes[0]?.bureau) || { y: CAT.etages.r1.y0 }).y);  // on vient d'emménager
+  PLAN.etage(etage, CAT);
+  const cle = carte() + '|' + etage + '|' + [...e.locaux].sort().join(',') + '|' + e.entreprise + '|' + e.saison;
   if (cache.decor !== cle) {
-    const demenage = cache.decor && cache.decor.split('|')[0] !== carte();
+    const demenage = cache.decor && cache.decor.split('|').slice(0, 2).join('|') !== carte() + '|' + etage;
     cache.decor = cle;
     $('#statique').innerHTML = PLAN.fond(e, CAT);
-    $('#devant').innerHTML = PLAN.devant(e);
+    $('#devant').innerHTML = PLAN.devant(e, CAT);
+    $('#rue').innerHTML = PLAN.rue(e);
     cache.fixes = PLAN.fixes(e, CAT);
     if (demenage) requestAnimationFrame(recentrer);
   }
   const occupes = {};
   for (const x of e.employes) occupes[x.bureau] = x;
   const etablis = CAT.etablis[carte()];
-  const objets = e.objets.map((o) => [o, fiche(o.type)]).filter(([, f]) => f);
+  const objets = e.objets.map((o) => [o, fiche(o.type)]).filter(([o, f]) => f && surEtage(o.y));
   const elements = cache.fixes.map(([prof, s], i) => [prof, s, `F${i}|${cle}`]);
   for (const [o, f] of objets) {
     const k = `${o.id}|${o.type}|${o.x}|${o.y}`;
@@ -190,7 +578,7 @@ function rendreMonde() {
   if (placement) {
     // zones autorisées pour l'objet en cours de placement
     for (const k of fiche(placement.type).pieces) {
-      if (!pieceDispo(k)) continue;
+      if (!pieceDispo(k) || !surEtage(CAT.pieces[k].rect[1])) continue;
       const [x, y, w, hh] = CAT.pieces[k].rect;
       svg.push(`<polygon points="${PLAN.empreinte(x, y, w, hh)}" fill="rgba(123,224,138,.16)" stroke="rgba(47,138,58,.9)" stroke-width="2.5" stroke-dasharray="8 5"/>`);
     }
@@ -200,22 +588,27 @@ function rendreMonde() {
     svg.push(`<polygon points="${PLAN.cadreMoral(e)}" fill="rgba(${t},.25)"/>`);
   }
   h.push(`<svg class="couche" viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}" xmlns="http://www.w3.org/2000/svg">${svg.join('')}</svg>`);
-  // carte « à louer » au centre de la pièce (sur le sol de la vue isométrique)
+  // carte d'emménagement posée sur le sol du garage (vue isométrique)
   const verrou = (lid, cx, cy) => {
     const l = CAT.locaux[lid], bloque = e.renommee < l.rep, [X, Y] = PLAN.iso(cx, cy, 0);
     return `<div class="verrou" style="left:${Math.round(X - 90)}px;top:${Math.round(Y - 62)}px">
       <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#fff7e6" stroke-width="2.4"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="#ffc94d" stroke="#2b1d14" stroke-width="1.8"/></svg>
-      <b>${esc(l.nom)}</b><small>${bloque ? `Renommée ${l.rep} requise` : 'Local à louer'}</small>
-      <button type="button" class="btn petit" data-act="local" data-id="${lid}" ${bloque || e.argent < l.prix ? 'disabled' : ''}>Louer · ${eur(l.prix)}</button></div>`;
+      <b>${esc(l.nom)}</b><small>${bloque ? `Renommée ${l.rep} requise` : `Loyer ${eur(l.loyer)} / mois`}</small>
+      <button type="button" class="btn petit" data-act="local" data-id="${lid}" aria-label="${esc(l.nom)} · ${eur(l.prix)}" ${bloque || e.argent < l.prix ? 'disabled' : ''}>Emménager · ${eur(l.prix)}</button></div>`;
   };
   if (carte() === 'garage') h.push(verrou('bureau', 690, 190));
-  else for (const [lid, k] of Object.entries(VERROUS)) if (!e.locaux.includes(lid)) { const [x, y, w, hh] = CAT.pieces[k].rect; h.push(verrou(lid, x + w / 2, y + hh / 2)); }
   if (vue === 'prod') {
-    const b = e.bonus;
-    for (const [d, c, x, y] of PUCES) {
-      if (c !== carte() || (d === 'm' && !e.locaux.includes('atelier')) || (d === 'c' && !e.locaux.includes('cem'))) continue;
-      const [X, Y] = PLAN.iso(x, y, 0);
-      h.push(`<div class="puce-prod" style="left:${Math.round(X)}px;top:${Math.round(Y)}px;background:${DC[d]}">${d === 'c' ? `CEM +${Math.round(b.cem * 100)} %` : `${DN[d]} +${b[d] * PCT_BONUS} %`}</div>`);
+    const b = e.bonus, puce = (d, x, y, texte) => { const [X, Y] = PLAN.iso(x, y, 0); h.push(`<div class="puce-prod" style="left:${Math.round(X)}px;top:${Math.round(Y)}px;background:${DC[d]}">${texte}</div>`); };
+    const txt = (d) => `${DN[d]} +${b[d] * PCT_BONUS} %`;
+    if (carte() === 'garage') for (const [d, x, y] of PUCES) puce(d, x, y, txt(d));
+    else {
+      const ou = [['e', pieceMateriel('e')], ['m', 'atelier'], ['f', pieceMateriel('f')], ['c', pieceMateriel('e')]];
+      const empile = {};
+      for (const [d, k] of ou) {
+        if (!k || CAT.pieces[k].etage !== etage) continue;
+        const [x, y] = CAT.pieces[k].rect, n = empile[k] = (empile[k] || 0) + 1;
+        puce(d, x + 20, y + 10 + 24 * (n - 1), d === 'c' ? `Tests CEM +${Math.round(b.cem * 100)} %` : txt(d));
+      }
     }
   }
   majHtml('#dyn', h.join(''));
@@ -241,9 +634,13 @@ function appliquerZoom(s, cx = $('#cadre').clientWidth / 2, cy = $('#cadre').cli
   if (wx !== null) { cadre.scrollLeft = wx * s + ech.offsetLeft - cx; cadre.scrollTop = wy * s + ech.offsetTop - cy; }
 }
 function recentrer() {
-  const cadre = $('#cadre'), ech = $('#echelle'), [x, y] = PLAN.centre(ETAT);
+  // centré sur l'équipe de l'étage affiché (sinon sur le milieu du plan) : sur téléphone, on voit tout de suite du monde
+  const cadre = $('#cadre'), ech = $('#echelle'), objs = Object.fromEntries(ETAT.objets.map((o) => [o.id, o]));
+  const bureaux = ETAT.employes.map((x) => objs[x.bureau]).filter((o) => o && surEtage(o.y));
+  const moy = (k) => bureaux.reduce((t, o) => t + o[k], 0) / bureaux.length + 30;
+  const [x, y] = bureaux.length ? PLAN.iso(moy('x'), moy('y'), 0) : PLAN.centre(ETAT);
   cadre.scrollLeft = x * zoom + ech.offsetLeft - cadre.clientWidth / 2;
-  cadre.scrollTop = y * zoom + ech.offsetTop - cadre.clientHeight / 2;
+  cadre.scrollTop = y * zoom + ech.offsetTop - (cadre.clientHeight - (tablette() ? 0 : 260)) / 2;  // sur téléphone, le bas est caché par la barre du temps
 }
 
 // ---------------------------------------------------------------- panneaux
@@ -276,7 +673,7 @@ function etapeProjet(p) {
   if (p.etape === 'debug') return `Debug · ${dec(p.defauts)} défauts`;
   if (p.etape === 'cem') return `Tests CEM (${p.cem_jours} j)`;
   const ph = p.phases[p.phase];
-  return ph.attente ? `Fabrication du proto (${ph.attente} j)` : ph.nom;
+  return ph.attente ? (ph.essais ? `Essais de qualification (${ph.attente} j)` : `Fabrication du proto (${ph.attente} j)`) : ph.nom;
 }
 
 function avancement(p) {
@@ -291,6 +688,7 @@ function encartProjet(p) {
     `<span class="${p.etape === 'cem' ? 'cours' : ''}" title="Tests CEM"></span>`;
   const ph = p.phases[p.phase];
   const equipe = e.employes.filter((x) => p.equipe.includes(x.id)).map((x) => esc(x.nom)).join(', ') || 'personne pour le moment';
+  const chefP = e.employes.find((x) => x.id === p.chef);
   const combos = p.combos_jour.map((c) => `<span class="chip" style="background:#b08af0;color:#2b1d14" title="${esc(CAT.combos[c].desc)}">${esc(CAT.combos[c].nom)}</span>`).join('');
   return `<div class="encart"><div class="t2" style="font-size:11px;font-weight:800;letter-spacing:1px;color:#a9b39a">${p.type === 'contrat' ? esc(p.client).toUpperCase() : 'PRODUIT MAISON'}</div>
     <h3>${esc(p.nom)}</h3><div class="etapes">${etapes}</div>
@@ -299,16 +697,21 @@ function encartProjet(p) {
     ${combos ? `<div class="chips">${combos}</div>` : ''}
     ${p.etape === 'travail' ? `<div class="barres">${Object.keys(ph.besoin).map((d) => barre(DN[d], ph.fait[d], ph.besoin[d], DC[d])).join('')}</div>` : ''}
     <div class="t2" style="font-size:13px;color:#b3bca5">Équipe du jour : ${equipe}</div>
-    <div class="t2" style="font-size:13px;color:#b3bca5">Tests CEM : ${Math.round(p.proba_cem * 100)} % de réussite${p.frais_cem ? ` · labo externe ${eur(p.frais_cem)}` : ' · labo interne gratuit'}</div>
-    ${p.etape === 'travail' && ph.attente ? `<div class="t2" style="font-size:13px;color:#b3bca5">Les PCB sont en fabrication : retour dans ${ph.attente} j. L'équipe en profite pour chasser les défauts.</div>` : ''}
+    ${p.chef && chefP ? `<div class="t2" style="font-size:13px;color:#b3bca5">Chef de projet : ${esc(chefP.nom)} · suivi ${Math.round(p.suivi * 100)} %${p.suivi < 1 ? ' (il suit plusieurs projets)' : ''} · il compose l'équipe${p.type === 'contrat' ? ` · prime de ${eur(p.paie * 0.08 * p.suivi)} si livré à l'heure et bien noté` : ''}</div>` : ''}
+    <div class="t2" style="font-size:13px;color:#b3bca5">Tests CEM : ${Math.round(p.proba_cem * 100)} % de réussite · labo externe ${eur(p.frais_cem)}, 3 jours</div>
+    ${p.etape === 'travail' && ph.attente ? `<div class="t2" style="font-size:13px;color:#b3bca5">${ph.essais ? `Essais en étuve et sur pot vibrant : encore ${ph.attente} j.` : `Les PCB sont en fabrication : retour dans ${ph.attente} j.`} L'équipe en profite pour chasser les défauts.</div>` : ''}
     <div class="btns">${p.etape === 'debug' ? bouton('tests_cem', p.id, 'Passer aux tests CEM') : ''}${bouton('abandonner', p.id, 'Abandonner', true, 'secondaire petit')}</div></div>`;
 }
 
 function panneauProjets() {
   const e = ETAT, plein = e.places >= e.capacite;
-  let h = `<div class="section">En cours · ${e.places} / ${e.capacite} place${e.capacite > 1 ? 's' : ''}${e.capacite < 4 ? ' · agrandissez pour en mener plus' : ''}</div>`;
+  const plus = !e.locaux.includes('bureau') ? ' · emménagez dans le bâtiment pour en mener plus' : e.capacite < 6 ? ' · chaque chef de projet ajoute une place' : '';
+  let h = `<div class="section">En cours · ${e.places} / ${e.capacite} place${e.capacite > 1 ? 's' : ''}${plus}</div>`;
   h += e.projets.map(encartProjet).join('') || '<div class="vide">Aucun projet : signez un contrat ci-dessous.</div>';
   h += `<div class="section">Appels d'offres · les clients attendent ${dec(e.attente_client)}/10</div>`;
+  if (e.nb_commerciaux) h += `<label class="t2" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:13px">Prospection
+    <select class="choix" data-prospecter="1"><option value="">Tous secteurs</option>${Object.entries(CAT.secteurs).map(([k, s]) => `<option value="${k}" ${e.prospection === k ? 'selected' : ''}>${esc(s.nom)}</option>`).join('')}</select></label>
+    <div class="t2" style="font-size:12px;color:#b3bca5">${e.nb_commerciaux} ${e.nb_commerciaux > 1 ? 'commerciaux' : 'commercial'} · offres +${Math.round(CAT.prime_commercial * 100) * Math.min(3, e.nb_commerciaux)} % mieux payées · négociation réussie ${Math.round(e.chance_commerciale * 100)} % (sinon le client part) · commission ${Math.round(CAT.commission * 100)} % des contrats signés par commercial</div>`;
   h += e.offres.length ? [...e.offres].sort((a, b) => (b.mega || 0) - (a.mega || 0) || (b.fidele || 0) - (a.fidele || 0)).map((o) => {
     const complet = e.places + (o.mega ? 2 : 1) > e.capacite;
     const equipe = o.equipe_min && e.employes.length < o.equipe_min;
@@ -317,7 +720,8 @@ function panneauProjets() {
       couleur: o.mega ? '#ff9a4a' : o.fidele ? '#ffc94d' : '#7be08a',
       t1: (o.mega ? '<span class="badge mega">MÉGA-PROJET</span> ' : '') + esc(o.nom),
       t2: `${esc(secteur)}${esc(o.client)}${o.fidele ? ` <span class="fid" title="Client fidèle : projet plus gros, négociation plus facile">${etoiles(o.fidele)}</span>` : ''} · ${eur(o.paie)} · ${o.delai} j`,
-      t3: `${repartition(o.total)} · expire dans ${o.expire} j${o.requis ? ' · ' + esc(nomRequis(o.requis)) : ''}${o.mega ? ` · compte pour 2 projets · équipe de ${o.equipe_min} minimum` : ''}`,
+      t3: `${repartition(o.total)} · expire dans ${o.expire} j${o.requis ? ' · ' + esc(nomRequis(o.requis)) : ''}${CAT.exigeants.includes(o.secteur) ? ' · qualification obligatoire' : ''}${o.mega ? ` · compte pour 2 projets · équipe de ${o.equipe_min} minimum` : ''}`,
+      extra: e.nb_commerciaux && !o.negociee ? `<div class="btns"><span style="align-self:center;font-size:13px;color:#b3bca5">Négocier</span>${bouton('negocier', o.id, '+15 % payé', true, 'petit secondaire', 'data-cible="prix" aria-label="Négocier : 15 % de plus"')}${bouton('negocier', o.id, '+25 % de délai', true, 'petit secondaire', 'data-cible="delai" aria-label="Négocier : 25 % de délai en plus"')}</div>` : '',
       btn: bouton('sig-ouvrir', o.id, complet ? 'Complet' : equipe ? `${o.equipe_min} pers. requises` : 'Signer', !complet && !equipe, '', 'data-genre="signer"'),
     });
   }).join('') : '<div class="vide">Aucune offre pour le moment, patientez quelques jours.</div>';
@@ -326,22 +730,37 @@ function panneauProjets() {
     const avant = x.suite && CAT.produits.find((y) => y.id === x.suite);
     const sansV1 = avant && !(x.suite in e.gammes);
     const sansTech = x.requis && !e.technos.includes(x.requis);
+    const idee = x.innovation && !e.roles_actifs.innov;
     const bloque = e.renommee < x.rep_min;
     const occupe = e.places >= e.capacite || [...e.produits, ...e.projets].some((y) => y.id_produit === x.id);
     const lance = x.id in e.gammes;
     const bonus = avant && !sansV1 ? Math.round(8 * Math.max(0, e.gammes[x.suite] - 6)) : 0;
     const total = { e: Math.round(x.taille * x.rep[0]), m: Math.round(x.taille * x.rep[1]), f: Math.round(x.taille * x.rep[2]) };
-    const infos = [avant ? `Suite de « ${esc(avant.nom)} »${bonus ? ` · ventes +${bonus} %` : ''}` : '', x.requis ? esc(nomRequis(x.requis)) : '', lance ? `Déjà lancé (meilleure note ${dec(e.gammes[x.id])})` : ''].filter(Boolean).join(' · ');
+    const infos = [x.innovation ? "Idée du chargé d'innovation" : '', avant ? `Suite de « ${esc(avant.nom)} »${bonus ? ` · ventes +${bonus} %` : ''}` : '', x.requis ? esc(nomRequis(x.requis)) : '', lance ? `Déjà lancé (meilleure note ${dec(e.gammes[x.id])})` : ''].filter(Boolean).join(' · ');
     return ligne({
       couleur: lance ? '#7be08a' : '#b08af0', t1: esc(x.nom), t2: `Prototype ${eur(x.cout)} · jusqu'à ~${eur(x.potentiel * 0.5)}/mois`, t3: repartition(total) + (infos ? ' · ' + infos : ''),
-      btn: bouton('sig-ouvrir', x.id, bloque ? `★ ${x.rep_min} requis` : sansV1 ? 'Après la v1' : sansTech ? 'Techno requise' : occupe ? 'Indisponible' : 'Lancer',
-        !bloque && !sansV1 && !sansTech && !occupe && e.argent >= x.cout, '', 'data-genre="produit"'),
+      btn: bouton('sig-ouvrir', x.id, bloque ? `★ ${x.rep_min} requis` : sansV1 ? 'Après la v1' : sansTech ? 'Techno requise' : idee ? 'Innovation requise' : occupe ? 'Indisponible' : 'Lancer',
+        !bloque && !sansV1 && !sansTech && !idee && !occupe && e.argent >= x.cout, '', 'data-genre="produit"'),
     });
   }).join('');
   if (e.produits.length) {
-    h += `<div class="section">En vente</div>` + e.produits.map((x) => ligne({
-      couleur: couleurNote(x.note), t1: esc(x.nom), t2: `Note ${dec(x.note)}/10 · ${eur(x.ventes)} le mois prochain`, t3: `Total encaissé ${eur(x.total)}`,
-    })).join('');
+    const place = e.stock_max - e.stock_total;
+    h += `<div class="section">En vente · stock ${e.stock_total} / ${e.stock_max} unités (commandes comprises)</div>
+      <div class="t2" style="font-size:12px;color:#b3bca5;margin-top:4px">Fabriqués par lots chez le sous-traitant : un gros lot coûte moins cher par unité, mais les invendus restent sur les bras. Stockage ${dec(CAT.stockage)} € par unité et par mois.</div>`;
+    h += e.produits.map((x) => {
+      const cmd = e.commandes.filter((c) => c.produit === x.id_produit);
+      const lots = Object.entries(CAT.lots).map(([q, [coef, j]]) => {
+        const cout = Math.round(q * x.cout_unite * coef / 10) * 10;
+        return bouton('commander', x.id_produit, `Lot ${q} · ${eur(cout)}`, Number(q) <= place && e.argent >= cout, 'petit secondaire', `data-qte="${q}" title="${j} jours de fabrication"`);
+      }).join('');
+      return ligne({
+        couleur: couleurNote(x.note), t1: esc(x.nom),
+        t2: `Note ${dec(x.note)}/10 · ${x.prix} € pièce (coût ${dec(x.cout_unite)} €) · demande ${x.demande} / mois · en stock ${x.stock}`,
+        t3: `${cmd.length ? 'En fabrication : ' + cmd.map((c) => `${c.qte} (${c.jours} j${c.retard ? ', en retard' : ''})`).join(', ') + ' · ' : ''}Total encaissé ${eur(x.total)}`,
+        extra: `<div class="btns">${lots}</div>`,
+      });
+    }).join('');
+    h += `<div class="btns">${bouton('agrandir_stock', '', `Agrandir le stock +${CAT.agrandir_stock[1]} · ${eur(CAT.agrandir_stock[0])}`, e.locaux.includes('bureau') && e.argent >= CAT.agrandir_stock[0], 'petit secondaire')}</div>`;
   }
   if (e.historique.length) {
     h += `<div class="section">Historique</div>` + e.historique.slice(0, 12).map((x) => ligne({
@@ -360,25 +779,40 @@ function panneauEquipe() {
     <div class="t2" style="font-size:13px;color:#b3bca5">${esc(H.nom)} · production ${H.prod >= 1 ? '+' : ''}${Math.round((H.prod - 1) * 100)} % · moral ${H.moral >= 0 ? '+' : ''}${H.moral} · fatigue ×${dec(H.fatigue)} · défauts ×${dec(H.defauts)}${H.salaire ? ` · heures sup +${Math.round(H.salaire * 100)} % de salaires` : ''}</div>`;
   h += `<div class="section">Vie d'équipe</div><div class="t2" style="font-size:13px;color:#b3bca5;margin-top:4px">Séminaire de 2 jours : moral +6 et fatigue effacée pour tous. Anniversaires et pots de livraison se fêtent tout seuls.</div>
     <div class="btns">${bouton('seminaire', '', e.seminaire_dans ? `Séminaire possible dans ${e.seminaire_dans} j` : `Organiser un séminaire · ${eur(e.cout_seminaire)}`, !e.seminaire_dans && e.argent >= e.cout_seminaire, 'petit')}</div>`;
+  h += `<div class="section">Services et direction</div>` + ['e', 'm', 'f'].map((d) => {
+    const s = e.services[d], resp = e.employes.find((x) => x.role === 'resp_' + d), seuil = CAT.service_sans_resp, r = CAT.roles['resp_' + d];
+    const malus = s.resp == null && s.n > seuil ? Math.min(20, 4 * (s.n - seuil)) : 0;
+    return ligne({
+      couleur: DC[d], t1: `Service ${DN[d]} · ${s.n} personne${s.n > 1 ? 's' : ''}`,
+      t2: resp ? `Responsable : ${esc(resp.nom)}${s.resp != null ? ' · production +8 % et moral +5 pour le service' : ' · inactif : il lui faut un bureau de responsable pour lui seul'}`
+        : malus ? `Sans responsable : −${malus} % d'efficacité pour tout le service` : `Pas de responsable (indispensable au-delà de ${seuil} personnes)`,
+      t3: `Responsable : ${r.min} en ${DN[d]}, bureau de responsable · +${eur(r.salaire)} / mois`,
+    });
+  }).join('') + [['dir_rd', 'Recherches 2× plus rapides et 25 % moins chères, note +0,2'], ['innov', 'Idées de produits exclusives, brevets, produits maison note +0,3']].map(([r, effet]) => {
+    const x = e.employes.find((y) => y.role === r);
+    return ligne({ couleur: '#b08af0', t1: CAT.roles[r].nom, t2: x ? `${esc(x.nom)}${x.role_actif ? '' : ' · inactif : son bureau doit être à la direction R&D'}` : `Poste vacant · ${CAT.roles[r].total} points de compétences requis, bureau à la direction R&D (R+1)`, t3: effet });
+  }).join('');
   h += `<div class="section">Équipe · ${e.employes.length} / ${e.postes_ouverts.length} postes · moral ${e.moral} %</div>`;
   h += e.employes.map((x) => {
     const etat = x.absent ? `${x.formation ? 'Formation ' + DN[x.formation] : ABSENCE[x.absence] || 'Absent'} : retour dans ${x.absent} j` : x.stage ? `Stage gratuit : encore ${x.stage} j` : x.salaire ? eur(x.salaire) + ' / mois' : 'Gérant';
     const promu = !x.chef && !x.stage && x.e + x.m + x.f >= (x.traits.includes('leader') ? 10 : 14);
+    const roles = Object.entries(CAT.roles).filter(([k, r]) => !x.role && !x.stage && !e.employes.some((y) => y.role === k) && (r.dom ? x[r.dom] >= r.min : x.e + x.m + x.f >= r.total));
     const btns = `<div class="btns">${['e', 'm', 'f'].map((d) => `<button type="button" class="btn petit secondaire" data-act="former" data-id="${x.id}" data-dom="${d}" ${x.absent || e.argent < x.cout_formation ? 'disabled' : ''}>Former ${DN[d]}</button>`).join('')}
-      ${bouton('conges', x.id, 'Congés', !x.absent, 'petit secondaire')}${promu ? bouton('promouvoir', x.id, 'Promouvoir chef de projet', true, 'petit') : ''}${aDecouvrir(x) ? bouton('specialiste', x.id, `Spécialiste · ${eur(e.cout_specialiste)}`, e.argent >= e.cout_specialiste, 'petit secondaire') : ''}${x.fondateur ? '' : bouton('licencier', x.id, 'Licencier', true, 'petit secondaire')}</div>
+      ${bouton('conges', x.id, 'Congés', !x.absent, 'petit secondaire')}${promu ? bouton('promouvoir', x.id, 'Promouvoir chef de projet', true, 'petit') : ''}${roles.map(([k, r]) => bouton('nommer', x.id, 'Nommer ' + r.nom, true, 'petit', `data-role="${k}"`)).join('')}${x.role ? bouton('nommer', x.id, 'Retirer le rôle', true, 'petit secondaire', 'data-role=""') : ''}${aDecouvrir(x) ? bouton('specialiste', x.id, `Spécialiste · ${eur(e.cout_specialiste)}`, e.argent >= e.cout_specialiste, 'petit secondaire') : ''}${x.fondateur ? '' : bouton('licencier', x.id, 'Licencier', true, 'petit secondaire')}</div>
       <div class="t2" style="font-size:12px">Formation : ${eur(x.cout_formation)}, ${10} jours, +2 dans le domaine</div>
       ${e.projets.length > 1 ? `<label class="t2" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:13px">Projet
         <select class="choix" data-affecter="${x.id}"><option value="">Automatique</option>${e.projets.map((p) => `<option value="${p.id}" ${x.projet === p.id ? 'selected' : ''}>${esc(p.nom)} · ${esc(p.client || 'maison')}</option>`).join('')}</select></label>` : ''}`;
     return ligne({
       avatar: sprite(x), t1: `${esc(x.nom)} — ${esc(x.poste)}`, t2: repartition(x),
       t3: etat + (x.fondateur ? '' : ` · ${x.anciennete < 1 ? "moins d'un an" : Math.floor(x.anciennete) + ' an' + (x.anciennete >= 2 ? 's' : '')} dans la maison`),
-      extra: `${profil(x)}<div class="chips" style="margin-top:4px"><span class="chip" style="background:${x.moral >= 70 ? '#7be08a' : x.moral >= 50 ? '#ffc94d' : '#ff8a7a'};color:#2b1d14">Moral ${x.moral} %</span><span class="chip">Fatigue ${Math.round(x.fatigue)}</span><span class="chip" title="Moral × conditions de travail × trait">Efficacité ${x.efficacite} %</span>${x.chef ? '<span class="chip" style="background:#ffc94d;color:#2b1d14" title="+8 % de production et moins de défauts pour son équipe">Chef de projet</span>' : ''}</div>${btns}`,
+      extra: `${profil(x)}<div class="chips" style="margin-top:4px"><span class="chip" style="background:${x.moral >= 70 ? '#7be08a' : x.moral >= 50 ? '#ffc94d' : '#ff8a7a'};color:#2b1d14">Moral ${x.moral} %</span><span class="chip">Fatigue ${Math.round(x.fatigue)}</span><span class="chip" title="Moral × conditions de travail × trait">Efficacité ${x.efficacite} %</span>${x.chef ? '<span class="chip" style="background:#ffc94d;color:#2b1d14" title="Suit des projets : une place de projet de plus, meilleure note, moins de retards et d\'erreurs">Chef de projet</span>' : ''}${x.commercial ? `<span class="chip" style="background:#7cc0f2;color:#2b1d14" title="Négocie les offres, prospecte un secteur ; touche une commission">Commercial·e</span>` : ''}${x.role ? `<span class="chip" style="background:${x.role_actif ? '#b08af0' : '#ff8a7a'};color:#2b1d14">${esc(CAT.roles[x.role].nom)}${x.role_actif ? '' : ' · inactif'}</span>` : ''}<span class="chip" title="Encadrement du service et bureau du service">Service ${DN[x.service]}${Math.round((x.facteur_service - 1) * 100) ? ` ${x.facteur_service > 1 ? '+' : '−'}${Math.abs(Math.round((x.facteur_service - 1) * 100))} %` : ''}</span>${x.piece ? `<span class="chip">${esc(CAT.pieces[x.piece].nom)}${CAT.pieces[x.piece].etage !== 'garage' ? ' · ' + esc(CAT.etages[CAT.pieces[x.piece].etage].nom) : ''}</span>` : ''}</div>${btns}`,
     });
   }).join('');
   h += `<div class="section">Candidats${libres ? '' : ' · placez un bureau de plus (Locaux) pour recruter'}</div>`;
   h += e.candidats.map((c) => {
     return ligne({
-      avatar: sprite(c), t1: `${esc(c.nom)} — ${esc(c.poste)}`, t2: repartition(c), t3: `${eur(c.salaire)} / mois`,
+      avatar: sprite(c), t1: `${esc(c.nom)} — ${esc(c.poste)}`, t2: repartition(c),
+      t3: `${eur(c.salaire)} / mois${c.role_propose ? ` · arrive comme ${esc(CAT.roles[c.role_propose].nom)}` : ''}${c.chef ? ' · chef de projet' : ''}${c.commercial ? ` · + commission de ${Math.round(CAT.commission * 100)} % sur les contrats` : ''}`,
       extra: `${profil(c)}<div class="btns">${c.entretien_fait ? '' : bouton('entretien', c.id, `Entretien · ${eur(CAT.cout_entretien)}`, e.argent >= CAT.cout_entretien, 'petit secondaire')}${aDecouvrir(c) ? bouton('specialiste', c.id, `Spécialiste · ${eur(e.cout_specialiste)}`, e.argent >= e.cout_specialiste, 'petit secondaire') : ''}</div>`,
       btn: bouton('embaucher', c.id, libres ? 'Embaucher' : 'Pas de bureau', libres > 0),
     });
@@ -391,15 +825,15 @@ function panneauEquipe() {
 
 function panneauMateriel() {
   const e = ETAT, b = e.bonus;
-  let h = `<div class="onglets">${['e', 'm', 'f', 'c'].map((k) => `<button type="button" data-act="catmat" data-id="${k}" class="${catMat === k ? 'actif' : ''}" style="${catMat === k ? 'background:' + DC[k] : ''}">${DN[k]}</button>`).join('')}</div>`;
-  const resume = catMat === 'c' ? `chance aux tests +${Math.round(b.cem * 100)} %` : `production +${b[catMat] * PCT_BONUS} % · debug +${b.debug}`;
+  let h = `<div class="onglets">${['e', 'm', 'f'].map((k) => `<button type="button" data-act="catmat" data-id="${k}" class="${catMat === k ? 'actif' : ''}" style="${catMat === k ? 'background:' + DC[k] : ''}">${DN[k]}</button>`).join('')}</div>`;
+  const resume = `production +${b[catMat] * PCT_BONUS} % · debug +${b.debug} · tests CEM +${Math.round(b.cem * 100)} %`;
   h += `<div class="section">${DN[catMat]} · ${resume}</div><div class="t2" style="font-size:13px;color:#b3bca5;margin-top:4px">Choisissez « Placer », puis touchez le plan à l'endroit voulu.</div>`;
   h += Object.entries(CAT.materiel).filter(([, m]) => m.dom === catMat).map(([id, m]) => {
     const effets = [m.bonus && `+${m.bonus * PCT_BONUS} % ${DN[m.dom]}`, m.debug && `debug +${m.debug}`, m.cem && `CEM +${Math.round(m.cem * 100)} %`].filter(Boolean).join(' · ');
     const possede = e.materiel.includes(id);
     const local = !m.pieces.some((k) => !CAT.pieces[k].local || e.locaux.includes(CAT.pieces[k].local));
     return ligne({
-      couleur: DC[m.dom], t1: esc(m.nom), t2: `${effets} · ${eur(m.prix)}`, t3: `${PIECE[m.piece]}${id in e.pannes ? ` · en panne (${e.pannes[id]} j)` : ''}`,
+      couleur: DC[m.dom], t1: esc(m.nom), t2: `${effets} · ${eur(m.prix)}`, t3: `${esc(CAT.pieces[m.piece].nom)}${m.pieces.filter((k) => k !== m.piece && k !== 'garage').map((k) => ' ou ' + esc(CAT.pieces[k].nom)).join('')}${id in e.pannes ? ` · en panne (${e.pannes[id]} j)` : ''}`,
       btn: bouton('placer', id, possede ? 'Installé' : local ? 'Local requis' : 'Placer', !possede && !local && e.argent >= m.prix),
     });
   }).join('');
@@ -415,15 +849,25 @@ function panneauLocaux() {
     t3: `${e.postes_ouverts.length} bureau${e.postes_ouverts.length > 1 ? 'x' : ''}, ${libres} libre${libres > 1 ? 's' : ''}`,
     btn: bouton('placer', 'poste', 'Placer', e.argent >= CAT.poste.prix),
   });
-  h += `<div class="section">Agrandissements</div>`;
-  h += Object.entries(CAT.locaux).map(([id, l]) => {
-    const fait = e.locaux.includes(id), bloque = e.renommee < l.rep;
-    const avantEmmenager = id !== 'bureau' && !e.locaux.includes('bureau');  // le moteur refuse : il faut d'abord emménager
-    return ligne({
-      couleur: '#efc488', t1: esc(l.nom), t2: `${esc(l.desc)} · ${eur(l.prix)}`, t3: `Loyer +${eur(l.loyer)} / mois`,
-      btn: bouton('local', id, fait ? 'Fait' : avantEmmenager ? "Après l'emménagement" : bloque ? `★ ${l.rep} requis` : 'Louer', !fait && !avantEmmenager && !bloque && e.argent >= l.prix),
-    });
-  }).join('');
+  const l = CAT.locaux.bureau, fait = e.locaux.includes('bureau');
+  h += `<div class="section">Bâtiment</div>` + ligne({
+    couleur: fait ? '#7be08a' : '#efc488', t1: esc(l.nom), t2: fait ? 'Tout le bâtiment est à vous : grandissez en embauchant.' : esc(l.desc), t3: `${eur(l.prix)} · loyer ${eur(l.loyer)} / mois`,
+    btn: bouton('local', 'bureau', fait ? 'Emménagé' : e.renommee < l.rep ? `★ ${l.rep} requis` : 'Emménager', !fait && e.renommee >= l.rep && e.argent >= l.prix, 'petit'),
+  });
+  if (fait) {
+    const nb = (f) => e.employes.filter((x) => x.piece && CAT.pieces[x.piece].fonction === f).length;
+    const pct = (q) => `qualité ${Math.round(q * 100)} %`;
+    h += `<div class="section">Pièces utiles</div>` + [
+      ['cdp', `${nb('cdp')} chef${nb('cdp') > 1 ? 's' : ''} de projet installé${nb('cdp') > 1 ? 's' : ''} : leur bonus y est 50 % plus fort`],
+      ['indus', `Industrialisation : ${pct(e.qualite_indus)} · installez-y le bureau d'un employé doué en indus`],
+      ['qualif', `Essais et qualification : ${pct(e.qualite_qualif)} · installez-y un employé doué en qualif`],
+      ['reception', 'Contrôle des lots du sous-traitant : un bon qualiticien repère les lots défectueux'],
+      ['opensp', `${e.nb_commerciaux} ${e.nb_commerciaux > 1 ? 'commerciaux' : 'commercial'} : négociation, prospection, une offre de plus chacun (3 au plus)`],
+      ['cantine', 'Moral +5 et meilleure récupération de la fatigue'],
+      ['rd', "Bureaux du directeur R&D et du chargé·e d'innovation"],
+      ['dg', 'Votre bureau ici : négociation +10 % et levée de fonds +30 %'],
+    ].map(([k, t]) => ligne({ couleur: '#efc488', t1: `${esc(CAT.pieces[k].nom)} · ${esc(CAT.etages[CAT.pieces[k].etage].nom)}`, t2: t, btn: bouton('voir', k, 'Voir', true, 'petit secondaire', `aria-label="Voir ${esc(CAT.pieces[k].nom)} sur le plan"`) })).join('');
+  }
   h += `<div class="section">Aménagement · moral ${e.moral} %</div>`;
   h += Object.entries(CAT.deco).map(([id, d]) => {
     const fait = e.deco.includes(id) && !d.multiple;
@@ -450,8 +894,9 @@ function rechercheLigne(genre, id, f, acquis) {
   let btn;
   if (acquis.includes(id)) btn = bouton(act, id, genre === 'tech' ? 'Maîtrisée' : 'Obtenue', false, 'petit');
   else if (cours) btn = bouton(act, id, `${cours.total - cours.jours} / ${cours.total} j`, false, 'petit');
-  else btn = bouton(act, id, requis ? 'Prérequis' : occupe ? 'Patientez' : 'Lancer', !requis && !occupe && e.argent >= f.prix, 'petit');
-  return ligne({ couleur: acquis.includes(id) ? '#7be08a' : '#b08af0', t1: esc(f.nom), t2: `${esc(f.desc)}`, t3: `${eur(f.prix)} · ${f.jours} jours${f.requis ? ' · après ' + esc((CAT.technos[f.requis] || CAT.certifs[f.requis]).nom) : ''}`, btn });
+  const directeur = genre === 'tech' && e.roles_actifs.dir_rd, prix = directeur ? Math.floor(f.prix * 0.75) : f.prix, jours = directeur ? Math.ceil(f.jours / 2) : f.jours;
+  if (!btn) btn = bouton(act, id, requis ? 'Prérequis' : occupe ? 'Patientez' : 'Lancer', !requis && !occupe && e.argent >= prix, 'petit');
+  return ligne({ couleur: acquis.includes(id) ? '#7be08a' : '#b08af0', t1: esc(f.nom), t2: `${esc(f.desc)}`, t3: `${eur(prix)} · ${jours} jours${f.requis ? ' · après ' + esc((CAT.technos[f.requis] || CAT.certifs[f.requis]).nom) : ''}`, btn });
 }
 
 function panneauSociete() {
@@ -470,8 +915,20 @@ function panneauSociete() {
     <div class="t2" style="font-size:12px;color:#b3bca5;margin-top:4px">Remboursement sur 24 mois, taux 6 % par an.</div>`;
   h += ligne({ couleur: '#b08af0', t1: 'Levée de fonds', t2: e.parts < 1 ? 'Déjà réalisée' : `+${eur(e.levee_possible)} contre 20 % du capital (score final ×0,8)`, t3: e.renommee < 5 ? 'Renommée 5 requise' : '',
     btn: bouton('lever', '', 'Lever', e.parts >= 1 && e.renommee >= 5, 'petit') });
+  h += `<div class="section">Investissements de fin de partie</div>` + Object.entries(CAT.investissements).map(([k, inv]) => {
+    const n = e.investissements[k] || 0, prix = e.prix_investissements[k], fort = [...e.concurrents].sort((a, b) => b.renommee - a.renommee)[0];
+    const attente = k === 'campagne' ? 360 - (e.jours_total - e.derniere_campagne) : 0;
+    const bloque = !e.locaux.includes('bureau') ? "Après l'emménagement" : e.renommee < inv.rep ? `★ ${inv.rep} requis`
+      : (k === 'formation' || k === 'filiale') && n ? 'Fait' : k === 'rachat' && (n >= 2 || e.concurrents.length < 2) ? 'Plus possible'
+      : attente > 0 ? `Dans ${attente} j` : '';
+    const suivi = k === 'campagne' && n ? ` · ${n} faite${n > 1 ? 's' : ''}` : k === 'rachat' ? ` · ${n} / 2 · cible : ${esc(fort.nom)} (renommée ${fort.renommee})` : '';
+    return ligne({ couleur: n ? '#7be08a' : '#b08af0', t1: esc(inv.nom), t2: esc(inv.desc), t3: eur(prix) + suivi,
+      btn: bouton('investir', k, bloque || 'Investir', !bloque && e.argent >= prix, 'petit') });
+  }).join('');
   h += `<div class="section">Production en série</div>` + (e.series.length ? e.series.map((x) => ligne({ couleur: '#7be08a', t1: esc(x.nom), t2: `${esc(x.client)} · ~${eur(x.marge)} / mois`, t3: `Encore ${x.mois} mois` })).join('')
     : '<div class="vide">Livrez de beaux projets (7/10 ou plus) : certains clients commandent ensuite une série.</div>');
+  h += `<div class="section">Brevets · 3 au plus</div>` + (e.brevets.length ? e.brevets.map((x) => ligne({ couleur: '#ffc94d', t1: esc(x.nom), t2: `Licences ${eur(x.revenu)} / mois`, t3: `Encore ${x.mois} mois` })).join('')
+    : `<div class="vide">Nommez un·e chargé·e d'innovation (direction R&D) : ses idées peuvent être brevetées.</div>`);
   h += `<div class="section">Garanties en cours</div>` + (e.garanties.length ? e.garanties.map((g) => ligne({ couleur: '#ff8a7a', t1: esc(g.nom), t2: `${esc(g.client)} · ${dec(g.defauts)} défauts livrés`, t3: `Garantie encore ${g.jours} j` })).join('')
     : '<div class="vide">Aucun projet livré avec des défauts : pas de risque de retour SAV.</div>');
   h += `<div class="section">Clients</div>` + (e.clients_top.length ? e.clients_top.map((c) => ligne({
@@ -529,11 +986,12 @@ function majHtml(sel, html) {
 function rendre() {
   const e = ETAT;
   if (!e || !CAT) return;
-  $('#date').innerHTML = `${esc(e.date)}<small>${esc(e.entreprise)} · ${SAISON_NOM[e.saison]} · ${METEO_NOM[e.meteo] || ''}</small>`;
+  $('#date').innerHTML = `${esc(e.date)}<span id="heure">${texteHeure()}</span><small>${esc(e.entreprise)} · ${SAISON_NOM[e.saison]} · ${METEO_NOM[e.meteo] || ''}</small>`;
   const monde = $('#monde');
   monde.dataset.saison = e.saison;
   monde.dataset.meteo = e.meteo;
-  monde.dataset.soir = e.heures >= 12 ? 'nuit' : e.heures >= 10 ? 'soir' : '';
+  monde.dataset.soir = eclairage();
+  monde.dataset.dehors = carte() === 'garage' || etage === 'rdc' ? '1' : '';  // feuilles et pétales seulement quand on voit le jardin
   $('#rep').textContent = e.renommee;
   $('#argent').textContent = eur(e.argent);
   $('#argent').classList.toggle('negatif', e.argent < 0);
@@ -554,13 +1012,18 @@ function rendre() {
   const j = e.journal[0] || { date: '', texte: '' };
   majHtml('#bandeau', `<span class="d">${esc(j.date)}</span><span class="t">${esc(j.texte)}</span>`);
   majHtml('#temps', `<button type="button" data-act="temps" data-id="pause" class="${joue ? '' : 'actif'}" aria-pressed="${!joue}" aria-label="Pause"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg></button>`
-    + Object.entries(VITESSES).map(([k, [nom]]) => `<button type="button" data-act="temps" data-id="${k}" class="${joue && vitesse === k ? 'actif' : ''}" aria-pressed="${joue && vitesse === k}">${nom}</button>`).join(''));
+    + (pilotage ? `<button type="button" data-act="demo" class="actif" aria-pressed="true" title="Reprendre la main">Démo</button>` : '')
+    + Object.entries(VITESSES).filter(([k]) => k !== 'demo').map(([k, [nom]]) => `<button type="button" data-act="temps" data-id="${k}" class="${joue && vitesse === k ? 'actif' : ''}" aria-pressed="${joue && vitesse === k}">${nom}</button>`).join(''));
   document.querySelectorAll('.nav button').forEach((b) => b.classList.toggle('actif', b.dataset.id === onglet || (onglet === 'journal' && b.dataset.id === 'accueil')));
   $('#panneau').classList.toggle('ouvert', onglet !== 'accueil');
   $('#titre-panneau').textContent = TITRES[onglet];
   const contenu = { accueil: panneauAccueil, projets: panneauProjets, equipe: panneauEquipe, materiel: panneauMateriel, locaux: panneauLocaux, journal: () => panneauJournal(40), societe: panneauSociete }[onglet]();
   majHtml('#contenu-panneau', contenu);
   rendreMonde();
+  const focus = document.activeElement?.closest?.('#etages [data-id]')?.dataset.id;
+  $('#etages').hidden = carte() === 'garage';
+  majHtml('#etages', ORDRE_ETAGES.map((k) => `<button type="button" data-act="etage" data-id="${k}" class="${etage === k ? 'actif' : ''}" aria-pressed="${etage === k}" aria-label="${esc(CAT.etages[k].nom)} : ${NB[k] || 0} personne${(NB[k] || 0) > 1 ? 's' : ''}">${esc(CAT.etages[k].nom)}${NB[k] ? `<small aria-hidden="true">${NB[k]}</small>` : ''}</button>`).join(''));
+  if (focus) $(`#etages [data-id="${focus}"]`)?.focus();  // le compteur change : on garde le focus clavier
   rendreModale();
   rendreAmenagement();
 }
@@ -659,13 +1122,14 @@ function rendreModale() {
   if (h && etaitCachee) $('#modale-contenu button')?.focus();
 }
 
-const chanceNego = (prix, delai, fid = 0) => Math.max(0.05, Math.min(1, 1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * ETAT.renommee + 0.05 * fid));
+const chanceNego = (prix, delai, fid = 0) => Math.max(0.05, Math.min(1, 1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * ETAT.renommee + 0.05 * fid + (ETAT.bonus_nego || 0)));
 function modaleSignature() {
   const e = ETAT, sg = signature;
   const cible = sg.genre === 'signer' ? e.offres.find((o) => o.id === sg.id) : CAT.produits.find((x) => x.id === sg.id);
   if (!cible) { signature = null; return ''; }
+  const exigeant = sg.genre === 'signer' && CAT.exigeants.includes(cible.secteur);
   const groupe = (cat, cle, val, options, desc) => `<div class="section" style="margin-top:6px">${esc(cat)}</div><div class="onglets">${Object.entries(options).map(([k, o]) => {
-    const bloque = o.requis && !e.technos.includes(o.requis);
+    const bloque = (o.requis && !e.technos.includes(o.requis)) || (exigeant && cle === 'qualif' && k === 'aucune');
     return `<button type="button" data-act="sig-opt" data-cle="${cle}" data-id="${k}" class="${val === k ? 'actif' : ''}" style="${val === k ? 'background:#ffc94d' : ''}" ${bloque ? 'disabled' : ''}>${esc(o.nom || o)}</button>`;
   }).join('')}</div>${desc ? `<p style="font-size:13px">${esc(desc)}</p>` : ''}`;
   let h = `<h2 id="modale-titre">${esc(cible.nom)}</h2><p>${sg.genre === 'signer' ? `${esc(cible.client)} · ${eur(cible.paie)} · ${cible.delai} j` : `Produit maison · prototype ${eur(cible.cout)}`}</p>`;
@@ -676,6 +1140,14 @@ function modaleSignature() {
     if (cle === 'boitier' && sansMeca) { h += `<div class="section" style="margin-top:6px">${esc(cat.nom)}</div><p style="font-size:13px">Pas de partie mécanique sur ce projet.</p>`; continue; }
     h += groupe(cat.nom, cle, sg.tech[cle], cat.options, cat.options[sg.tech[cle]].desc);
   }
+  // même calcul que le moteur (_appliquer_choix) : points après les choix × coût par point, −15 % avec un chef de projet
+  const base = sg.genre === 'signer' ? cible.total : { e: Math.round(cible.taille * cible.rep[0]), m: Math.round(cible.taille * cible.rep[1]), f: Math.round(cible.taille * cible.rep[2]) };
+  const opts = Object.entries(sg.tech).filter(([k]) => !(k === 'boitier' && sansMeca)).map(([k, v]) => CAT.choix_tech[k].options[v]);
+  const points = ['e', 'm', 'f'].reduce((t, d) => t + opts.reduce((x, o) => (d in o ? Math.round(x * o[d]) : x), base[d]), 0);
+  const chefs = e.employes.some((x) => x.chef);
+  const etapes = Math.round(opts.reduce((t, o) => t + (o.cout_point || 0), 0) * points * (chefs ? 0.85 : 1) / 10) * 10, moule = opts.reduce((t, o) => t + (o.cout || 0), 0);
+  if (etapes + moule) h += `<p style="font-size:13px">Payé à la signature : <b>${eur(etapes + moule)}</b>${etapes ? ` (indus et qualification ${eur(etapes)}${chefs ? ', −15 % grâce au chef de projet' : ''})` : ''}</p>`;
+  if (exigeant) h += `<p style="font-size:13px">Marché exigeant : une qualification est obligatoire.</p>`;
   if (sg.genre === 'signer') {
     const ch = chanceNego(Number(sg.prix), Number(sg.delai), cible.fidele || 0);
     h += groupe('Prix demandé', 'prix', sg.prix, CAT.prix_proposes) + groupe('Délai proposé', 'delai', sg.delai, CAT.delais_proposes);
@@ -688,14 +1160,16 @@ const AIDE = [
   ['Note du client', "Les défauts et le retard font baisser la note sur 10. Elle fixe le solde payé et la renommée gagnée."],
   ['Clients fidèles', "Une note au-dessus de l'attente fidélise le client (★). Il revient avec des projets de son secteur plus gros, et négocie plus facilement."],
   ['Méga-projets', "Dès 10 de renommée, de rares projets géants apparaissent : ils occupent deux places, demandent une grande équipe et plusieurs technos."],
-  ['Produits maison', "Lancez vos produits, puis leurs suites : une v2 se vend d'autant mieux que la v1 a été bien notée."],
+  ['Produits maison', "Lancez vos produits, puis leurs suites : une v2 se vend d'autant mieux que la v1 a été bien notée. Une fois en vente, commandez des lots au sous-traitant (Projets › En vente) : un gros lot coûte moins cher par unité mais risque de rester en stock. Un lot peut arriver en retard ou défectueux ; le contrôle à réception le repère mieux avec un bon qualiticien."],
+  ['Indus et qualification', "À la signature, deux étapes optionnelles et payantes, pour la carte ou le produit fini. L'industrialisation baisse le coût unitaire, les défauts en série et les retours. La qualification (essais en température et vibrations) améliore la note, réduit les pannes et est obligatoire pour l'auto, l'aéro, le médical et le spatial. Installez un employé doué au Bureau indus ou au Labo de qualification pour mieux les réussir."],
+  ['Chefs et commerciaux', "Les chefs de projet suivent plusieurs projets : une place de projet de plus chacun, ils composent eux-mêmes l'équipe (le meilleur spécialiste libre de chaque domaine), meilleure note, moins de retard et de surcoûts, prime du client si le projet est livré à l'heure et bien noté ; leur effet baisse avec le nombre de projets suivis. Les responsables d'équipe font produire et progresser leur service et évitent les pertes de coordination. Les commerciaux rendent les offres mieux payées, les négocient, prospectent le secteur choisi et touchent une commission."],
   ['Missions', "Trois missions sont proposées à la fois sur le tableau de bord. Chacune rapporte une prime, parfois de la renommée."],
   ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware) et des compétences métier, une séniorité, plusieurs traits, une motivation, un moral et une fatigue. Le CV ne dit pas tout : l'entretien et le spécialiste en révèlent plus, le reste se découvre avec le temps. Gare au burn-out, et soignez les entretiens annuels."],
   ['Conditions de travail', "Décoration, café, climatisation, isolation et horaires changent la production (vue Productivité)."],
-  ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Quittez le garage pour le bâtiment, puis louez ses pièces une à une : plus de projets en parallèle, jusqu'au hangar de production."],
-  ['Plan', "Sur téléphone, faites glisser le plan au doigt et pincez pour zoomer. Les boutons + / − / ⌖ zooment et recentrent."],
+  ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Quittez le garage pour le bâtiment de bureaux (onglets RDC, R1, R2 à gauche du plan) : tout le bâtiment est ouvert d'un coup, vous grandissez ensuite en embauchant. Nommez des responsables de service, un directeur R&D et un chargé d'innovation dans Équipe."],
+  ['Plan', "Sur téléphone, faites glisser le plan au doigt et pincez pour zoomer. Les boutons + / − / ⌖ zooment et recentrent. En vitesse Lent ou Normal, suivez la journée de bureau : réunion du matin, cafés, déjeuner à midi."],
   ['Aménagement', "Le bouton en haut à gauche permet de placer, déplacer ou revendre bureaux, appareils et décoration."],
-  ['Société', "Recherche, certifications, fournisseurs, prêts et levée de fonds débloquent de meilleurs contrats."],
+  ['Société', "Recherche, certifications, fournisseurs, prêts et levée de fonds débloquent de meilleurs contrats. En fin de partie, investissez : campagne nationale, centre de formation, filiale, rachat d'un concurrent."],
   ['Argent', "Loyer, salaires et frais tombent chaque mois, l'impôt chaque année. Sous −5 000 €, c'est la faillite."],
   ['Fin de partie', "Au bout de 20 ans, un score et un titre. Les 10 meilleurs scores restent dans les records."],
 ];
@@ -769,6 +1243,7 @@ async function agir(genre, params = {}) {
   try {
     const avant = ETAT.projets.length;
     const r = await api('/api/action', { genre, ...params });
+    observer(ETAT, r.etat);
     ETAT = r.etat;
     if (!r.ok) toast(r.erreur);
     else if (genre === 'signer' && ETAT.projets.length === avant) toast(ETAT.journal[0].texte);  // négociation perdue
@@ -787,7 +1262,11 @@ function boucle() {
       envoi = true;
       try {
         const r = await api('/api/action', { genre: 'avancer' });
+        const avant = ETAT;
+        observer(ETAT, r.etat);
         ETAT = r.etat;
+        if (pilotage) { const lent = jourLent(avant, ETAT); await piloter(); vitesse = lent ? 'normal' : 'demo'; }
+        debutJour = performance.now();
       } catch (err) {
         joue = false;
         toast(err.message);
@@ -816,7 +1295,24 @@ document.addEventListener('click', async (ev) => {
       if (id === 'centre') return recentrer();
       return appliquerZoom(zoom * (id === 'plus' ? 1.25 : 0.8));
     case 'amenage': joue = false; amenage = !amenage; selection = null; placement = null; if (!tablette()) onglet = 'accueil'; return rendre();
-    case 'placer': joue = false; placement = { type: id }; amenage = true; selection = null; if (!tablette()) onglet = 'accueil'; return rendre();
+    case 'placer': {
+      joue = false; placement = { type: id }; amenage = true; selection = null;
+      if (!tablette()) onglet = 'accueil';
+      // on montre l'étage d'une pièce où l'objet peut aller
+      const ok = fiche(id).pieces.filter(pieceDispo);
+      if (carte() === 'batiment' && ok.length && !ok.some((k) => CAT.pieces[k].etage === etage)) { etage = CAT.pieces[ok[0]].etage; rendre(); recentrer(); }
+      return rendre();
+    }
+    case 'etage': etage = id; rendre(); return recentrer();
+    case 'voir': {
+      if (!tablette()) onglet = 'accueil';
+      etage = CAT.pieces[id].etage;
+      rendre();
+      const [x, y, w, hh] = CAT.pieces[id].rect, [X, Y] = PLAN.iso(x + w / 2, y + hh / 2, 0), cadre = $('#cadre'), ech = $('#echelle');
+      cadre.scrollLeft = X * zoom + ech.offsetLeft - cadre.clientWidth / 2;
+      cadre.scrollTop = Y * zoom + ech.offsetTop - cadre.clientHeight / 2;
+      return;
+    }
     case 'placer-fin': placement = null; return rendre();
     case 'deplacer-sel': { const o = ETAT.objets.find((x) => x.id === selection); if (o) placement = { type: o.type, id: o.id }; return rendre(); }
     case 'vendre':
@@ -824,9 +1320,11 @@ document.addEventListener('click', async (ev) => {
       selection = null;
       break;
     case 'catmat': catMat = id; return rendre();
+    case 'demo': pilotage = false; figee = fractionJour(); joue = false; toast('Démo arrêtée : à vous de jouer !', true); return rendre();
     case 'temps':
-      if (id === 'pause') joue = false;
-      else { joue = true; vitesse = id; }
+      pilotage = false;
+      if (id === 'pause') { figee = fractionJour(); joue = false; }
+      else { if (!joue) debutJour = performance.now() - figee * VITESSES[id][1]; joue = true; vitesse = id; }
       rendre(); return boucle();
     case 'menu': return ouvrirMenu('menu');
     case 'nouvelle-directe': return ouvrirMenu('liste', 'nouvelle');
@@ -853,6 +1351,8 @@ document.addEventListener('click', async (ev) => {
     case 'sig-ouvrir': {
       joue = false;
       const tech = Object.fromEntries(Object.entries(CAT.choix_tech).map(([k, c]) => [k, c.defaut]));
+      const o = b.dataset.genre === 'signer' && ETAT.offres.find((x) => x.id === id);
+      if (o && CAT.exigeants.includes(o.secteur)) tech.qualif = 'carte';
       signature = { genre: b.dataset.genre, id, tech, prix: '1.0', delai: '1.0' };
       return rendre();
     }
@@ -881,6 +1381,9 @@ document.addEventListener('click', async (ev) => {
   if (b.dataset.choix !== undefined) params.choix = Number(b.dataset.choix);
   if (b.dataset.heures) params.heures = Number(b.dataset.heures);
   if (b.dataset.montant) params.montant = Number(b.dataset.montant);
+  if (b.dataset.role !== undefined) params.role = b.dataset.role || null;
+  if (b.dataset.qte) params.qte = Number(b.dataset.qte);
+  if (b.dataset.cible) params.cible = b.dataset.cible;
   await agir(act, params);
 });
 
@@ -912,6 +1415,7 @@ document.addEventListener('input', (ev) => {
 document.addEventListener('change', (ev) => {
   const sel = ev.target.closest('[data-affecter]');
   if (sel) agir('affecter', { id: Number(sel.dataset.affecter), projet: sel.value ? Number(sel.value) : null });
+  if (ev.target.closest('[data-prospecter]')) agir('prospecter', { id: ev.target.value || null });
 });
 
 // Pincer pour zoomer (téléphone), Ctrl + molette (ordinateur)
@@ -933,7 +1437,8 @@ $('#cadre').addEventListener('wheel', (ev) => {
 }, { passive: false });
 
 async function demarrer() {
-  $('#dyn').insertAdjacentHTML('afterend', '<div id="devant"></div>');  // façade basse et extérieur : devant les objets, sous les personnages
+  $('#dyn').insertAdjacentHTML('afterend', '<div id="devant"></div><div id="rue"></div><div id="effets"></div>');
+  $('#ambiance').insertAdjacentHTML('beforebegin', '<div id="saison"></div>');  // feuilles d'automne, pétales de printemps  // façade basse et extérieur, puis la rue animée : devant les objets, sous les personnages
   $('#monde').insertAdjacentHTML('beforeend', `<div id="fantome" class="fantome" hidden><svg viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}"><polygon points=""/></svg></div>`);
   $('#monde').style.width = PLAN.W + 'px';
   $('#monde').style.height = PLAN.H + 'px';
@@ -948,7 +1453,8 @@ async function demarrer() {
   }
   rendre();
   recentrer();
-  ouvrirMenu('menu');  // écran titre à chaque ouverture
+  if (DEMO) { joue = true; vitesse = 'normal'; rendre(); boucle(); toast('Mode démo : la partie se joue toute seule. Le bouton « Démo » vous rend la main.', true); }
+  else ouvrirMenu('menu');  // écran titre à chaque ouverture
 }
 
 demarrer();

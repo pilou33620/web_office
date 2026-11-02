@@ -137,7 +137,7 @@ class TestExtensions(unittest.TestCase):
         fondateur["e"] = 8
         j.action("promouvoir", id=fondateur["id"])
         self.assertTrue(fondateur["chef"])
-        self.assertEqual(j._mult_chef([fondateur]), 1.06)
+        self.assertEqual(j._mult_chef({"chef": fondateur["id"], "suivi": 1}), 1.06)
         j.action("seminaire")
         self.assertEqual(fondateur["absence"], "seminaire")
         with self.assertRaises(ErreurJeu):
@@ -223,6 +223,8 @@ class TestExtensions(unittest.TestCase):
             j.action("signer", id=mega["id"])  # équipe trop petite
         for _ in range(5):
             j._nouvel_employe(j._candidat(), None)
+        for x in e["employes"]:
+            x["chef"] = False  # un chef de projet ajouterait une place
         with self.assertRaises(ErreurJeu):
             j.action("signer", id=mega["id"])  # 2 places nécessaires, le garage n'en a qu'une
         e["locaux"].append("bureau")

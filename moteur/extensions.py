@@ -2,7 +2,8 @@
 fournisseurs, prêts et investisseurs, carrières, vie d'équipe, météo, scénarios et difficulté."""
 from .donnees import (CERTIFS, CHOIX_TECH, CONCURRENTS, DIFFICULTES, ENTRETIEN_CERTIF, FIDELITE_MAX, FOURNISSEURS, MEGA_PRIME,
                       MEGAS, METEO, MISSIONS, NB_MISSIONS_ACTIVES, NIVEAUX_FIDELITE, PRETS, PRIMES, PRODUITS, SAISONS, SCENARIOS,
-                      SECTEURS, TAUX_PRET, TECHNOS)
+                      SECTEURS, TAUX_PRET, TECHNOS, BREVET, IDEES_BREVET, NOM_DOMAINE, ROLES, AGRANDIR_STOCK, LOTS,
+                      STOCK_BATIMENT, STOCK_GARAGE, STOCKAGE, INVESTISSEMENTS)
 
 DUREE_GARANTIE = 120
 DUREE_STAGE = 90
@@ -33,7 +34,8 @@ class Extensions:
         e.setdefault("difficulte", difficulte)
         for cle, val in (("technos", []), ("certifs", []), ("recherches", []), ("garanties", []), ("series", []),
                          ("prets", []), ("fournisseur", "europe"), ("parts", 1.0), ("meteo", "soleil"), ("fete", None),
-                         ("dernier_seminaire", -999), ("victoire", None), ("objectif", None), ("offre_serie", None),
+                         ("dernier_seminaire", -999), ("victoire", None), ("objectif", None), ("offre_serie", None), ("brevets", []),
+                         ("commandes", []), ("stock_max", STOCK_GARAGE), ("prospection", None), ("investissements", {}), ("derniere_campagne", -999),
                          ("clients", {}), ("gammes", {}), ("missions", []), ("affinites", {}), ("affinites_connues", [])):
             e.setdefault(cle, val)
         st = e["stats"]
@@ -52,6 +54,7 @@ class Extensions:
     def _completer_employe(self, x):
         x.setdefault("anniv", [self.rng.randint(0, 11), self.rng.randint(1, 30)])
         x.setdefault("chef", False)
+        x.setdefault("role", None)
         x.setdefault("stage", 0)
         x.setdefault("absence", None)
         self._completer_personnel(x)
@@ -68,6 +71,7 @@ class Extensions:
             e["locaux"].append(lid)
         if "bureau" in e["locaux"]:
             self._replacer_objets()
+            e["stock_max"] = STOCK_BATIMENT  # on reprend une société déjà installée dans le bâtiment
         for _ in range(sc.get("employes", 0)):
             c = self._candidat()
             libres = self.bureaux_libres()
@@ -92,8 +96,19 @@ class Extensions:
         return [CHOIX_TECH[k]["options"][v].get(cle) for k, v in p.get("choix", {}).items() if CHOIX_TECH[k]["options"][v].get(cle) is not None]
 
     def _note_bonus(self, p):
-        e = self.etat
-        return sum(self._choix_effets(p, "note")) + 0.2 * ("ia" in e["technos"]) + 0.2 * ("iso" in e["certifs"])
+        e, actifs = self.etat, self.roles()["actifs"]
+        n = sum(self._choix_effets(p, "note")) + 0.2 * ("ia" in e["technos"]) + 0.2 * ("iso" in e["certifs"])
+        return n + 0.2 * ("dir_rd" in actifs) + 0.3 * ("innov" in actifs and p["type"] == "produit")
+
+    def dg_actif(self):
+        """Votre bureau (fondateur) est installé en direction générale."""
+        return any(x.get("fondateur") and self.roles()["pieces"].get(x["id"]) == "dg" for x in self.etat["employes"])
+
+    def prix_recherche(self, genre, f):
+        return int(f["prix"] * (0.75 if genre == "tech" and "dir_rd" in self.roles()["actifs"] else 1))
+
+    def montant_levee(self):
+        return int((60000 + 15000 * self.etat["renommee"]) * (1.3 if self.dg_actif() else 1))
 
     def _cem_bonus(self, p):
         return sum(self._choix_effets(p, "cem"))
@@ -151,11 +166,13 @@ class Extensions:
             choix["boitier"] = CHOIX_TECH["boitier"]["defaut"]  # pas de méca : le choix du boîtier ne s'applique pas
             return self._appliquer_choix(base, choix)
         base = {**base, "total": total, "taille": sum(total.values())}
-        return base, cout
+        etapes = sum(CHOIX_TECH[k]["options"][v].get("cout_point", 0) for k, v in choix.items()) * base["taille"]
+        return base, cout + int(round(etapes * (0.85 if self.chefs_projet() else 1), -1))  # le chef de projet pilote l'indus et la qualif
 
     def chance_negociation(self, prix, delai, fid=0):
         """Au prix et au délai affichés, le client signe à coup sûr ; demander plus est un pari (moins risqué avec un client fidèle)."""
-        return round(borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"] + 0.05 * fid + 0.01 * self.meilleur_metier("commercial"), 0.05, 1.0), 2)
+        return round(borne(1 - 2.6 * (prix - 1) - 0.6 * (delai - 1) + 0.01 * self.etat["renommee"] + 0.05 * fid + 0.01 * self.meilleur_metier("commercial")
+                           + (0.1 if self.dg_actif() else 0), 0.05, 1.0), 2)
 
     # ------------------------------------------------------------------ clients fidèles, méga-projets, suites
     def _client_fidele(self):
@@ -197,7 +214,7 @@ class Extensions:
             raise ErreurJeu("Une seule recherche de ce type à la fois." if genre == "tech" else "Un seul audit à la fois.")
         if f.get("requis") and f["requis"] not in (e["technos"] if genre == "tech" else e["certifs"]):
             raise ErreurJeu(f"Il faut d'abord : {cat[f['requis']]['nom']}.")
-        self._payer(f["prix"])
+        self._payer(self.prix_recherche(genre, f))
         e["recherches"].append({"genre": genre, "id": rid, "jours": f["jours"], "total": f["jours"]})
         self._log(f"{'Recherche' if genre == 'tech' else 'Audit'} lancé : {f['nom']} ({f['jours']} jours).", "info")
 
@@ -241,7 +258,7 @@ class Extensions:
                 raise ErreurJeu("Vous avez déjà ouvert votre capital.")
             if e["renommee"] < 5:
                 raise ErreurJeu("Les investisseurs attendent 5 de renommée.")
-            montant = 60000 + 15000 * e["renommee"]
+            montant = self.montant_levee()
             e["argent"] += montant
             e["parts"] = 0.8
             self._log(f"Levée de fonds : +{montant:,} € contre 20 % du capital (score final ×0,8).".replace(",", " "), "bon")
@@ -255,6 +272,7 @@ class Extensions:
             if emp.get("stage"):
                 raise ErreurJeu("Un stagiaire ne peut pas être promu.")
             emp["chef"] = True
+            self._installer_fonction(emp, "cdp")
             if not emp.get("fondateur"):
                 emp["salaire"] += 600
             emp["humeur"] = min(8, emp["humeur"] + 4)
@@ -269,6 +287,27 @@ class Extensions:
                 x["humeur"] = min(8, x["humeur"] + 6)
             e["dernier_seminaire"] = e["jours_total"]
             self._log("Séminaire d'équipe : deux jours au vert, tout le monde revient regonflé.", "bon")
+        elif genre == "commander":
+            self._commander(p.get("id"), p.get("qte"))
+        elif genre == "agrandir_stock":
+            if not self.emmenage():
+                raise ErreurJeu("Le stock s'agrandit dans le bâtiment : emménagez d'abord.")
+            self._payer(AGRANDIR_STOCK[0])
+            e["stock_max"] += AGRANDIR_STOCK[1]
+            self._log(f"Stock agrandi : {e['stock_max']} unités.", "bon")
+        elif genre == "negocier":
+            self._negocier(p.get("id"), p.get("cible"))
+        elif genre == "prospecter":
+            if p.get("id") is not None and p.get("id") not in SECTEURS:
+                raise ErreurJeu("Secteur inconnu.")
+            if not self.commerciaux():
+                raise ErreurJeu("Il faut des commerciaux pour prospecter.")
+            e["prospection"] = p.get("id")
+            self._log("Prospection : " + (SECTEURS[p["id"]]["nom"] if p.get("id") else "tous secteurs") + ".", "info")
+        elif genre == "nommer":
+            self._nommer(self.employe(p.get("id")), p.get("role"))
+        elif genre == "investir":
+            self._investir(p.get("id"))
         elif genre == "fermer_victoire":
             if e.get("victoire"):
                 e["victoire"]["vue"] = True
@@ -277,6 +316,180 @@ class Extensions:
         return True
 
     # ------------------------------------------------------------------ chaque jour
+    # ------------------------------------------------------------------ produits : sous-traitant, lots, stock
+    # ------------------------------------------------------------------ investissements de fin de partie
+    def a_investi(self, iid):
+        return self.etat["investissements"].get(iid, 0)
+
+    def prix_investissement(self, iid):
+        inv, n = INVESTISSEMENTS[iid], self.a_investi(iid)
+        if iid == "campagne":
+            return int(inv["prix"] * (1 + 0.5 * n))
+        if iid == "rachat":
+            return inv["prix"] + inv["par_rep"] * max(c["renommee"] for c in self.etat["concurrents"])
+        return inv["prix"]
+
+    def _investir(self, iid):
+        e = self.etat
+        inv = INVESTISSEMENTS.get(iid)
+        if not inv:
+            raise ErreurJeu("Investissement inconnu.")
+        if not self.emmenage():
+            raise ErreurJeu("Les investissements se font depuis le bâtiment : emménagez d'abord.")
+        if e["renommee"] < inv["rep"]:
+            raise ErreurJeu(f"Renommée {inv['rep']} requise.")
+        if iid in ("formation", "filiale") and self.a_investi(iid):
+            raise ErreurJeu("Déjà fait.")
+        if iid == "campagne" and e["jours_total"] - e["derniere_campagne"] < 360:
+            raise ErreurJeu("Une campagne nationale par an au plus.")
+        if iid == "rachat" and (self.a_investi(iid) >= 2 or len(e["concurrents"]) < 2):
+            raise ErreurJeu("Deux rachats au plus : il reste toujours un concurrent.")
+        prix = self.prix_investissement(iid)
+        self._payer(prix)
+        e["investissements"][iid] = self.a_investi(iid) + 1
+        if iid == "campagne":
+            e["derniere_campagne"] = e["jours_total"]
+            e["renommee"] += 2
+            self._log(f"Campagne de communication nationale (−{prix:_} €) : renommée +2.".replace("_", " "), "bon")
+        elif iid == "rachat":
+            c = max(e["concurrents"], key=lambda c: c["renommee"])
+            e["concurrents"].remove(c)
+            e["renommee"] += 3
+            self._log(f"Vous rachetez {c['nom']} (−{prix:_} €) : un concurrent de moins, renommée +3.".replace("_", " "), "bon")
+        else:
+            self._log(f"{inv['nom']} : c'est fait ! (−{prix:_} €)".replace("_", " "), "bon")
+
+    def stock_total(self):
+        e = self.etat
+        return sum(x["stock"] for x in e["produits"]) + sum(c["qte"] for c in e["commandes"])
+
+    def _commander(self, pid, qte):
+        e = self.etat
+        prod = next((x for x in e["produits"] if x["id_produit"] == pid), None)
+        if not prod:
+            raise ErreurJeu("Produit introuvable.")
+        if qte not in LOTS:
+            raise ErreurJeu("Taille de lot inconnue.")
+        if self.stock_total() + qte > e["stock_max"]:
+            raise ErreurJeu(f"Stock trop petit : {e['stock_max']} unités en tout (commandes en cours comprises).")
+        coef, jours = LOTS[qte]
+        cout = int(round(qte * prod["cout_unite"] * coef, -1))
+        self._payer(cout)
+        jours += 3 * FOURNISSEURS[e["fournisseur"]]["jours"]
+        e["commandes"].append({"produit": pid, "nom": prod["nom"], "qte": qte, "jours": jours, "retard": False})
+        self._log(f"Lot de {qte} « {prod['nom']} » commandé au sous-traitant (−{cout:_} €, {jours} jours).".replace("_", " "), "info")
+
+    def _lots_du_jour(self):
+        """Fabrication chez le sous-traitant, retards possibles, contrôle à réception (mieux fait avec la qualification)."""
+        e, r = self.etat, self.rng
+        for c in list(e["commandes"]):
+            c["jours"] -= 1
+            if c["jours"] > 0:
+                continue
+            prod = next((x for x in e["produits"] if x["id_produit"] == c["produit"]), None)
+            if not c["retard"] and r.random() < 0.15 * (0.5 if self.chefs_projet() else 1):
+                c["retard"], c["jours"] = True, r.randint(5, 12)
+                self._log(f"Le sous-traitant prend du retard sur le lot « {c['nom']} » ({c['jours']} jours de plus).", "mauvais")
+                continue
+            e["commandes"].remove(c)
+            if not prod:
+                continue
+            defaut = r.random() < prod["defaut_lot"] * FOURNISSEURS[e["fournisseur"]]["defauts"]
+            if defaut and r.random() < min(0.95, 0.5 + 0.06 * self.meilleur_metier("qualif")):
+                e["commandes"].append({**c, "jours": 15, "retard": True})
+                self._log(f"Contrôle à réception : lot « {c['nom']} » défectueux, renvoyé au sous-traitant qui le refait.", "mauvais")
+                continue
+            prod["stock"] += c["qte"]
+            if defaut:
+                prod["note"] = max(1, round(prod["note"] - 0.4, 1))
+                prod["demande"] = max(1, round(prod["demande"] * 0.85))
+                self._log(f"Lot « {c['nom']} » défectueux passé au contrôle : retours clients, la réputation du produit baisse.", "mauvais")
+            else:
+                self._log(f"Lot de {c['qte']} « {c['nom']} » reçu au stock.", "info")
+
+    def _ventes_du_mois(self):
+        """Ventes limitées au stock, pannes remboursées, invendus liquidés en fin de vie ; renvoie (ventes, frais de stockage)."""
+        e = self.etat
+        frais = int(round(STOCKAGE * sum(x["stock"] for x in e["produits"])))
+        total = 0
+        for prod in list(e["produits"]):
+            vendus = min(prod["stock"], prod["demande"])
+            net = int(round(vendus * prod["prix"] * (1 - prod["pannes"])))
+            if vendus < prod["demande"] and prod["mois"]:
+                self._log(f"Rupture de stock : « {prod['nom']} » a manqué {prod['demande'] - vendus} ventes.", "mauvais")
+            prod["stock"] -= vendus
+            prod["total"] += net
+            prod["mois"] += 1
+            prod["demande"] = int(prod["demande"] * 0.9)
+            prod["ventes"] = prod["demande"] * prod["prix"]
+            total += net
+            if prod["demande"] < 3 and not any(c["produit"] == prod["id_produit"] for c in e["commandes"]):
+                reste = int(round(prod["stock"] * prod["cout_unite"] * 0.3))
+                if prod["stock"]:
+                    self._log(f"Fin de vie de « {prod['nom']} » : {prod['stock']} invendus soldés (+{reste:,} €).".replace(",", " "), "info")
+                total += reste
+                e["produits"].remove(prod)
+        return total, frais
+
+    def _negocier(self, oid, cible):
+        """Un commercial renégocie une offre : plus d'argent ou plus de délai, au risque de perdre le client."""
+        e = self.etat
+        o = next((x for x in e["offres"] if x["id"] == oid), None)
+        if not o:
+            raise ErreurJeu("Cette offre n'est plus disponible.")
+        if cible not in ("prix", "delai"):
+            raise ErreurJeu("Paramètres invalides.")
+        com = self.commerciaux()
+        if not com:
+            raise ErreurJeu("Il faut des commerciaux pour négocier.")
+        if o.get("negociee"):
+            raise ErreurJeu("Offre déjà négociée.")
+        o["negociee"] = True
+        if self.rng.random() < self.chance_commerciale():
+            if cible == "prix":
+                o["paie"] = int(round(o["paie"] * 1.15, -2))
+            else:
+                o["delai"] = round(o["delai"] * 1.25)
+            self._log(f"Négociation réussie sur « {o['nom']} » : " + (f"{o['paie']:,} €".replace(",", " ") if cible == "prix" else f"{o['delai']} jours") + ".", "bon")
+        else:
+            e["offres"].remove(o)
+            self._log(f"Négociation ratée : {o['client']} se tourne vers la concurrence pour « {o['nom']} ».", "mauvais")
+
+    def chance_commerciale(self):
+        return round(min(0.9, 0.45 + 0.05 * max([self.metier(x, "commercial") for x in self.commerciaux()], default=0)), 2)
+
+    def _nommer(self, emp, role):
+        """Donne (ou retire, role=None) un rôle : responsable de service, directeur R&D ou chargé d'innovation."""
+        paye = not emp.get("fondateur") and not emp.get("stage")
+        if role is None:
+            if not emp.get("role"):
+                raise ErreurJeu("Aucun rôle à retirer.")
+            if paye:
+                emp["salaire"] = max(0, emp["salaire"] - ROLES[emp["role"]]["salaire"])
+            self._log(f"{emp['nom']} quitte son poste de {ROLES[emp['role']]['nom']}.", "info")
+            emp["role"] = None
+            emp["humeur"] = max(-8, emp["humeur"] - 4)  # rendu à la nomination : pas d'humeur gratuite en boucle
+            return
+        r = ROLES.get(role) if isinstance(role, str) else None
+        if not r:
+            raise ErreurJeu("Rôle inconnu.")
+        if emp.get("stage"):
+            raise ErreurJeu("Un stagiaire ne peut pas être promu.")
+        if emp.get("role"):
+            raise ErreurJeu(f"{emp['nom']} a déjà un rôle.")
+        if any(x.get("role") == role for x in self.etat["employes"]):
+            raise ErreurJeu(f"Il y a déjà un·e {r['nom']}.")
+        if "dom" in r and emp[r["dom"]] < r["min"]:
+            raise ErreurJeu(f"Il faut {r['min']} en {NOM_DOMAINE[r['dom']]}.")
+        if "total" in r and emp["e"] + emp["m"] + emp["f"] < r["total"]:
+            raise ErreurJeu(f"Il faut {r['total']} points de compétences au total.")
+        self._installer(emp, r["genre"])
+        emp["role"] = role
+        if paye:
+            emp["salaire"] += r["salaire"]
+        emp["humeur"] = min(8, emp["humeur"] + 4)
+        self._log(f"{emp['nom']} devient {r['nom']} !", "bon")
+
     def _debut_jour_extensions(self):
         e, r = self.etat, self.rng
         saison = SAISONS[e["mois"]]
@@ -303,7 +516,7 @@ class Extensions:
     def _fin_jour_extensions(self):
         e, r = self.etat, self.rng
         for rech in list(e["recherches"]):
-            rech["jours"] -= 1
+            rech["jours"] -= 2 if rech["genre"] == "tech" and "dir_rd" in self.roles()["actifs"] else 1
             if rech["jours"] <= 0:
                 e["recherches"].remove(rech)
                 if rech["genre"] == "tech":
@@ -318,7 +531,7 @@ class Extensions:
                 e["garanties"].remove(g)
             elif not e["evenement"] and r.random() < g["defauts"] * 0.003:
                 e["garanties"].remove(g)
-                cout = int(round(500 + 400 * g["defauts"], -1))
+                cout = int(round((500 + 400 * g["defauts"]) * (0.5 if self.emmenage() else 1), -1))  # atelier SAV du bâtiment
                 e["evenement"] = {"type": "sav", "titre": "Retour SAV",
                                   "texte": f"{g['client']} signale des pannes sur « {g['nom']} », encore sous garantie.",
                                   "options": [f"Corriger gratuitement (−{cout:,} €)".replace(",", " "), "Refuser la prise en charge (renommée −2)"],
@@ -350,6 +563,7 @@ class Extensions:
             e["evenement"] = {"type": "serie", "titre": "Commande de série", "serie": s,
                               "texte": f"{s['client']} veut produire « {s['nom']} » en série pendant {s['mois']} mois. Vous touchez une marge sur chaque lot.",
                               "options": [f"Accepter (~{s['marge']:,} €/mois)".replace(",", " "), "Décliner"]}
+        self._lots_du_jour()
         self._verifier_objectif()
 
     def _mois_extensions(self):
@@ -361,13 +575,22 @@ class Extensions:
             if r.random() < f["risque"]:
                 self._log(f"Rupture de composants : pas de lot ce mois-ci pour « {s['nom']} ».", "mauvais")
             else:
-                recettes += int(s["marge"] * f["serie"] * (1.5 if "cms" in e["locaux"] else 1) * (1 + 0.04 * self.meilleur_metier("indus")))
+                recettes += int(s["marge"] * f["serie"] * s.get("indus", 1) * (1 + 0.04 * self.meilleur_metier("indus")))
             s["mois"] -= 1
             if s["mois"] <= 0:
                 e["series"].remove(s)
                 self._log(f"Fin de la production en série de « {s['nom']} ».", "info")
         if recettes:
             morceaux.append(f"séries +{recettes:,} €".replace(",", " "))
+        brevets = sum(b["revenu"] for b in e["brevets"])
+        for b in list(e["brevets"]):
+            b["mois"] -= 1
+            if b["mois"] <= 0:
+                e["brevets"].remove(b)
+                self._log(f"Le brevet « {b['nom']} » arrive à échéance.", "info")
+        if brevets:
+            recettes += brevets
+            morceaux.append(f"brevets +{brevets:,} €".replace(",", " "))
         capital = 0
         for pret in list(e["prets"]):
             part_capital = pret["montant"] // 24
@@ -409,13 +632,18 @@ class Extensions:
                 c["livres"] += 1
                 if c["fid"] >= 3 > avant:
                     self._log(f"{p['client']} devient un client fidèle : il reviendra avec de plus gros projets.", "bon")
-        if p["type"] == "contrat" and p["defauts"] >= 0.3:
-            e["garanties"].append({"nom": p["nom"], "client": p["client"], "defauts": round(p["defauts"], 1), "jours": DUREE_GARANTIE})
+        ni, nq = self._niveau(p, "indus"), self._niveau(p, "qualif")
+        qi, qq = self.qualite_etape("indus", "indus"), self.qualite_etape("qualif", "qualif")
+        # défauts vus par le client : l'indus et la qualif en évitent ; sans indus, un gros projet en laisse passer plus
+        reel = p["defauts"] * (1 - 0.35 * ni * qi) * (1 - 0.35 * nq * qq) * (1.3 if not ni and p["taille"] >= 250 else 1)
+        if p["type"] == "contrat" and reel >= 0.3:
+            e["garanties"].append({"nom": p["nom"], "client": p["client"], "defauts": round(reel, 1), "jours": DUREE_GARANTIE})
         if note >= 7:
             e["pot"] = True
-        if p["type"] == "contrat" and note >= 7 and len(e["series"]) < 4 and r.random() < 0.35:
+        # un projet industrialisé est plus souvent produit en série, avec une meilleure marge
+        if p["type"] == "contrat" and note >= 7 and len(e["series"]) < 4 and r.random() < 0.35 + 0.1 * ni:
             e["offre_serie"] = {"nom": p["nom"], "client": p["client"], "mois": r.randint(6, 18),
-                                "marge": int(round(p["paie"] * 0.04 * note / 8, -1))}
+                                "marge": int(round(p["paie"] * 0.04 * note / 8, -1)), "indus": round(1 + 0.3 * ni * qi, 2)}
 
     def _evenements_extensions(self, possibles):
         e, r = self.etat, self.rng
@@ -431,6 +659,11 @@ class Extensions:
             possibles.append({"type": "stage", "titre": "Stagiaire d'école d'ingénieurs",
                               "texte": "Une école propose un stagiaire gratuit pendant 3 mois.",
                               "options": ["L'accueillir", "Pas maintenant"]})
+        if "innov" in self.roles()["actifs"] and len(e["brevets"]) < 3:  # 3 brevets actifs au plus
+            idee = r.choice(IDEES_BREVET)
+            possibles.append({"type": "brevet", "titre": "Idée brevetable", "idee": idee,
+                              "texte": f"Votre chargé·e d'innovation a une idée : « {idee} ». Un brevet rapporterait des licences pendant 3 ans.",
+                              "options": [f"Déposer le brevet (−{BREVET['cout']:,} €)".replace(",", " "), "Laisser tomber"]})
         if e["series"]:
             s = r.choice(e["series"])
             cout = int(round(2000 + s["marge"] * 2, -1))
@@ -473,6 +706,13 @@ class Extensions:
             elif x:
                 e["employes"].remove(x)
                 self._log(f"Fin de stage pour {x['nom']}. Bonne route !", "info")
+        elif t == "brevet":
+            if choix == 0:
+                self._payer(BREVET["cout"])
+                revenu = int(round(self.rng.randint(*BREVET["revenu"]), -1))
+                e["brevets"].append({"nom": ev["idee"], "revenu": revenu, "mois": BREVET["mois"]})
+                e["renommee"] += 1
+                self._log(f"Brevet déposé : « {ev['idee']} » (+{revenu} €/mois de licences, renommée +1).", "bon")
         elif t == "obsolescence":
             s = next((y for y in e["series"] if y["nom"] == ev["serie"]), None)
             if s and choix == 0:
@@ -513,7 +753,8 @@ class Extensions:
         return {"livres": st["livres"], "employes": len(e["employes"]), "produits": st["produits_lances"],
                 "technos": len(e["technos"]), "certifs": len(e["certifs"]), "renommee": e["renommee"],
                 "fideles": sum(1 for c in e["clients"].values() if c["fid"] >= 3), "series": st["series"],
-                "suites": st["suites"], "megas": st["megas"], "note": st["meilleure_note"]}[cle]
+                "suites": st["suites"], "megas": st["megas"], "note": st["meilleure_note"], "indus": st.get("indus", 0),
+                "qualif": st.get("qualif_produit", 0), "chefs": len([x for x in e["employes"] if x.get("chef")])}[cle]
 
     def missions_actives(self):
         faites = set(self.etat["missions"])
@@ -548,6 +789,7 @@ class Extensions:
         e = self.etat
         v["classement"] = sorted([{"nom": e["entreprise"], "renommee": e["renommee"], "vous": True}] +
                                  [dict(c) for c in e["concurrents"]], key=lambda c: -c["renommee"])
+        v["prix_investissements"] = {k: self.prix_investissement(k) for k in INVESTISSEMENTS}
         v["mensualites"] = self.mensualites()
         v["dette"] = self.dette()
         v["plafond_pret"] = self.plafond_pret()
@@ -555,7 +797,12 @@ class Extensions:
         v["progres_objectif"] = self.progres_objectif()
         v["seminaire_dans"] = max(0, DELAI_SEMINAIRE - (e["jours_total"] - e["dernier_seminaire"]))
         v["cout_seminaire"] = 1000 + 300 * len([x for x in e["employes"] if not x["absent"]])
-        v["levee_possible"] = 60000 + 15000 * e["renommee"]
+        v["levee_possible"] = self.montant_levee()
+        v["bonus_nego"] = 0.1 if self.dg_actif() else 0
+        v["stock_total"] = self.stock_total()
+        v["chance_commerciale"] = self.chance_commerciale()
+        v["nb_commerciaux"] = len(self.commerciaux())
+        v["qualite_indus"], v["qualite_qualif"] = self.qualite_etape("indus", "indus"), self.qualite_etape("qualif", "qualif")
         v["missions_actives"] = [{"id": m[0], "texte": m[1], "progres": min(self._mesure(m[2]), m[3]), "seuil": m[3],
                                   "argent": m[4], "renommee": m[5]} for m in self.missions_actives()]
         v["clients_top"] = [{"nom": nom, "secteur": SECTEURS.get(c.get("secteur"), {}).get("nom", ""), "fid": c["fid"],

@@ -1,7 +1,7 @@
 """Personnel : séniorité, traits multiples, compétences métier, motivations, affinités, fidélité, burn-out,
 vie perso, entretiens annuels et découverte progressive des candidats (CV, entretien, spécialiste)."""
-from .donnees import (CHEVEUX, COULEURS, COUT_ENTRETIEN, DOMAINES, JOURS_AN, METIERS, MOTIVATIONS, PEAUX, POSTES, PRENOMS,
-                      SALAIRE_BASE, SALAIRE_POINT, SENIORITES, TRAITS)
+from .donnees import (CHEVEUX, COULEURS, COUT_ENTRETIEN, DOMAINES, JOURS_AN, METIERS, MOTIVATIONS, NOM_DOMAINE, PEAUX, POSTES,
+                      PRENOMS, ROLES, SALAIRE_BASE, SALAIRE_POINT, SENIORITES, TRAITS)
 from .extensions import ErreurJeu, borne
 
 MULTIPLICATIFS = ("vitesse", "defauts", "detection", "fatigue")  # les autres effets de traits s'additionnent
@@ -85,9 +85,18 @@ class Personnel:
              "traits": r.sample(sorted(TRAITS), 3 if r.random() < 0.3 else 2), "motivation": r.choice(list(MOTIVATIONS)),
              "connu": {"traits": 1, "cachee": False, "motivation": False, "seniorite": False, "indice": None},
              "couleur": r.choice(COULEURS), "cheveux": r.choice(CHEVEUX), "peau": r.choice(PEAUX)}
+        if not stagiaire and rep >= 3 and r.random() < 0.12:  # un chef d'équipe expérimenté, embauché pour encadrer un service
+            d = r.choice(DOMAINES)
+            c[d] = max(c[d], 8 + r.randint(0, 2))
+            c.update(poste=f"Chef d'équipe {NOM_DOMAINE[d]}", role_propose=f"resp_{d}")
+        c["chef"], c["commercial"] = bool(profil.get("chef")), bool(profil.get("commercial"))
         c["seniorite"] = 0 if stagiaire else self.seniorite_possible(c)
         c["annonce"] = min(3, c["seniorite"] + 1) if not stagiaire and r.random() < 0.3 else c["seniorite"]  # CV parfois gonflé
         c["salaire"] = 600 if stagiaire else self.prix_marche(c, c["annonce"])  # on paie ce que le CV annonce
+        if c["commercial"]:
+            c["salaire"] = int(round(c["salaire"] * 0.6, -1))  # fixe plus faible : le reste en commission sur les contrats
+        if c.get("role_propose"):
+            c["salaire"] += ROLES[c["role_propose"]]["salaire"]
         return c
 
     def _completer_personnel(self, x):
@@ -174,7 +183,7 @@ class Personnel:
     def _contexte(self, emp, p, equipe):
         """Effet du contexte sur la vitesse : chef présent, taille de l'équipe, pression du délai."""
         t, f = emp["traits"], 1.0
-        chef = any(x.get("chef") and x is not emp for x in equipe)
+        chef = bool(p.get("chef")) and p["chef"] != emp["id"]  # un chef de projet suit ce projet
         if "autonome" in t and not chef:
             f *= 1.08
         if "encadrement" in t:
@@ -192,10 +201,10 @@ class Personnel:
     def _facteur_defauts_emp(self, emp, p):
         return self._trait(emp, "defauts") * SENIORITES[emp["seniorite"]]["defauts"] * (1.2 if "stresse" in emp["traits"] and self._sous_pression(p) else 1.0)
 
-    def _affinites(self, equipe):
-        """Les collègues qui s'entendent travaillent mieux ensemble ; un chef apaise les conflits."""
+    def _affinites(self, equipe, p=None):
+        """Les collègues qui s'entendent travaillent mieux ensemble ; un chef de projet apaise les conflits."""
         e, f = self.etat, 1.0
-        chef = any(x.get("chef") for x in equipe)
+        chef = bool(p and p.get("chef"))
         for i, a in enumerate(equipe):
             for b in equipe[i + 1:]:
                 k = paire(a["id"], b["id"])
@@ -208,9 +217,13 @@ class Personnel:
                 f *= 1.03 if v > 0 else 0.975 if chef else 0.95
         return f
 
-    def _mult_chef(self, actifs):
-        chefs = [x for x in actifs if x.get("chef")]
-        return max([1 + (0.06 + 0.01 * self.metier(c, "gestion")) * (1.5 if "leader" in c["traits"] else 1) for c in chefs], default=1.0)
+    def _mult_chef(self, p):
+        """Bonus du chef de projet qui suit ce projet : sa gestion, son leadership, son bureau ; partagé entre ses projets."""
+        c = next((x for x in self.etat["employes"] if x["id"] == p.get("chef")), None)
+        if not c:
+            return 1.0
+        return 1 + (0.06 + 0.01 * self.metier(c, "gestion")) * (1.5 if "leader" in c["traits"] else 1) \
+            * (1.5 if self.roles()["pieces"].get(c["id"]) == "cdp" else 1) * p.get("suivi", 0)
 
     # ------------------------------------------------------------------ chaque jour, chaque mois
     def _jour_personnel(self):

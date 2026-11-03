@@ -646,20 +646,27 @@ const PLAN = (() => {
   const triees = (liste) => liste.sort((a, b) => a[0] - b[0]).map((x) => x[1]).join('');
   const svgEnveloppe = (contenu) => `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${contenu}</svg>`;
   const batiment = (e) => e.locaux.includes('bureau');
+  const defs = (e) => {
+    SAISON = e.saison || 'printemps';
+    const [h1, h2] = HERBE[SAISON] || HERBE.printemps;
+    return DEFS.replace('fill="#7cc46a"/><circle cx="5" cy="6" r="1.6" fill="#68b357"/><circle cx="16" cy="15" r="1.6" fill="#68b357"/>',
+      `fill="${h1}"/><circle cx="5" cy="6" r="1.6" fill="${h2}"/><circle cx="16" cy="15" r="1.6" fill="${h2}"/>`);
+  };
   return {
     W, H, PEAUX, iso, versMonde, empreinte, figure, objet, profondeur,
     // Étage du bâtiment à dessiner (le garage n'a qu'un niveau)
     etage: (k, cat) => { ETAGE = k; DY = k === 'garage' ? 0 : cat.etages[k].y0; },
     // Calque du fond : sol, murs du fond, mobilier fixe
     fond: (e, cat) => {
-      SAISON = e.saison || 'printemps';
-      const [h1, h2] = HERBE[SAISON] || HERBE.printemps, defs = DEFS.replace('fill="#7cc46a"/><circle cx="5" cy="6" r="1.6" fill="#68b357"/><circle cx="16" cy="15" r="1.6" fill="#68b357"/>',
-        `fill="${h1}"/><circle cx="5" cy="6" r="1.6" fill="${h2}"/><circle cx="16" cy="15" r="1.6" fill="${h2}"/>`);
       const f = batiment(e) ? fondEtage(e, cat) : fondGarage(e, cat);
-      return svgEnveloppe(defs + sol(f.plat) + f.fond + triees(f.el));
+      return svgEnveloppe(defs(e) + sol(f.plat) + f.fond + triees(f.el));
     },
-    // Calque de devant : façade basse, extérieur (au-dessus des objets, sous les personnages)
-    devant: (e, cat) => (SAISON = e.saison || 'printemps') && svgEnveloppe(triees(batiment(e) ? devantEtage(e, cat) : devantGarage()) + etiquettes(e, cat)),
+    // Motifs et dégradés de la saison : chaque dessin rendu à part (rendu.js) les embarque
+    defs,
+    // Calque de devant : façade basse, extérieur (au-dessus des objets)
+    devant: (e, cat) => (SAISON = e.saison || 'printemps') && svgEnveloppe(triees(batiment(e) ? devantEtage(e, cat) : devantGarage())),
+    // Noms des pièces et des lieux, écrits en texte net par-dessus le plan
+    etiquettes: (e, cat) => svgEnveloppe(etiquettes(e, cat)),
     // Calque animé : voitures, bus et passants dans la rue, nuages aux étages
     rue: (e) => rue(e),
     passage, pointEffet,

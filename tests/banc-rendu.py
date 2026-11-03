@@ -80,8 +80,18 @@ await RENDU.init(document.getElementById('monde'));
 const fx = await Promise.all(NOMS.map((n, k) => RENDU.jouer(n, 40 + (k %% 6) * 80, 120 + Math.floor(k / 6) * 120, { boucle: true })));
 RENDU.ambiance({ meteo: 'orage', saison: 'printemps', dehors: true, soir: 'nuit' });
 RENDU.effets(new Map(['etincelles', 'onde', 'tete', 'four', 'code', 'copeaux', 'fumee', 'confettis'].map((t, k) => [t, [t, 30 + k * 55, 60]])));
-let n = 0;
-const image = () => { if (++n === 90) console.log('BANC-EFFETS ' + fx.filter(Boolean).length + '/' + NOMS.length); else requestAnimationFrame(image); };
+// marche : un chemin de 20 s, puis un rafraîchissement vers la même cible sans chemin (comme rendrePersos) : il doit être en route, pas arrivé
+// (vérifications au temps écoulé : en temps virtuel, une image de cette page chargée peut durer une demi-seconde)
+const FIG = '<svg viewBox="-18 -50 36 56"><rect x="-5" y="-30" width="10" height="30" fill="#d9534f"/></svg>', perso = (o) => RENDU.persos([{ id: 't', figure: FIG, prof: 0, ...o }]);
+let n = 0, t0 = 0, vu = false;
+const image = () => {
+  n++;
+  if (n === 1) perso({ X: 20, Y: 280 });
+  if (n === 2) { perso({ X: 460, Y: 280, chemin: [[460, 280]], duree: 20 }); t0 = performance.now(); }
+  if (n === 3) perso({ X: 460, Y: 280 });
+  if (!vu && n > 3 && performance.now() - t0 > 1000) { vu = true; const [x] = RENDU.position('t'); console.log('BANC-MARCHE ' + (x > 20.5 && x < 459 ? 'en-route' : 'x=' + Math.round(x))); }
+  if (vu && performance.now() - t0 > 2500) console.log('BANC-EFFETS ' + fx.filter(Boolean).length + '/' + NOMS.length); else requestAnimationFrame(image);
+};
 requestAnimationFrame(image);
 </script></body></html>""" % json.dumps(noms), encoding="utf-8")
 image = str(Path(capture) / "rendu-effets.png") if capture else str(tmp / "effets.png")
@@ -90,12 +100,13 @@ journal = subprocess.run([navigateur, "--headless=new", "--no-sandbox", "--disab
                           "--screenshot=" + image, "file://%s/effets.html" % web], capture_output=True, text=True, timeout=120).stderr
 erreurs = [l for l in journal.splitlines() if "CONSOLE" in l and any(m in l for m in ("BANC-ERREUR", "Error", "Uncaught", "Failed", "blocked", "Effet pixelfx")) and "WebGPU" not in l]
 attendu = "BANC-EFFETS %d/%d" % (len(noms), len(noms))
-if erreurs or attendu not in journal:
+if erreurs or attendu not in journal or "BANC-MARCHE en-route" not in journal:
     echecs += 1
-    print("ECHEC effets : %d erreur(s)%s" % (len(erreurs), "" if attendu in journal else ", effets non joués (attendu %s)" % attendu))
+    print("ECHEC effets : %d erreur(s)%s%s" % (len(erreurs), "" if attendu in journal else ", effets non joués (attendu %s)" % attendu,
+                                            "" if "BANC-MARCHE en-route" in journal else ", la marche est coupée (téléportation)"))
     for l in erreurs[:5]:
         print("  " + l.split("] ", 1)[-1][:220])
 shutil.rmtree(tmp, ignore_errors=True)
 if echecs:
     sys.exit(1)
-print("OK : garage et bâtiment affichés, %d effets joués, aucune erreur" % len(noms) + (" ; captures dans " + capture if capture else ""))
+print("OK : garage et bâtiment affichés, %d effets joués, marche suivie, aucune erreur" % len(noms) + (" ; captures dans " + capture if capture else ""))

@@ -25,7 +25,8 @@ function raster(contenu, x, y, w, h) {
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })), img = new Image();
   img.src = url;
   return img.decode().then(() => createImageBitmap(img))
-    .then((b) => ({ t: new Texture({ source: new ImageSource({ resource: b, scaleMode: 'nearest' }) }), x: x0, y: y0, w: w0, h: h0 }), () => null)
+    .then((b) => ({ t: new Texture({ source: new ImageSource({ resource: b, scaleMode: 'nearest' }) }), x: x0, y: y0, w: w0, h: h0 }),
+      (err) => { console.warn('Dessin SVG illisible', err, contenu.slice(0, 120)); return null; })
     .finally(() => URL.revokeObjectURL(url));
 }
 const liberer = (t) => { if (t && t !== Texture.EMPTY) t.destroy(true); };
@@ -56,7 +57,7 @@ function dessin(parent) {
 
 // ---------------------------------------------------------------- couches
 async function init(monde) {
-  await app.init({ width: W, height: H, backgroundAlpha: 0, antialias: false, resolution: 1, preference: 'webgl' });
+  await app.init({ width: W, height: H, backgroundAlpha: 0, antialias: false, resolution: Math.min(2, devicePixelRatio || 1), autoDensity: true, preference: 'webgl' });
   app.canvas.className = 'rendu';
   monde.prepend(app.canvas);
   for (const k of ['fond', 'monde', 'zones', 'devant', 'rue', 'gestes', 'fx', 'etiquettes', 'bulles', 'lumiere']) app.stage.addChild(C[k] = ['gestes', 'lumiere'].includes(k) ? new Graphics() : new Container());
@@ -142,9 +143,11 @@ function persos(liste) {
       const f = o.figure = p.figure;
       figure(f).then((r) => { if (r && o.figure === f && !o.mort) { o.corps.texture = r.t; o.corps.position.set(r.x, r.y); o.corps.scale.set(PX); o.corps.visible = true; } });
     }
-    if (p.chemin && p.chemin.length && !DOUX.matches) o.marche = { pts: [[o.X, o.Y], ...p.chemin], t0: maintenant, duree: p.duree * 1000 };
-    else if (!p.chemin) o.marche = null;
-    if (!o.marche) { o.X = p.X; o.Y = p.Y; }
+    if (o.cX !== p.X || o.cY !== p.Y) {  // nouvelle destination : il y marche (chemin fourni) ou il y est posé ; sinon la marche en cours continue
+      o.cX = p.X; o.cY = p.Y;
+      o.marche = p.chemin && p.chemin.length && !DOUX.matches ? { pts: [[o.X, o.Y], ...p.chemin], t0: maintenant, duree: p.duree * 1000 } : null;
+      if (!o.marche) { o.X = p.X; o.Y = p.Y; }
+    }
     const cleBulle = p.bulle ? p.bulle.texte + '|' + p.bulle.couleur : '';
     if (o.cleBulle !== cleBulle) {
       o.cleBulle = cleBulle;
@@ -318,7 +321,7 @@ function tuiles(nom) {
 let GESTES = new Map(), EN_COURS = new Map();
 function effets(voulus) {
   for (const [k, [type, X, Y]] of voulus) {
-    if (EN_COURS.has(k)) continue;
+    if (EN_COURS.has(k)) { EN_COURS.get(k).then((f) => { if (f) { f.options.x = X / PX; f.options.y = (Y + (type === 'fumee' ? 40 : 70)) / PX; } }); continue; }
     if (type === 'fumee') EN_COURS.set(k, jouer('explosions/smoke-bomb', X, Y + 40));  // jeu.js vise 40 px au-dessus du sol
     else if (type === 'confettis') EN_COURS.set(k, jouer('ui/confetti', X, Y + 70, { boucle: true }));
   }
@@ -377,6 +380,7 @@ function eclairer(g, t) {
   const [c, al] = LUMIERE[AMB.soir] || [0, 0];
   if (al) g.rect(0, 0, W, H).fill({ color: c, alpha: al });
   if (AMB.meteo === 'canicule') g.rect(0, 0, W, H).fill({ color: 0xffaa3c, alpha: 0.12 });
+  if (AMB.meteo === 'brouillard') g.rect(0, 0, W, H).fill({ color: 0xf0f4f6, alpha: 0.2 });
   if (AMB.meteo === 'orage' && !DOUX.matches && t % 6 > 5.82) g.rect(0, 0, W, H).fill({ color: 0xffffff, alpha: 0.55 });
 }
 

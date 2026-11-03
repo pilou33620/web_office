@@ -505,7 +505,7 @@ function rendreMonde() {
   for (const x of e.employes) occupes[x.bureau] = x;
   const etablis = CAT.etablis[carte()];
   const objets = e.objets.map((o) => [o, fiche(o.type)]).filter(([o, f]) => f && surEtage(o.y));
-  const elements = cache.fixes.map(([prof, s], i) => [prof, s, `F${i}|${cle}`]);
+  const elements = cache.fixes.map(([prof, s], i) => [prof, s, `F${i}|${cle}`, s]);  // [profondeur, SVG des clics, clé, dessin seul]
   for (const [o, f] of objets) {
     const k = `${o.id}|${o.type}|${o.x}|${o.y}`;
     if (!DESSINS.has(k)) DESSINS.set(k, PLAN.objet(o, f, etablis));
@@ -517,7 +517,7 @@ function rendreMonde() {
     let extra = '';
     if (o.type in e.pannes) { const [X, Y] = PLAN.iso(o.x + f.w / 2, o.y + f.h / 2, 46); extra += `<circle cx="${X}" cy="${Y}" r="9" fill="#ff8a7a" stroke="#2b1d14" stroke-width="2"/><text x="${X}" y="${Y + 4}" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#2b1d14">!</text>`; }
     if (amenage && selection === o.id) extra += `<polygon points="${PLAN.empreinte(o.x - 3, o.y - 3, f.w + 6, f.h + 6)}" fill="rgba(255,201,77,.25)" stroke="#ffc94d" stroke-width="3" stroke-dasharray="6 4"/>`;
-    elements.push([PLAN.profondeur(o, f), `<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${DESSINS.get(k)}${extra}</g>`, k + extra]);
+    elements.push([PLAN.profondeur(o, f), `<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${DESSINS.get(k)}${extra}</g>`, k + extra, DESSINS.get(k) + extra]);
   }
   if (DESSINS.size > 400) DESSINS.clear();  // anciens emplacements oubliés de temps en temps
   cache.elements = elements.sort((a, b) => a[0] - b[0]);
@@ -563,7 +563,7 @@ function rendreMonde() {
   const gs = $('#dyn g.elements').children;
   cache.elements.forEach((x, i) => { if (!BOITES.has(x[2])) { const r = gs[i].getBBox(); if (r.width) BOITES.set(x[2], r); } });  // plan caché : rien mesuré
   if (BOITES.size > 600) BOITES.clear();
-  RENDU.elements(cache.elements.map(([prof, s, k]) => { const b = BOITES.get(k); return b && { cle: k, prof, svg: s, x: b.x, y: b.y, w: b.width, h: b.height }; }).filter(Boolean));
+  RENDU.elements(cache.elements.map(([prof, , k, s]) => { const b = BOITES.get(k); return b && { cle: k, prof, svg: s, x: b.x, y: b.y, w: b.width, h: b.height }; }).filter(Boolean));
   RENDU.zones(zones.join(''));
   rendrePersos();
 }
@@ -1454,7 +1454,9 @@ $('#cadre').addEventListener('wheel', (ev) => {
 const majAmbiance = () => { const d = $('#monde').dataset; RENDU.ambiance({ meteo: d.meteo, saison: d.saison, dehors: d.dehors === '1', soir: d.soir || '' }); };
 
 async function demarrer() {
-  if (!window.RENDU) await new Promise((ok) => window.addEventListener('rendu-pret', ok, { once: true }));
+  if (!window.RENDU) await Promise.race([new Promise((ok) => window.addEventListener('rendu-pret', ok, { once: true })), new Promise((ok) => setTimeout(ok, 8000))]);
+  const sansPlan = !window.RENDU;
+  if (sansPlan) window.RENDU = new Proxy({}, { get: () => () => {} });  // rendu.js absent : chaque appel ne fait rien
   $('#monde').insertAdjacentHTML('beforeend', `<div id="fantome" class="fantome" hidden><svg viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}"><polygon points=""/></svg></div>`);
   $('#monde').style.width = PLAN.W + 'px';
   $('#monde').style.height = PLAN.H + 'px';
@@ -1468,9 +1470,10 @@ async function demarrer() {
     return;
   }
   try {
+    if (sansPlan) throw new Error('rendu.js absent');
     await RENDU.init($('#monde'));
   } catch (err) {
-    toast("Le plan ne peut pas s'afficher : ce navigateur n'a pas WebGL.");
+    toast("Le plan ne peut pas s'afficher : ce navigateur n'a pas WebGL ou est trop ancien.");
   }
   rendre();
   recentrer();

@@ -290,17 +290,18 @@ function initFx() {
 }
 // Joue un effet aux pieds (X, Y) de l'écran ; boucle : rejoué jusqu'à stop() ; renvoie une promesse de l'instance
 const graine = () => Math.floor(Math.random() * 1e6);
-function lancer(mod, o, boucle) {
+function lancer(mod, o, boucle, calque) {
   let cur = PFX.createFx(mod, { seed: graine(), ...o }), fini = false;
   // un effet unique rejoué en boucle : relancé à la fin, à l'endroit où l'on a déplacé ses options
   const fx = !boucle || mod.meta.loop ? cur : { options: cur.options, draw: (f, l) => cur.draw(f, l), stop: () => { fini = true; cur.stop(); }, done: () => fini && cur.done(),
     update: (dt) => { if (cur.done() && !fini) cur = PFX.createFx(mod, { ...fx.options, seed: graine() }); cur.options.x = fx.options.x; cur.options.y = fx.options.y; cur.update(dt); } };
+  fx.calque = calque;  // météo en tuiles : premier plan seul (gouttes, flocons, feuilles), sans le ciel ni le sol de la vignette
   VIVANTS.push(fx);
   return fx;
 }
 function jouer(nom, X, Y, { boucle = false, ...o } = {}) {
   if (DOUX.matches) return Promise.resolve(null);
-  return module(nom).then((mod) => lancer(mod, { x: X / PX, y: Y / PX, ...o }, boucle)).catch(() => null);
+  return module(nom).then((mod) => lancer(mod, { x: X / PX, y: Y / PX, ...o }, boucle)).catch((err) => { console.warn('Effet pixelfx', nom, err); return null; });
 }
 // Météo et saison : l'effet (une vignette de ciel) répété en tuiles sur tout le monde
 function tuiles(nom) {
@@ -308,9 +309,9 @@ function tuiles(nom) {
   return [module(nom).then((mod) => {
     const [sw, sh] = mod.meta.size || [320, 180], [ox, oy] = mod.meta.origin || [sw / 2, sh];
     const liste = [];
-    for (let i = 0; i < Math.ceil(FW / sw); i++) for (let j = 0; j < Math.ceil(FH / sh); j++) liste.push(lancer(mod, { x: i * sw + ox, y: j * sh + oy }, true));
+    for (let i = 0; i < Math.ceil(FW / sw); i++) for (let j = 0; j < Math.ceil(FH / sh); j++) liste.push(lancer(mod, { x: i * sw + ox, y: j * sh + oy }, true, 'front'));
     return { stop: () => liste.forEach((f) => f.stop()) };
-  }).catch(() => null)];
+  }).catch((err) => { console.warn('Effet pixelfx', nom, err); return null; })];
 }
 
 // Gestes de métier et effets des lieux : Map clé → [type, X, Y] (comme avant dans #effets)
@@ -394,7 +395,7 @@ function tic(tk) {
   VIVANTS = VIVANTS.filter((f) => !f.done());
   if (VIVANTS.length || actifAvant) {  // effets pixelfx : un frame partagé, recomposé seulement quand quelque chose joue
     PFX.clearFrame(frame);
-    for (const f of VIVANTS) { f.update(dt); f.draw(frame); }
+    for (const f of VIVANTS) { f.update(dt); f.draw(frame, f.calque); }
     PFX.composite(frame, img.data, null);
     ctx.putImageData(img, 0, 0);
     texFx.source.update();

@@ -31,16 +31,16 @@ class TestBatiment(unittest.TestCase):
         self.assertEqual(list(LOCAUX), ["bureau"])
         self.assertTrue(all(p["local"] == "bureau" for k, p in PIECES.items() if k != "garage"))
         j = riche(1, emmenage=False)
-        self.assertEqual((j.capacite_projets(), j.nb_offres()), (1, 4))
+        self.assertEqual((j.capacite_projets(), j.nb_offres()), (1, 3))
         moral = j.moral_global()
         j.action("local", id="bureau")
         self.assertEqual(set(j.pieces_dispo()), set(PIECES) - {"garage"})
-        self.assertEqual((j.capacite_projets(), j.nb_offres(), j.moral_global()), (2, 5, moral + 5))
+        self.assertEqual((j.capacite_projets(), j.nb_offres(), j.moral_global()), (2, 4, moral + 5))
         self.assertEqual(j.etat["stock_max"], 1000)
         employe(j, e=6, chef=True)
         self.assertEqual(j.capacite_projets(), 3)
         employe(j, e=2, commercial=True)
-        self.assertEqual(j.nb_offres(), 6)
+        self.assertEqual(j.nb_offres(), 4)  # les commerciaux prospectent au lieu d'attirer des offres
 
     def test_investissements(self):
         j = riche(20, rep=7, emmenage=False)
@@ -71,7 +71,7 @@ class TestBatiment(unittest.TestCase):
         j.action("investir", id="rachat")
         j.action("investir", id="rachat")
         self.assertNotIn(fort, j.etat["concurrents"])
-        self.assertEqual((len(j.etat["concurrents"]), j.etat["renommee"]), (1, 20))
+        self.assertEqual((len(j.etat["concurrents"]), j.etat["renommee"]), (2, 20))
         with self.assertRaises(ErreurJeu):
             j.action("investir", id="rachat")  # il reste toujours un concurrent
         for _ in range(40):
@@ -191,7 +191,7 @@ class TestBatiment(unittest.TestCase):
     def test_commerciaux_offres_mieux_payees(self):
         sans, avec = riche(16), riche(16)
         for _ in range(3):
-            employe(avec, e=1, commercial=True)
+            employe(avec, e=1, commercial=True)["metier"]["commercial"] = 2  # +2 % chacun, +1,5 % par point du meilleur
         for j in (sans, avec):
             j.rng.seed(3)
             j.etat["moyenne"] = [j._offre() for _ in range(40)]
@@ -274,10 +274,9 @@ class TestBatiment(unittest.TestCase):
         self.assertEqual(o["paie"], int(round(paie * 1.15, -2)))
         with self.assertRaises(ErreurJeu):
             j.action("negocier", id=o["id"], cible="delai")  # une seule fois par offre
-        j.action("prospecter", id="maison")
-        offres = [j._offre() for _ in range(20)]
+        offres = [j._offre(secteur="maison") for _ in range(20)]
         del j.rng.random
-        self.assertTrue(all(x["secteur"] == "maison" for x in offres if not x["fidele"]))
+        self.assertTrue(all(x["secteur"] == "maison" for x in offres))
         autre = j.etat["offres"][1]
         toujours(j, 0.999)
         j.action("negocier", id=autre["id"], cible="delai")  # ratée : le client part

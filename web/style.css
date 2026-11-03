@@ -245,6 +245,7 @@ main { position: relative; overflow: hidden; background: #7cc46a; }
 #zone.amenage .hud-bas { display: none; }
 .titre-date small { display: block; font-family: Nunito, sans-serif; font-size: 11px; font-weight: 800; color: #a9b39a; letter-spacing: .5px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav button { font-size: 12px; }
+@media (max-width: 480px) { .nav button { font-size: 10.5px; } .nav button svg { width: 20px; height: 20px; } }  /* 7 onglets sur téléphone */
 #ambiance { pointer-events: none; z-index: 8; }
 #monde[data-saison="hiver"] { background-color: #cfe3d6; background-image: radial-gradient(#ffffff 2px, transparent 2.5px); }
 #monde[data-saison="automne"] { background-color: #a8b85a; background-image: radial-gradient(#d18b3a 2px, transparent 2.5px); }

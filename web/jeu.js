@@ -6,7 +6,7 @@ const DN = { e: 'Élec', m: 'Méca 3D', f: 'Firmware', c: 'CEM' };
 const COURT = { e: 'élec', m: '3D', f: 'fw' };
 const DC = { e: '#ffc94d', m: '#f08a6c', f: '#7cc0f2', c: '#b08af0' };
 const PCT_BONUS = 6;  // % de production par point de matériel (moteur : _production)
-const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', equipe: 'Équipe', materiel: 'Matériel', locaux: 'Locaux', journal: 'Journal', societe: 'Société' };
+const TITRES = { accueil: 'Tableau de bord', projets: 'Projets', commerce: 'Commerce', equipe: 'Équipe', materiel: 'Matériel', locaux: 'Locaux', journal: 'Journal', societe: 'Société' };
 const ABSENCE = { formation: 'En formation', conges: 'En congés', seminaire: 'Séminaire', burnout: 'Burn-out', maladie: 'Malade', naissance: 'Congé naissance' };
 const METEO_NOM = { soleil: 'soleil', pluie: 'pluie', neige: 'neige', canicule: 'canicule', orage: 'orage', brouillard: 'brouillard' };
 const SAISON_NOM = { hiver: 'Hiver', printemps: 'Printemps', ete: 'Été', automne: 'Automne' };
@@ -55,8 +55,8 @@ const SPOTS = {
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
 
-function corps(x, assis = false) {
-  return `<div class="anim">${PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis)}</div>`;
+function corps(x, assis = false, pose = 'debout') {
+  return `<div class="anim">${PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis, pose)}</div>`;
 }
 
 const sprite = (x) => `<div class="perso">${corps(x)}</div>`;  // portrait des listes (équipe, candidats)
@@ -130,13 +130,14 @@ function rendrePersos() {
     else if (joue && lieu === 'visite') { t = DEMANDES[(emp.id + e.jours_total) % DEMANDES.length]; c = '#fff7e6'; }
     else if (joue && texte) { t = texte; c = '#fff7e6'; }
     else if (joue && (lieu === 'escapade' || lieu === 'vie')) t = '';
+    else if (joue && emp.prospecte) { t = 'Prospection…'; c = '#ffc94d'; }
     else if (joue && lieu === 'babyfoot') { t = (emp.id + e.jours_total) % 2 ? 'But !' : 'Allez !'; c = '#7be08a'; }
     else if (joue && p && 'emf'.includes(emp.tache || '_')) { t = emp.gain >= 0.05 ? `+${dec(emp.gain)} ${COURT[emp.tache]}` : `${COURT[emp.tache]}…`; c = DC[emp.tache]; }
     else if (joue && p && emp.tache === 'debug') { t = emp.gain >= 0.05 ? `−${dec(emp.gain)} bug` : 'Debug…'; c = '#ffb3a8'; }
     else if (joue && p && emp.tache === 'cem') { t = 'Attente CEM'; c = DC.c; }
     else if (joue && ['salle', 'terrasse', 'accueil'].includes(lieu)) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
     else if (joue && !p) { t = 'zzz'; c = '#e8e8e8'; }
-    const html = corps(emp, lieu === 'bureau') + (pos[emp.id].carton || (ARRIVEES[emp.id] && maintenant < ARRIVEES[emp.id].fin) ? CARTON : '') + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' || lieu === 'escapade' || lieu === 'vie' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
+    const html = corps(emp, lieu === 'bureau', emp.prospecte ? 'telephone' : 'debout') + (pos[emp.id].carton || (ARRIVEES[emp.id] && maintenant < ARRIVEES[emp.id].fin) ? CARTON : '') + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' || lieu === 'escapade' || lieu === 'vie' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
     let el = PERSOS[emp.id];
     if (!el) {
       el = PERSOS[emp.id] = document.createElement('div');
@@ -709,22 +710,19 @@ function panneauProjets() {
   let h = `<div class="section">En cours · ${e.places} / ${e.capacite} place${e.capacite > 1 ? 's' : ''}${plus}</div>`;
   h += e.projets.map(encartProjet).join('') || '<div class="vide">Aucun projet : signez un contrat ci-dessous.</div>';
   h += `<div class="section">Appels d'offres · les clients attendent ${dec(e.attente_client)}/10</div>`;
-  if (e.nb_commerciaux) h += `<label class="t2" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:13px">Prospection
-    <select class="choix" data-prospecter="1"><option value="">Tous secteurs</option>${Object.entries(CAT.secteurs).map(([k, s]) => `<option value="${k}" ${e.prospection === k ? 'selected' : ''}>${esc(s.nom)}</option>`).join('')}</select></label>
-    <div class="t2" style="font-size:12px;color:#b3bca5">${e.nb_commerciaux} ${e.nb_commerciaux > 1 ? 'commerciaux' : 'commercial'} · offres +${Math.round(CAT.prime_commercial * 100) * Math.min(3, e.nb_commerciaux)} % mieux payées · négociation réussie ${Math.round(e.chance_commerciale * 100)} % (sinon le client part) · commission ${Math.round(CAT.commission * 100)} % des contrats signés par commercial</div>`;
   h += e.offres.length ? [...e.offres].sort((a, b) => (b.mega || 0) - (a.mega || 0) || (b.fidele || 0) - (a.fidele || 0)).map((o) => {
     const complet = e.places + (o.mega ? 2 : 1) > e.capacite;
     const equipe = o.equipe_min && e.employes.length < o.equipe_min;
     const secteur = CAT.secteurs[o.secteur] ? CAT.secteurs[o.secteur].nom + ' · ' : '';
     return ligne({
       couleur: o.mega ? '#ff9a4a' : o.fidele ? '#ffc94d' : '#7be08a',
-      t1: (o.mega ? '<span class="badge mega">MÉGA-PROJET</span> ' : '') + esc(o.nom),
+      t1: (o.mega ? '<span class="badge mega">MÉGA-PROJET</span> ' : o.gagne ? '<span class="badge" style="background:#7be08a;color:#2b1d14">DEVIS ACCEPTÉ</span> ' : o.reservee ? '<span class="badge" style="background:#ffc94d;color:#2b1d14">RÉSERVÉE</span> ' : '') + esc(o.nom),
       t2: `${esc(secteur)}${esc(o.client)}${o.fidele ? ` <span class="fid" title="Client fidèle : projet plus gros, négociation plus facile">${etoiles(o.fidele)}</span>` : ''} · ${eur(o.paie)} · ${o.delai} j`,
       t3: `${repartition(o.total)} · expire dans ${o.expire} j${o.requis ? ' · ' + esc(nomRequis(o.requis)) : ''}${CAT.exigeants.includes(o.secteur) ? ' · qualification obligatoire' : ''}${o.mega ? ` · compte pour 2 projets · équipe de ${o.equipe_min} minimum` : ''}`,
-      extra: e.nb_commerciaux && !o.negociee ? `<div class="btns"><span style="align-self:center;font-size:13px;color:#b3bca5">Négocier</span>${bouton('negocier', o.id, '+15 % payé', true, 'petit secondaire', 'data-cible="prix" aria-label="Négocier : 15 % de plus"')}${bouton('negocier', o.id, '+25 % de délai', true, 'petit secondaire', 'data-cible="delai" aria-label="Négocier : 25 % de délai en plus"')}</div>` : '',
+      extra: e.nb_commerciaux && !o.negociee && !o.gagne ? `<div class="btns"><span style="align-self:center;font-size:13px;color:#b3bca5">Négocier</span>${bouton('negocier', o.id, '+15 % payé', true, 'petit secondaire', 'data-cible="prix" aria-label="Négocier : 15 % de plus"')}${bouton('negocier', o.id, '+25 % de délai', true, 'petit secondaire', 'data-cible="delai" aria-label="Négocier : 25 % de délai en plus"')}</div>` : '',
       btn: bouton('sig-ouvrir', o.id, complet ? 'Complet' : equipe ? `${o.equipe_min} pers. requises` : 'Signer', !complet && !equipe, '', 'data-genre="signer"'),
     });
-  }).join('') : '<div class="vide">Aucune offre pour le moment, patientez quelques jours.</div>';
+  }).join('') : '<div class="vide">Aucune offre pour le moment : prospectez dans l\'onglet Commerce.</div>';
   h += `<div class="section">Produits maison</div>`;
   h += CAT.produits.map((x) => {
     const avant = x.suite && CAT.produits.find((y) => y.id === x.suite);
@@ -862,7 +860,7 @@ function panneauLocaux() {
       ['indus', `Industrialisation : ${pct(e.qualite_indus)} · installez-y le bureau d'un employé doué en indus`],
       ['qualif', `Essais et qualification : ${pct(e.qualite_qualif)} · installez-y un employé doué en qualif`],
       ['reception', 'Contrôle des lots du sous-traitant : un bon qualiticien repère les lots défectueux'],
-      ['opensp', `${e.nb_commerciaux} ${e.nb_commerciaux > 1 ? 'commerciaux' : 'commercial'} : négociation, prospection, une offre de plus chacun (3 au plus)`],
+      ['opensp', `${e.nb_commerciaux} ${e.nb_commerciaux > 1 ? 'commerciaux' : 'commercial'} : prospection (Commerce) et négociation`],
       ['cantine', 'Moral +5 et meilleure récupération de la fatigue'],
       ['rd', "Bureaux du directeur R&D et du chargé·e d'innovation"],
       ['dg', 'Votre bureau ici : négociation +10 % et levée de fonds +30 %'],
@@ -936,7 +934,46 @@ function panneauSociete() {
     t3: `${c.livres} projet${c.livres > 1 ? 's' : ''} livré${c.livres > 1 ? 's' : ''}`,
   })).join('') + '<div class="t2" style="font-size:12px;color:#b3bca5;margin-top:4px">Une note au-dessus de l\'attente rend un client plus fidèle : il revient avec des projets plus gros et négocie plus facilement.</div>'
     : '<div class="vide">Livrez vos premiers contrats : les clients satisfaits reviendront.</div>');
-  h += `<div class="section">Concurrence</div>` + e.classement.map((c, i) => ligne({ couleur: c.vous ? '#ffc94d' : '#3a4535', t1: `${i + 1}. ${esc(c.nom)}`, t2: `Renommée ${c.renommee}` })).join('');
+  return h;
+}
+
+function panneauCommerce() {
+  const e = ETAT, libres = e.prospecteurs.filter((x) => !x.occupe);
+  if (!libres.some((x) => String(x.id) === String(COM.qui))) COM.qui = libres.length ? String(libres[0].id) : null;
+  const options = (liste, choisi) => Object.entries(liste).map(([k, v]) => `<option value="${esc(k)}" ${k === choisi ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  const nom = (id) => (e.employes.find((x) => x.id === id) || { nom: '?' }).nom;
+  let h = `<div class="section">Prospection</div>`;
+  h += libres.length ? `<label class="t2" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:13px">Qui prospecte
+    <select class="choix" data-com="qui">${options(Object.fromEntries(libres.map((x) => [String(x.id), x.nom + (x.commercial ? ` · commercial ${x.commercial}` : '')])), COM.qui)}</select></label>
+    <div class="t2" style="font-size:12px;color:#b3bca5">Pendant la prospection, il ou elle produit à mi-temps sur les projets.</div>`
+    : `<div class="vide">${e.prospecteurs.length ? 'Tout le monde prospecte déjà.' : 'Personne de disponible pour prospecter.'} Embauchez des commerciaux pour prospecter en parallèle.</div>`;
+  h += Object.entries(e.canaux).map(([k, c]) => {
+    const secteur = k === 'demarchage' ? `<label class="t2" style="display:flex;gap:8px;align-items:center;margin-top:4px;font-size:13px">Secteur
+      <select class="choix" data-com="secteur"><option value="">Choisir…</option>${options(Object.fromEntries(Object.entries(CAT.secteurs).map(([s, x]) => [s, x.nom])), COM.secteur)}</select></label>` : '';
+    const pret = libres.length && c.dispo && e.argent >= c.cout && (k !== 'demarchage' || COM.secteur);
+    return ligne({
+      couleur: c.devis ? '#7cc0f2' : '#ffc94d', t1: esc(k === 'salon' && c.salon ? c.salon : c.nom), t2: esc(c.desc),
+      t3: `${c.cout ? eur(c.cout) : 'Gratuit'} · ${c.jours} jours · ${c.devis ? 'devis mis en concurrence' : 'piste réservée pour vous'}${k === 'salon' && !c.dispo ? ` · prochain : ${esc(e.prochain_salon || '—')}` : ''}`,
+      extra: secteur, btn: bouton('prospecter', k, 'Lancer', !!pret, 'petit'),
+    });
+  }).join('');
+  if (e.prospections.length) h += `<div class="section">En cours</div>` + e.prospections.map((pr) => ligne({ couleur: '#b08af0', t1: `${esc(nom(pr.qui))} · ${esc(e.canaux[pr.canal].nom)}`, t2: `${pr.secteur ? esc(CAT.secteurs[pr.secteur].nom) + ' · ' : ''}encore ${pr.jours} j` })).join('');
+  h += `<div class="section">Pistes à chiffrer</div>` + (e.pistes.length ? e.pistes.map((o) => {
+    const d = COM.devis[o.id] || { prix: '1.0', delai: '1.0' };
+    const n = o.rivaux.length;
+    return ligne({
+      couleur: '#7cc0f2', t1: esc(o.nom), t2: `${esc(CAT.secteurs[o.secteur].nom)} · ${esc(o.client)} · budget ${eur(o.paie)} · ${o.delai} j`,
+      t3: `${repartition(o.total)} · ${n ? `${n} concurrent${n > 1 ? 's' : ''} consulté${n > 1 ? 's' : ''}` : 'aucun concurrent consulté'} · répondre sous ${o.expire} j${o.requis ? ' · ' + esc(nomRequis(o.requis)) : ''}`,
+      extra: `<div class="btns"><select class="choix" data-com="prix:${o.id}" aria-label="Prix du devis">${options(e.devis_prix, d.prix)}</select><select class="choix" data-com="delai:${o.id}" aria-label="Délai du devis">${options(e.devis_delais, d.delai)}</select></div>
+        <div class="t2" style="font-size:13px">Votre devis : <b>${eur(o.paie * Number(d.prix))}</b> en ${Math.max(8, Math.round(o.delai * Number(d.delai)))} jours</div>`,
+      btn: bouton('devis', o.id, 'Envoyer', true, 'petit'),
+    });
+  }).join('') : '<div class="vide">Plateformes et salons ramènent des pistes à chiffrer.</div>');
+  if (e.devis.length) h += `<div class="section">Devis envoyés</div>` + e.devis.map((d) => ligne({ couleur: '#3a4535', t1: esc(d.nom), t2: `${esc(d.client)} · ${eur(d.paie * Number(d.prix))} en ${Math.max(8, Math.round(d.delai * Number(d.delai_devis)))} j`, t3: `Réponse dans ${d.reponse} j` })).join('');
+  h += `<div class="section">Concurrence</div>` + e.classement.map((c, i) => ligne({
+    couleur: c.vous ? '#ffc94d' : '#3a4535', t1: `${i + 1}. ${esc(c.nom)}`, t2: c.vous ? `Renommée ${c.renommee} · vous` : `${esc(c.style)} · renommée ${c.renommee}`,
+    t3: c.vous ? '' : `Équipe de ${c.equipe} · ${c.gagnes} marché${c.gagnes > 1 ? 's' : ''} remporté${c.gagnes > 1 ? 's' : ''}`,
+  })).join('');
   return h;
 }
 
@@ -1017,7 +1054,7 @@ function rendre() {
   document.querySelectorAll('.nav button').forEach((b) => b.classList.toggle('actif', b.dataset.id === onglet || (onglet === 'journal' && b.dataset.id === 'accueil')));
   $('#panneau').classList.toggle('ouvert', onglet !== 'accueil');
   $('#titre-panneau').textContent = TITRES[onglet];
-  const contenu = { accueil: panneauAccueil, projets: panneauProjets, equipe: panneauEquipe, materiel: panneauMateriel, locaux: panneauLocaux, journal: () => panneauJournal(40), societe: panneauSociete }[onglet]();
+  const contenu = { accueil: panneauAccueil, projets: panneauProjets, commerce: panneauCommerce, equipe: panneauEquipe, materiel: panneauMateriel, locaux: panneauLocaux, journal: () => panneauJournal(40), societe: panneauSociete }[onglet]();
   majHtml('#contenu-panneau', contenu);
   rendreMonde();
   const focus = document.activeElement?.closest?.('#etages [data-id]')?.dataset.id;
@@ -1160,7 +1197,8 @@ function modaleSignature() {
   const details = [moule && `moule ${eur(moule)}`, etapes && `indus et qualification ${eur(etapes)}${chefs ? ', −15 % grâce au chef de projet' : ''}`, dev && `prestataires ${eur(dev)}`].filter(Boolean);
   if (etapes + moule + dev) h += `<p style="font-size:13px">Payé à la signature : <b>${eur(etapes + moule + dev)}</b> (${details.join(' · ')})</p>`;
   if (exigeant) h += `<p style="font-size:13px">Marché exigeant : une qualification est obligatoire.</p>`;
-  if (sg.genre === 'signer') {
+  if (sg.genre === 'signer' && cible.gagne) h += `<p><b>${eur(cible.paie)}</b> en ${cible.delai} jours, comme dans votre devis accepté.</p>`;
+  else if (sg.genre === 'signer') {
     const ch = chanceNego(Number(sg.prix), Number(sg.delai), cible.fidele || 0);
     h += groupe('Prix demandé', 'prix', sg.prix, CAT.prix_proposes) + groupe('Délai proposé', 'delai', sg.delai, CAT.delais_proposes);
     h += `<p><b>${eur(cible.paie * Number(sg.prix))}</b> en ${Math.max(8, Math.round(cible.delai * Number(sg.delai)))} jours · chance que le client accepte : <b style="color:${ch >= 0.99 ? '#7be08a' : ch >= 0.6 ? '#ffc94d' : '#ff8a7a'}">${Math.round(ch * 100)} %</b></p>`;
@@ -1176,7 +1214,8 @@ const AIDE = [
   ['Indus et qualification', "À la signature, deux étapes optionnelles et payantes, pour la carte ou le produit fini. L'industrialisation baisse le coût unitaire, les défauts en série et les retours. La qualification (essais en température et vibrations) améliore la note, réduit les pannes et est obligatoire pour l'auto, l'aéro, le médical et le spatial. Installez un employé doué au Bureau indus ou au Labo de qualification pour mieux les réussir."],
   ['Prestataires', "À la signature, pour le firmware, la méca, l'indus et la qualif : en interne (gratuit ou moins cher, mais ça occupe l'équipe, et l'indus et la qualif sont moins efficaces sans spécialiste), un freelance ou un labo low-cost (prix moyen, qualité variable) ou un bureau d'études ou un labo accrédité (cher, rapide et sûr). Un prestataire avance de son côté sans occuper l'équipe."],
   ['Options avancées', "Certaines options de signature (8 et 12 couches, FPGA, 4G, boîtier blindé ou étanche, USB-C, composants auto, aéro ou spatiaux…) se débloquent avec une techno ou une certification : le cadenas indique laquelle."],
-  ['Chefs et commerciaux', "Les chefs de projet suivent plusieurs projets : une place de projet de plus chacun, ils composent eux-mêmes l'équipe (le meilleur spécialiste libre de chaque domaine), meilleure note, moins de retard et de surcoûts, prime du client si le projet est livré à l'heure et bien noté ; leur effet baisse avec le nombre de projets suivis. Les responsables d'équipe font produire et progresser leur service et évitent les pertes de coordination. Les commerciaux rendent les offres mieux payées, les négocient, prospectent le secteur choisi et touchent une commission."],
+  ['Chefs et commerciaux', "Les chefs de projet suivent plusieurs projets : une place de projet de plus chacun, ils composent eux-mêmes l'équipe (le meilleur spécialiste libre de chaque domaine), meilleure note, moins de retard et de surcoûts, prime du client si le projet est livré à l'heure et bien noté ; leur effet baisse avec le nombre de projets suivis. Les responsables d'équipe font produire et progresser leur service et évitent les pertes de coordination. Les commerciaux rendent les offres mieux payées, les négocient, prospectent et touchent une commission."],
+  ['Commerce', "Quelques clients viennent d'eux-mêmes, le reste se prospecte dans Commerce : plateformes et salons ramènent des pistes à chiffrer (votre devis est comparé à ceux des rivaux : prix, délai, renommée), réseaux sociaux et démarchage des pistes que le client vous réserve quelques jours. Au garage, vous prospectez vous-même et produisez à mi-temps pendant ce temps ; les commerciaux prospectent mieux. Quatre rivaux, chacun avec son style, grandissent en gagnant des marchés."],
   ['Missions', "Trois missions sont proposées à la fois sur le tableau de bord. Chacune rapporte une prime, parfois de la renommée."],
   ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware) et des compétences métier, une séniorité, plusieurs traits, une motivation, un moral et une fatigue. Le CV ne dit pas tout : l'entretien et le spécialiste en révèlent plus, le reste se découvre avec le temps. Gare au burn-out, et soignez les entretiens annuels."],
   ['Conditions de travail', "Décoration, café, climatisation, isolation et horaires changent la production (vue Productivité)."],
@@ -1236,6 +1275,7 @@ async function ouvrirMenu(etape, mode) {
   rendre();
 }
 let signature = null, parties = null;
+const COM = { qui: null, secteur: '', devis: {} };  // choix en cours dans Commerce : qui prospecte, secteur démarché, prix et délai de chaque devis
 
 // ---------------------------------------------------------------- échanges serveur
 async function api(chemin, corps) {
@@ -1379,6 +1419,8 @@ document.addEventListener('click', async (ev) => {
       return rendre();
     }
     case 'sig-annuler': signature = null; return rendre();
+    case 'prospecter': return agir('prospecter', { canal: id, qui: Number(COM.qui), secteur: COM.secteur || null });
+    case 'devis': { const d = COM.devis[id] || { prix: '1.0', delai: '1.0' }; delete COM.devis[id]; return agir('devis', { id: Number(id), ...d }); }
     case 'sig-ok': {
       const sg = signature;
       signature = null;
@@ -1432,7 +1474,13 @@ document.addEventListener('input', (ev) => {
 document.addEventListener('change', (ev) => {
   const sel = ev.target.closest('[data-affecter]');
   if (sel) agir('affecter', { id: Number(sel.dataset.affecter), projet: sel.value ? Number(sel.value) : null });
-  if (ev.target.closest('[data-prospecter]')) agir('prospecter', { id: ev.target.value || null });
+  const com = ev.target.closest('[data-com]');
+  if (com) {
+    const [cle, id] = com.dataset.com.split(':');
+    if (id) (COM.devis[id] = COM.devis[id] || { prix: '1.0', delai: '1.0' })[cle] = com.value;
+    else COM[cle] = com.value;
+    rendre();
+  }
 });
 
 // Pincer pour zoomer (téléphone), Ctrl + molette (ordinateur)

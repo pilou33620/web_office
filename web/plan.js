@@ -97,9 +97,9 @@ const PLAN = (() => {
     return s + `<circle cx="${n1(X + 2)}" cy="${n1(Y + 1)}" r=".9" fill="${T}"/><circle cx="${n1(X - 2)}" cy="${n1(Y + 1)}" r=".9" fill="${T}"/>`;
   };
   // Figure seule (calque des personnages) : SVG de 36x56, les pieds en (18, 50)
-  const figure = (haut, cheveux, peau, i, assis = false) => {
+  const figure = (haut, cheveux, peau, i, assis = false, pose = 'debout') => {
     const [X0, Y0] = iso(0, 0, 0);
-    return `<svg viewBox="-18 -50 36 56" width="36" height="56" aria-hidden="true"><g transform="translate(${n1(-X0)},${n1(-Y0)})">${personne(0, 0, assis ? 4 : 0, haut, cheveux, peau, assis, i)}</g></svg>`;
+    return `<svg viewBox="-18 -50 36 56" width="36" height="56" aria-hidden="true"><g transform="translate(${n1(-X0)},${n1(-Y0)})">${personne(0, 0, assis ? 4 : 0, haut, cheveux, peau, assis, i, pose)}</g></svg>`;
   };
 
   // ---------------------------------------------------------------- appareils à taille réelle, dessinés au centre de leur emplacement

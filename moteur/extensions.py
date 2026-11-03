@@ -46,7 +46,8 @@ class Extensions:
         for prod in e["produits"]:  # anciennes sauvegardes : les produits en vente comptent pour les suites
             e["gammes"].setdefault(prod["id_produit"], prod["note"])
         if not e.get("concurrents"):
-            e["concurrents"] = [{"nom": n, "renommee": r} for n, r in CONCURRENTS]
+            e["concurrents"] = [{"nom": c["nom"], "renommee": c["renommee"], "equipe": c["equipe"], "gagnes": 0} for c in CONCURRENTS]
+        self._init_commerce()
         for x in e["employes"]:
             self._completer_employe(x)
         e["candidats"] = [c if "traits" in c else self._candidat() for c in e["candidats"]]  # anciens CV, sans les nouveautés
@@ -318,13 +319,6 @@ class Extensions:
             self._log(f"Stock agrandi : {e['stock_max']} unités.", "bon")
         elif genre == "negocier":
             self._negocier(p.get("id"), p.get("cible"))
-        elif genre == "prospecter":
-            if p.get("id") is not None and p.get("id") not in SECTEURS:
-                raise ErreurJeu("Secteur inconnu.")
-            if not self.commerciaux():
-                raise ErreurJeu("Il faut des commerciaux pour prospecter.")
-            e["prospection"] = p.get("id")
-            self._log("Prospection : " + (SECTEURS[p["id"]]["nom"] if p.get("id") else "tous secteurs") + ".", "info")
         elif genre == "nommer":
             self._nommer(self.employe(p.get("id")), p.get("role"))
         elif genre == "investir":
@@ -463,7 +457,7 @@ class Extensions:
         com = self.commerciaux()
         if not com:
             raise ErreurJeu("Il faut des commerciaux pour négocier.")
-        if o.get("negociee"):
+        if o.get("negociee") or o.get("gagne"):
             raise ErreurJeu("Offre déjà négociée.")
         o["negociee"] = True
         if self.rng.random() < self.chance_commerciale():
@@ -559,9 +553,12 @@ class Extensions:
                                   "cout": cout}
         fort = max(c["renommee"] for c in e["concurrents"])
         for o in list(e["offres"]):
+            if o.get("reservee") or o.get("gagne"):
+                continue  # piste réservée ou devis déjà accepté : le client attend votre signature
             if r.random() < 0.004 + 0.0008 * fort:  # plus la concurrence est connue, plus elle rafle de marchés
                 c = r.choices(e["concurrents"], weights=[1 + c["renommee"] for c in e["concurrents"]])[0]
                 e["offres"].remove(o)
+                self._rival_gagne(c)
                 self._log(f"{c['nom']} remporte l'appel d'offres « {o['nom']} ».", "info")
         if e["renommee"] >= 10 and not any(o.get("mega") for o in e["offres"]) and r.random() < 0.012:
             mega = self._offre_mega()

@@ -4,6 +4,7 @@ import random
 
 from .extensions import ErreurJeu, Extensions, borne, requis_liste
 from .personnel import Personnel
+from .commerce import Commerce
 
 from .donnees import (CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
                       EMPLACEMENTS, ETABLIS, GRILLE, HORAIRES, OBSTACLES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
@@ -14,7 +15,7 @@ from .donnees import (CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE
 
 JOURS_MOIS = 30
 SEUIL_FAILLITE = -5000
-NB_OFFRES = 4
+NB_OFFRES = 3
 PAIE_REP = 0.01  # prix du point : +1 % par point de renommée (20 au plus)
 PRIX_GROS = (150, 600)  # au-delà de 150 points, le client négocie le prix du point : ÷ (1 + (taille − 150) / 600)
 ATTENTE_REP = (10, 3)  # note attendue : 6 + renommée / 10, +3 au plus
@@ -48,7 +49,7 @@ def nom_propre(v, defaut):
     return v or defaut
 
 
-class Jeu(Personnel, Extensions):
+class Jeu(Personnel, Extensions, Commerce):
     def __init__(self, etat=None, graine=None, scenario="garage", difficulte="normal", entreprise=None, directeur=None):
         self.rng = random.Random(graine)
         self._roles = None  # cache des rôles et services, recalculé à chaque jour et à chaque action
@@ -121,21 +122,20 @@ class Jeu(Personnel, Extensions):
         self.etat["prochain_id"] += 1
         return self.etat["prochain_id"] - 1
 
-    def _offre(self, bonus_rep=0):
+    def _offre(self, bonus_rep=0, secteur=None):
         rep = self.etat["renommee"] + bonus_rep
         r = self.rng
         acquis = set(self.etat.get("technos", [])) | set(self.etat.get("certifs", []))
         eligibles = [c for c in CONTRATS if c[3] <= rep and set(requis_liste(c[4])) <= acquis]
-        fidele = self._client_fidele()
+        fidele = None if secteur else self._client_fidele()
         fid = 0
         if fidele:  # un client fidèle revient avec un projet de son secteur, plus gros et mieux payé
             nom_client, fiche = fidele
             pool = [c for c in eligibles if c[5] == fiche["secteur"]]
             if pool:
                 eligibles, fid = pool, fiche["fid"]
-        cible = self.etat.get("prospection")
-        if cible and not fid and self.commerciaux() and r.random() < 0.5:  # les commerciaux démarchent le secteur choisi
-            eligibles = [c for c in eligibles if c[5] == cible] or eligibles
+        if secteur:  # démarchage d'un secteur choisi
+            eligibles = [c for c in eligibles if c[5] == secteur] or eligibles
         nom, mix, base, rmin, requis, secteur = r.choices(eligibles, weights=range(1, len(eligibles) + 1))[0]
         client = nom_client if fid else r.choice(SECTEURS[secteur]["clients"])
         taille = round(base * (1 + TAILLE_REP[0] * min(TAILLE_REP[1], max(0, rep - rmin))) * r.uniform(0.85, 1.2) * (1 + 0.08 * fid))
@@ -476,7 +476,7 @@ class Jeu(Personnel, Extensions):
         return 1 + self.emmenage() + min(4, len(self.chefs_projet())) + self.a_investi("filiale")
 
     def nb_offres(self):
-        return NB_OFFRES + self.emmenage() + min(3, len(self.commerciaux())) + 2 * self.a_investi("filiale")  # l'accueil, les commerciaux, la filiale
+        return NB_OFFRES + self.emmenage() + 2 * self.a_investi("filiale")  # demandes spontanées : l'accueil, la filiale ; le reste se prospecte
 
     def places_occupees(self):
         return sum(2 if p.get("mega") else 1 for p in self.etat["projets"])
@@ -548,7 +548,7 @@ class Jeu(Personnel, Extensions):
         if emp[dom] <= 0:
             return 0.0
         logiciel = 1 + 0.03 * emp["metier"]["logiciel"] if dom == "f" else 1
-        return emp[dom] * self.efficacite(emp) * (1 + 0.06 * bon[dom]) * logiciel
+        return emp[dom] * self.efficacite(emp) * (1 + 0.06 * bon[dom]) * logiciel * self.facteur_prospection(emp)  # moins de production pendant la prospection
 
     def _detection(self, emp, bon):
         fm = borne(self.moral(emp) / 70, 0.4, 1.4) * self.conditions()[1]
@@ -1044,8 +1044,9 @@ class Jeu(Personnel, Extensions):
         for o in e["offres"]:
             o["expire"] -= 1
         e["offres"] = [o for o in e["offres"] if o["expire"] > 0]
-        if len(e["offres"]) < self.nb_offres() + len(e["projets"]) and self.rng.random() < 0.15:
+        if sum(not o.get("canal") for o in e["offres"]) < self.nb_offres() + len(e["projets"]) and self.rng.random() < 0.15:
             e["offres"].append(self._offre())
+        self._jour_commerce()
         if e["jours_total"] > 10 and self.rng.random() < 1 / 18:
             self._evenement()
         self._fin_jour_extensions()
@@ -1269,7 +1270,7 @@ class Jeu(Personnel, Extensions):
         elif genre == "fermer_fin":
             if e.get("fin"):
                 e["fin"]["vue"] = True
-        elif self._action_extension(genre, p) or self._action_personnel(genre, p):
+        elif self._action_extension(genre, p) or self._action_personnel(genre, p) or self._action_commerce(genre, p):
             pass
         elif genre == "signer":
             o = next((x for x in e["offres"] if x["id"] == p.get("id")), None)
@@ -1279,6 +1280,8 @@ class Jeu(Personnel, Extensions):
             if len(e["employes"]) < o.get("equipe_min", 0):
                 raise ErreurJeu(f"Il faut une équipe d'au moins {o['equipe_min']} personnes pour ce méga-projet.")
             prix, delai = str(p.get("prix", "1.0")), str(p.get("delai", "1.0"))
+            if o.get("gagne"):
+                prix = delai = "1.0"  # devis déjà accepté : prix et délai fixés
             if prix not in PRIX_PROPOSES or delai not in DELAIS_PROPOSES:
                 raise ErreurJeu("Paramètres invalides.")
             tech = dict(p["tech"]) if isinstance(p.get("tech"), dict) else {}
@@ -1486,4 +1489,4 @@ class Jeu(Personnel, Extensions):
         v["conditions"], v["facteur_conditions"] = self.conditions()
         v["projets"] = [{**p, "note_estimee": self.note(p), "proba_cem": self.proba_cem(p), "frais_cem": self.frais_cem(p)}
                         for p in e["projets"]]
-        return self.vue_personnel(self.vue_extensions(v))
+        return self.vue_commerce(self.vue_personnel(self.vue_extensions(v)))

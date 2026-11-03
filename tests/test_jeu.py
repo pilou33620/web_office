@@ -10,7 +10,7 @@ class TestJeu(unittest.TestCase):
         j = Jeu(graine=1)
         self.assertEqual(j.etat["argent"], 15000)
         self.assertEqual(len(j.etat["employes"]), 1)
-        self.assertEqual(len(j.etat["offres"]), 4)
+        self.assertEqual(len(j.etat["offres"]), 3)  # demandes spontanées ; le reste se prospecte
         self.assertEqual(len(j.postes_ouverts()), 2)
         self.assertEqual(sorted(j.etat["materiel"]), ["multi", "station", "stlink"])
 
@@ -389,12 +389,19 @@ class TestJeu(unittest.TestCase):
                 if e["faillite"]:
                     break
                 if e["evenement"]:
-                    try:
-                        j.action("evenement", choix=r.randrange(len(e["evenement"]["options"])))
-                    except ErreurJeu:
-                        j.action("evenement", choix=len(e["evenement"]["options"]) - 1)
+                    n = len(e["evenement"]["options"])
+                    for choix in [r.randrange(n)] + list(range(n)):  # au hasard, sinon la première option abordable
+                        try:
+                            j.action("evenement", choix=choix)
+                            break
+                        except ErreurJeu:
+                            pass
                 for cle in ("bilan", "dernier_livre"):
                     e.pop(cle, None)
+                if not e["prospections"] and j.prospecteurs():
+                    j.action("prospecter", canal=r.choice(["plateformes", "reseaux"]), qui=j.prospecteurs()[0]["id"])
+                for piste in list(e["pistes"]):
+                    j.action("devis", id=piste["id"], prix=r.choice(["0.95", "1.0"]), delai="1.0")
                 if len(e["projets"]) < j.capacite_projets() and e["offres"]:
                     j.action("signer", id=e["offres"][0]["id"])
                 for p in list(e["projets"]):

@@ -451,7 +451,29 @@ INVESTISSEMENTS = {
 # Négociation : prix et délai proposés au client (multiplicateurs)
 PRIX_PROPOSES = {"1.0": "Prix affiché", "1.1": "+10 %", "1.2": "+20 %", "1.3": "+30 %"}
 DELAIS_PROPOSES = {"0.8": "−20 %", "1.0": "Délai affiché", "1.2": "+20 %"}
-CONCURRENTS = [("ElectroConcept", 3), ("Circuits du Sud-Ouest", 6), ("Volta Ingénierie", 10)]
+# Rivaux : style de devis (prix et délai proposés par rapport au budget du client), secteurs de prédilection, renommée et équipe de départ
+CONCURRENTS = [
+    {"nom": "ElectroConcept", "style": "Petits prix", "prix": 0.95, "delai": 1.05, "secteurs": [], "renommee": 3, "equipe": 2},
+    {"nom": "Circuits du Sud-Ouest", "style": "Rapide", "prix": 1.0, "delai": 0.85, "secteurs": ["industrie", "agri"], "renommee": 6, "equipe": 4},
+    {"nom": "Volta Ingénierie", "style": "Haut de gamme", "prix": 1.12, "delai": 1.0, "secteurs": ["medical", "aero", "spatial"], "renommee": 10, "equipe": 8},
+    {"nom": "Onde & Signal", "style": "Spécialiste radio et objets connectés", "prix": 1.0, "delai": 1.0, "secteurs": ["maison", "telecom", "loisirs"], "renommee": 5, "equipe": 3},
+]
+
+# Prospection : coût, durée (jours), pistes tentées (min, max), réussite de base de chaque piste (+5 % par point de commercial),
+# renommée en plus pour choisir les contrats, devis mis en concurrence (sinon le client réserve la piste), chance de base qu'un rival réponde
+CANAUX = {
+    "plateformes": {"nom": "Plateformes et sites d'appels d'offres", "desc": "Petits projets publiés en ligne : rapide et gratuit, mais les rivaux répondent souvent.",
+                    "cout": 0, "jours": 2, "pistes": (2, 3), "reussite": 0.7, "bonus_rep": 0, "devis": True, "rivaux": 0.25},
+    "reseaux": {"nom": "Réseaux sociaux / LinkedIn", "desc": "Publications et messages : le client vous réserve la piste quelques jours. Mieux avec de la renommée.",
+                "cout": 0, "jours": 3, "pistes": (1, 2), "reussite": 0.5, "bonus_rep": 0, "devis": False},
+    "demarchage": {"nom": "Démarchage d'entreprises", "desc": "Appeler et visiter les entreprises d'un secteur : un projet plus gros, réservé pour vous.",
+                   "cout": 400, "jours": 4, "pistes": (1, 2), "reussite": 0.55, "bonus_rep": 2, "devis": False},
+    "salon": {"nom": "Salon professionnel", "desc": "Un stand pendant trois jours : beaucoup de pistes mises en concurrence, et de la renommée.",
+              "cout": 3000, "jours": 3, "pistes": (3, 5), "reussite": 0.75, "bonus_rep": 1, "devis": True, "rivaux": 0.15},
+}
+SALONS = {2: "Salon des objets connectés", 5: "Salon de l'électronique embarquée", 9: "Salon de l'industrie du futur"}  # mois (0 = janvier)
+DEVIS_PRIX = {"0.85": "−15 %", "0.95": "−5 %", "1.0": "Budget du client", "1.1": "+10 %", "1.2": "+20 %"}
+DEVIS_DELAIS = {"0.8": "−20 %", "1.0": "Délai demandé", "1.2": "+20 %"}
 
 TECHNOS = {
     "ble":    {"nom": "Bluetooth Low Energy", "prix": 4000, "jours": 30, "desc": "Objets connectés et nRF52 ; firmware +10 %"},

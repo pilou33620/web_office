@@ -3,7 +3,7 @@ import unittest
 from moteur import ErreurJeu, Jeu
 from moteur.donnees import CANAUX
 
-from test_batiment import employe, toujours
+from tests.test_batiment import employe, toujours
 
 
 def piste(j, rivaux=()):

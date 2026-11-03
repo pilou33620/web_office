@@ -153,8 +153,8 @@ CATALOGUE = {
 }
 
 
-# Ce que la page charge, et rien d'autre de web/ ; dans vendor/, aucun segment ne commence par un point
-STATIQUE = re.compile(r"^/(?:index\.html|jeu\.js|plan\.js|rendu\.js|style\.css)?$|^/vendor(?:/[\w-][\w.-]*)+$")
+# Ce que la page charge, et rien d'autre de web/
+STATIQUE = re.compile(r"^/(?:index\.html|jeu\.js|plan\.js|style\.css)?$")
 CORPS_MAX = 10_000
 GARDE = appairage.Garde("WEB_OFFICE", actif=False)   # remplacé dans main() selon --local
 
@@ -165,7 +165,6 @@ class Gestionnaire(http.server.SimpleHTTPRequestHandler):
         **http.server.SimpleHTTPRequestHandler.extensions_map,
         ".html": "text/html; charset=utf-8",
         ".js": "text/javascript; charset=utf-8",
-        ".mjs": "text/javascript; charset=utf-8",
         ".css": "text/css; charset=utf-8",
     }
 

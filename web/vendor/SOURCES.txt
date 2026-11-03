@@ -1,2 +1,0 @@
-PixiJS 8.22.0 (MIT) : https://pixijs.com
-pixelfx, commit a841596 (MIT, voir pixelfx/NOTICE.md) : https://github.com/patch-gg/pixelfx

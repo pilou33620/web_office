@@ -2,7 +2,7 @@
 
 Jeu de gestion façon *Game Dev Story* : vous dirigez un bureau d'études qui conçoit des cartes électroniques, des pièces 3D et des firmwares. On commence seul dans un garage, puis on embauche, on s'équipe et on agrandit les locaux.
 
-Moteur en Python (bibliothèque standard uniquement), interface web cartoon en vue du dessus, jouable sur téléphone et sur tablette.
+Moteur en Python (bibliothèque standard uniquement), plan isométrique en pixel art (PixiJS et effets pixelfx), jouable sur téléphone et sur tablette.
 
 ## Lancer le jeu
 
@@ -19,7 +19,7 @@ Le jeu figure aussi dans **web_launcher** (port 8793) ; c'est alors le launcher 
 
 Ouvrir l'adresse « réseau » affichée dans le terminal (IP du poste, en HTTPS). La première fois, l'appareil demande le **code d'appairage** à 6 chiffres affiché dans le terminal (ou sur la carte du launcher) ; il est ensuite reconnu par tous les web tools du poste. Pour éviter l'alerte de certificat, installer la CA du poste depuis `/appairage/ca.pem` (instructions dans le terminal). Une IP publique est toujours refusée : à distance, passer par Tailscale.
 
-Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements).
+Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. PixiJS 8 et les effets pixelfx utilisés sont copiés dans `web/vendor` (licences MIT, voir `web/vendor/SOURCES.txt`) : le jeu s'affiche sans Internet. Il faut un navigateur avec WebGL. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements).
 
 ## Mode démo
 
@@ -99,5 +99,6 @@ API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/acti
 python3 -m unittest -q          # moteur
 python3 tests/banc-serveur.py   # serveur : fichiers servis, Host, en-tête, tailles
 node tests/test_trajets.js      # trajets : les personnages passent par les portes
+python3 tests/banc-rendu.py     # rendu : garage et bâtiment s'affichent sans erreur (Chromium sans écran ; CAPTURE=dossier ZOOM=2 pour des images)
 python3 appairage.py            # code, jeton, cookie
 ```

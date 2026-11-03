@@ -60,7 +60,9 @@ def verifier(nom, obtenu, attendu):
 
 # --- Fichiers servis et refusés ---------------------------------------------
 for chemin, attendu in [
-    ("/", 200), ("/index.html", 200), ("/jeu.js", 200), ("/plan.js", 200), ("/style.css", 200),
+    ("/", 200), ("/index.html", 200), ("/jeu.js", 200), ("/plan.js", 200), ("/rendu.js", 200), ("/style.css", 200),
+    ("/vendor/pixi.min.mjs", 200), ("/vendor/pixelfx/core/index.js", 200), ("/vendor/pixelfx/fx/ui/_lib.js", 200),
+    ("/vendor/../serveur.py", 404), ("/vendor/%2e%2e/serveur.py", 404), ("/vendor/.cache", 404), ("/vendor/", 404),
     ("/api/etat", 200), ("/api/catalogue", 200), ("/api/parties", 200),
     ("/.git/config", 404), ("/.gitignore", 404), ("/serveur.py", 404), ("/appairage.py", 404),
     ("/../serveur.py", 404), ("/%2e%2e/serveur.py", 404), ("/.env", 404), ("/README.md", 404),
@@ -77,6 +79,7 @@ verifier("en-têtes", (r.getheader("X-Frame-Options"), r.getheader("X-Content-Ty
                       "frame-ancestors 'self'" in (r.getheader("Content-Security-Policy") or "")),
          ("SAMEORIGIN", "nosniff", "no-store, max-age=0", True))
 verifier("type de jeu.js", requete("/jeu.js")[2].getheader("Content-Type"), "text/javascript; charset=utf-8")
+verifier("type de pixi.min.mjs", requete("/vendor/pixi.min.mjs")[2].getheader("Content-Type"), "text/javascript; charset=utf-8")
 
 # --- POST : en-tête maison, taille, JSON ------------------------------------
 verifier("POST sans X-WEB_OFFICE", requete("/api/action", methode="POST", corps=b"{}")[0], 403)

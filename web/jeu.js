@@ -55,15 +55,14 @@ const SPOTS = {
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
 
-function corps(x, assis = false, pose = 'debout') {
-  return `<div class="anim">${PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis, pose)}</div>`;
-}
+const figureDe = (x, assis = false, pose = 'debout') => PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis, pose);
+const corps = (x, assis = false, pose = 'debout') => `<div class="anim">${figureDe(x, assis, pose)}</div>`;
 
 const sprite = (x) => `<div class="perso">${corps(x)}</div>`;  // portrait des listes (équipe, candidats)
 
-const PERSOS = {};
+const CIBLES = {};  // dernière destination de chaque personnage affiché (x|y|étage) : il y marche quand elle change
 function rendrePersos() {
-  const e = ETAT, p = e.projets.length > 0, cont = $('#persos'), vus = new Set(), groupes = {};
+  const e = ETAT, p = e.projets.length > 0, groupes = {}, liste = [];
   const duree = Math.min(1.2, VITESSES[vitesse][1] / 2000);
   const bat = carte() === 'batiment', salle = bat, S = bat ? spotsBatiment(e) : SPOTS.garage;
   const pos = {};
@@ -120,7 +119,7 @@ function rendrePersos() {
     const { lieu, x: cx, y: cy, texte } = pos[emp.id];
     NB[etageDe(cy)] = (NB[etageDe(cy)] || 0) + 1;
     if (!surEtage(cy)) continue;  // à un autre étage : retiré du plan affiché
-    const [X, Y] = PLAN.iso(cx, cy, 0), x = Math.round(X - 18), y = Math.round(Y - 50);  // pieds de la figure au point du sol
+    const [X, Y] = PLAN.iso(cx, cy, 0);  // pieds de la figure au point du sol
     let t = '', c = '';
     const choc = REACTION && REACTION.ids.includes(emp.id);
     if (vue === 'moral' && emp.moral !== undefined) { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
@@ -137,68 +136,34 @@ function rendrePersos() {
     else if (joue && p && emp.tache === 'cem') { t = 'Attente CEM'; c = DC.c; }
     else if (joue && ['salle', 'terrasse', 'accueil'].includes(lieu)) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
     else if (joue && !p) { t = 'zzz'; c = '#e8e8e8'; }
-    const html = corps(emp, lieu === 'bureau', emp.prospecte ? 'telephone' : 'debout') + (pos[emp.id].carton || (ARRIVEES[emp.id] && maintenant < ARRIVEES[emp.id].fin) ? CARTON : '') + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' || lieu === 'escapade' || lieu === 'vie' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
-    let el = PERSOS[emp.id];
-    if (!el) {
-      el = PERSOS[emp.id] = document.createElement('div');
-      el.className = 'perso';
-      el.style.left = x + 'px'; el.style.top = y + 'px';
-      el._x = x; el._y = y;
-      cont.appendChild(el);
-    }
-    if (el._html !== html) { el.innerHTML = html; el._html = html; }
-    if (el._x !== x || el._y !== y) {
-      // il marche depuis là où il en est, en contournant les murs par les portes ; arrivé par l'escalier : pas de marche
-      const cs = getComputedStyle(el), depart = PLAN.versMonde(parseFloat(cs.left) + 18, parseFloat(cs.top) + 50);
-      if (el._anim) el._anim.cancel();
-      el._x = x; el._y = y;
-      el.style.left = x + 'px'; el.style.top = y + 'px';
-      const pts = [depart, ...PLAN.trajet(e, CAT, depart[0], depart[1], cx, cy)], long = [0];
-      for (let k = 1; k < pts.length; k++) long.push(long[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
-      const L = long[long.length - 1], dt = Math.min(4 * duree, Math.max(duree, L / 200));
-      if (el._etage === etage && L > 0 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        el._anim = el.animate(pts.map(([a, b], k) => { const [X, Y] = PLAN.iso(a, b, 0); return { left: X - 18 + 'px', top: Y - 50 + 'px', offset: long[k] / L }; }), { duration: dt * 1000 });
-        el.classList.add('marche');
-        clearTimeout(el._t);
-        el._t = setTimeout(() => el.classList.remove('marche'), dt * 1000);
+    const id = String(emp.id), cle = `${cx}|${cy}|${etage}`;
+    let chemin = null, dt = 0;
+    if (CIBLES[id] !== cle) {
+      const ici = CIBLES[id] && CIBLES[id].endsWith('|' + etage) && RENDU.position(id);  // arrivé par l'escalier ou d'un autre étage : pas de marche
+      if (ici) {  // il marche depuis là où il en est, en contournant les murs par les portes
+        const depart = PLAN.versMonde(ici[0], ici[1]), pts = [depart, ...PLAN.trajet(e, CAT, depart[0], depart[1], cx, cy)];
+        let L = 0;
+        for (let k = 1; k < pts.length; k++) L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+        dt = Math.min(4 * duree, Math.max(duree, L / 200));
+        if (L > 0) chemin = pts.slice(1).map(([a, b]) => PLAN.iso(a, b, 0));
       }
+      CIBLES[id] = cle;
     }
-    el._etage = etage;
-    const assis = lieu === 'bureau', d = Math.round(cx + cy);
-    el.style.zIndex = 2 * d;  // les plus proches devant
-    // par-dessus le personnage : copie, découpée à sa taille, de ce qui est devant lui (armoire, plante, bureau de la rangée suivante…)
-    const devant = cache.elements.filter(([prof, , k]) => {
-      const b = BOITES.get(k);
-      return prof > cx + cy && b && b.x < x + 36 && x < b.x + b.width && b.y < y + 56 && y < b.y + b.height;
-    });
-    const masque = devant.length ? `<svg width="36" height="56" viewBox="${x} ${y} 36 56" xmlns="http://www.w3.org/2000/svg">${devant.map((v) => v[1]).join('')}</svg>` : '';
-    if (el._masque !== masque) {
-      el._masque = masque;
-      if (!el._m) { el._m = document.createElement('div'); el._m.className = 'masque'; cont.appendChild(el._m); }
-      el._m.innerHTML = masque;
-    }
-    Object.assign(el._m ? el._m.style : {}, { left: x + 'px', top: y + 'px', zIndex: 2 * d + 1 });
+    const assis = lieu === 'bureau';
     const travaille = joue && (lieu === 'babyfoot' || (p && (assis || lieu === 'labo' || lieu === 'atelier' || lieu === 'cem' || lieu === 'visite') && emp.tache));
-    el.classList.toggle('bob', !!travaille && emp.id % 2 === 0);
-    el.classList.toggle('bob2', !!travaille && emp.id % 2 === 1);
-    el.classList.toggle('secoue', !!choc);
-    el.classList.toggle('affale', !!pos[emp.id].affale);
-    vus.add(String(emp.id));
+    liste.push({ id, figure: figureDe(emp, assis, emp.prospecte ? 'telephone' : 'debout'), X, Y, prof: cx + cy, chemin, duree: dt,
+      bulle: t ? { texte: t, couleur: c, parle: ['babyfoot', 'visite', 'escapade', 'vie'].includes(lieu) } : null,
+      carton: !!(pos[emp.id].carton || (ARRIVEES[emp.id] && maintenant < ARRIVEES[emp.id].fin)), anim: travaille ? (emp.id % 2 ? 'bob2' : 'bob') : '',
+      secoue: !!choc, affale: !!pos[emp.id].affale, arrive: !!ARRIVEES[emp.id] });
   }
+  RENDU.persos(liste);
+  const affiches = new Set(liste.map((x) => x.id));
+  for (const id in CIBLES) if (!affiches.has(id)) delete CIBLES[id];
   effetsMateriel(pos);
-  for (const id of Object.keys(PERSOS)) if (!vus.has(id)) { PERSOS[id].remove(); if (PERSOS[id]._m) PERSOS[id]._m.remove(); delete PERSOS[id]; }
 }
 
-const CARTON = '<svg class="carton" viewBox="0 0 16 12" width="16" height="12" aria-hidden="true"><path d="M1 4 L8 1 L15 4 L15 10 L8 11.5 L1 10Z" fill="#c48a52" stroke="#2b1d14" stroke-width="1"/><path d="M1 4 L8 6 L15 4 M8 6 V11.5" fill="none" stroke="#2b1d14" stroke-width=".9"/></svg>';
-
 // Gestes de métier : soudure, oscillo, impression 3D, fraisage, four, code qui défile sur les écrans ; fumée après un échec CEM ; confettis au pot
-const EFFETS = new Map();
 const TYPE_EFFET = { station: 'etincelles', micro: 'etincelles', oscillo: 'onde', spectre: 'onde', logique: 'onde', fdm: 'tete', resine: 'tete', cnc: 'copeaux', four: 'four' };
-const DESSIN_EFFET = {
-  etincelles: '<i></i><i></i><i></i><i></i>', copeaux: '<i></i><i></i><i></i>', tete: '<i></i>', four: '', code: '',
-  onde: '<svg viewBox="0 0 16 8" width="16" height="8"><path d="M0 4 H3 L4 1 L6 7 L8 2 L10 6 L11 4 H16" fill="none" stroke="#7be08a" stroke-width="1.4"/></svg>',
-  fumee: '<i></i><i></i><i></i>', confettis: '<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>',
-};
 function effetsMateriel(pos) {
   const e = ETAT, voulus = new Map(), actif = joue && e.projets.length > 0;
   const labo = Object.values(pos).some((p) => p.lieu === 'labo' || p.lieu === 'cem'), atelier = Object.values(pos).some((p) => p.lieu === 'atelier');
@@ -224,20 +189,7 @@ function effetsMateriel(pos) {
     const cx = fete.reduce((t, p) => t + p.x, 0) / fete.length, cy = fete.reduce((t, p) => t + p.y, 0) / fete.length;
     voulus.set('confettis', ['confettis', ...PLAN.iso(cx, cy, 70)]);
   }
-  for (const [k, el] of EFFETS) if (!voulus.has(k) || el._type !== voulus.get(k)[0]) { el.remove(); EFFETS.delete(k); }
-  for (const [k, [t, X, Y]] of voulus) {
-    let el = EFFETS.get(k);
-    if (!el) {
-      el = document.createElement('div');
-      el.className = 'fx ' + t;
-      el._type = t;
-      el.innerHTML = DESSIN_EFFET[t];
-      $('#effets').appendChild(el);
-      EFFETS.set(k, el);
-    }
-    el.style.left = Math.round(X) + 'px';
-    el.style.top = Math.round(Y) + 'px';
-  }
+  RENDU.effets(voulus);
 }
 
 // Petites escapades pendant que le temps tourne : un café, une question à un collègue, un passage au labo… puis retour au bureau
@@ -406,10 +358,7 @@ function observer(a, n) {
 }
 function passage(genre) {
   const html = PLAN.passage(ETAT, genre);
-  if (!html || document.hidden) return;
-  $('#rue').insertAdjacentHTML('beforeend', html);
-  const el = $('#rue').lastElementChild;
-  setTimeout(() => el.remove(), 15000);
+  if (html && !document.hidden) RENDU.passage(html);
 }
 function visite(n, objs) {  // le client arrive par la rue, puis s'installe en salle de réunion avec le commercial (ou un chef, ou vous)
   passage('client');
@@ -435,10 +384,8 @@ function lancerCourse(e, objs, etg) {
   const pilotes = ici.slice().sort((a, b) => (a.id * 7 + e.jours_total) % 5 - (b.id * 7 + e.jours_total) % 5).slice(0, 3);
   COURSE = { ids: pilotes.map((x) => x.id), fin: Date.now() + 8000 };
   const [[x1, y1], [x2, y2]] = COULOIRS[carte() === 'batiment' ? etage : 'garage'], [X1, Y1] = PLAN.iso(x1, y1, 0), [X2, Y2] = PLAN.iso(x2, y2, 0);
-  $('#effets').insertAdjacentHTML('beforeend', pilotes.map((x, k) => `<div class="pilote" style="left:${Math.round(X1 - 18)}px;top:${Math.round(Y1 - 46 + k * 10)}px;--dx:${Math.round(X2 - X1)}px;--dy:${Math.round(Y2 - Y1)}px;--t:${(2.1 + k * 0.45).toFixed(2)}s;z-index:${1000 + k}">
-    <svg class="fauteuil" viewBox="0 0 24 16" width="24" height="16" aria-hidden="true"><rect x="3" y="2" width="18" height="7" rx="2" fill="#3d3d3d" stroke="#2b1d14"/><path d="M12 9v4M6 14h12" stroke="#2b1d14" stroke-width="2"/></svg>
-    ${corps(x, true)}<div class="bulle parle" style="background:#ffc94d">${k ? 'J\'arrive !' : 'Vroum !'}</div></div>`).join(''));
-  setTimeout(() => { document.querySelectorAll('#effets .pilote').forEach((el) => el.remove()); COURSE = null; rendrePersos(); }, 8000);
+  RENDU.course(pilotes.map((x, k) => ({ figure: figureDe(x, true), X1, Y1: Y1 + 4 + k * 10, X2, Y2: Y2 + 4 + k * 10, t: 2.1 + k * 0.45, texte: k ? 'J\'arrive !' : 'Vroum !' })));
+  setTimeout(() => { RENDU.course([]); COURSE = null; rendrePersos(); }, 8000);
 }
 
 // ---------------------------------------------------------------- mode démo : un pilote automatique joue, en accéléré avec des journées lentes
@@ -515,7 +462,7 @@ setInterval(() => {
   const h = $('#heure');
   if (h) h.textContent = texteHeure();
   const lum = eclairage();
-  if ($('#monde').dataset.soir !== lum) $('#monde').dataset.soir = lum;
+  if ($('#monde').dataset.soir !== lum) { $('#monde').dataset.soir = lum; majAmbiance(); }
   if (planifier(m) || etape !== etapeVue || anime) { etapeVue = etape; rendrePersos(); }
 }, 400);
 
@@ -541,7 +488,7 @@ const PUCES = [['f', 560, 376], ['e', 446, 376]];
 const DESSINS = new Map();  // dessin SVG de chaque objet placé, recalculé seulement s'il bouge
 const BOITES = new Map();  // contour à l'écran de chaque élément du plan
 function rendreMonde() {
-  const e = ETAT, h = [], svg = [];
+  const e = ETAT, h = [], svg = [], zones = [];
   if (carte() === 'garage') etage = 'garage';
   else if (etage === 'garage') etage = etageDe((e.objets.find((o) => o.id === e.employes[0]?.bureau) || { y: CAT.etages.r1.y0 }).y);  // on vient d'emménager
   PLAN.etage(etage, CAT);
@@ -549,9 +496,8 @@ function rendreMonde() {
   if (cache.decor !== cle) {
     const demenage = cache.decor && cache.decor.split('|').slice(0, 2).join('|') !== carte() + '|' + etage;
     cache.decor = cle;
-    $('#statique').innerHTML = PLAN.fond(e, CAT);
-    $('#devant').innerHTML = PLAN.devant(e, CAT);
-    $('#rue').innerHTML = PLAN.rue(e);
+    RENDU.decor({ fond: PLAN.fond(e, CAT), devant: PLAN.devant(e, CAT), etiquettes: PLAN.etiquettes(e, CAT), defs: PLAN.defs(e) });
+    RENDU.rue(PLAN.rue(e));
     cache.fixes = PLAN.fixes(e, CAT);
     if (demenage) requestAnimationFrame(recentrer);
   }
@@ -581,12 +527,12 @@ function rendreMonde() {
     for (const k of fiche(placement.type).pieces) {
       if (!pieceDispo(k) || !surEtage(CAT.pieces[k].rect[1])) continue;
       const [x, y, w, hh] = CAT.pieces[k].rect;
-      svg.push(`<polygon points="${PLAN.empreinte(x, y, w, hh)}" fill="rgba(123,224,138,.16)" stroke="rgba(47,138,58,.9)" stroke-width="2.5" stroke-dasharray="8 5"/>`);
+      zones.push(`<polygon points="${PLAN.empreinte(x, y, w, hh)}" fill="rgba(123,224,138,.16)" stroke="rgba(47,138,58,.9)" stroke-width="2.5" stroke-dasharray="8 5"/>`);
     }
   }
   if (vue === 'moral') {
     const t = e.moral >= 70 ? '123,224,138' : e.moral >= 55 ? '255,201,77' : '255,138,122';
-    svg.push(`<polygon points="${PLAN.cadreMoral(e)}" fill="rgba(${t},.25)"/>`);
+    zones.push(`<polygon points="${PLAN.cadreMoral(e)}" fill="rgba(${t},.25)"/>`);
   }
   h.push(`<svg class="couche" viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}" xmlns="http://www.w3.org/2000/svg">${svg.join('')}</svg>`);
   // carte d'emménagement posée sur le sol du garage (vue isométrique)
@@ -613,10 +559,12 @@ function rendreMonde() {
     }
   }
   majHtml('#dyn', h.join(''));
-  // contour à l'écran de chaque élément, mesuré une fois : sert à cacher les personnages qui passent derrière
+  // contour à l'écran de chaque élément, mesuré une fois dans le calque SVG invisible (qui sert aussi aux clics) : le rendu le dessine à cette place
   const gs = $('#dyn g.elements').children;
   cache.elements.forEach((x, i) => { if (!BOITES.has(x[2])) { const r = gs[i].getBBox(); if (r.width) BOITES.set(x[2], r); } });  // plan caché : rien mesuré
   if (BOITES.size > 600) BOITES.clear();
+  RENDU.elements(cache.elements.map(([prof, s, k]) => { const b = BOITES.get(k); return b && { cle: k, prof, svg: s, x: b.x, y: b.y, w: b.width, h: b.height }; }).filter(Boolean));
+  RENDU.zones(zones.join(''));
   rendrePersos();
 }
 
@@ -1029,6 +977,7 @@ function rendre() {
   monde.dataset.meteo = e.meteo;
   monde.dataset.soir = eclairage();
   monde.dataset.dehors = carte() === 'garage' || etage === 'rdc' ? '1' : '';  // feuilles et pétales seulement quand on voit le jardin
+  majAmbiance();
   $('#rep').textContent = e.renommee;
   $('#argent').textContent = eur(e.argent);
   $('#argent').classList.toggle('negatif', e.argent < 0);
@@ -1501,9 +1450,11 @@ $('#cadre').addEventListener('wheel', (ev) => {
   appliquerZoom(zoom * (ev.deltaY < 0 ? 1.12 : 0.89), ev.clientX - r.left, ev.clientY - r.top);
 }, { passive: false });
 
+// Météo, saison au jardin et lumière du jour : lues sur #monde (rendre et l'horloge les y posent)
+const majAmbiance = () => { const d = $('#monde').dataset; RENDU.ambiance({ meteo: d.meteo, saison: d.saison, dehors: d.dehors === '1', soir: d.soir || '' }); };
+
 async function demarrer() {
-  $('#dyn').insertAdjacentHTML('afterend', '<div id="devant"></div><div id="rue"></div><div id="effets"></div>');
-  $('#ambiance').insertAdjacentHTML('beforebegin', '<div id="saison"></div>');  // feuilles d'automne, pétales de printemps  // façade basse et extérieur, puis la rue animée : devant les objets, sous les personnages
+  if (!window.RENDU) await new Promise((ok) => window.addEventListener('rendu-pret', ok, { once: true }));
   $('#monde').insertAdjacentHTML('beforeend', `<div id="fantome" class="fantome" hidden><svg viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}"><polygon points=""/></svg></div>`);
   $('#monde').style.width = PLAN.W + 'px';
   $('#monde').style.height = PLAN.H + 'px';
@@ -1515,6 +1466,11 @@ async function demarrer() {
   } catch (err) {
     toast('Impossible de joindre le serveur du jeu.');
     return;
+  }
+  try {
+    await RENDU.init($('#monde'));
+  } catch (err) {
+    toast("Le plan ne peut pas s'afficher : ce navigateur n'a pas WebGL.");
   }
   rendre();
   recentrer();

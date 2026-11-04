@@ -111,6 +111,7 @@ function matTexture(nom, w, h, teinteSol = null) {
 
 // ---------------------------------------------------------------- ce que plan.js a décrit
 const estLaVoitureDuGarage = (x, y) => x >= 538 && x <= 570 && y >= 698 && y <= 758;
+const parasol = (x, y, z, r, c) => ajoute(new THREE.ConeGeometry(r, 11, 8), c, { amp: 0, m: T(x, y, z), faces: Array.from({ length: 32 }, (_, k) => (k % 2 ? c : '#f7f3ea')) });
 function construire(prims, groupe, garage = false) {
   for (const x of prims) {
     if (x.t === 'boite') {
@@ -123,6 +124,7 @@ function construire(prims, groupe, garage = false) {
       if (lum) B(x.x + 0.6, x.y + x.dp, x.z + 0.6, x.w - 1.2, 0.2, x.h - 1.2, '#6fb4f0', 0, null, null, LUEUR);
     } else if (x.t === 'boule') {
       const c = teinte(x.c); if (!c) continue;
+      if (x.c === '#ff8f7a') { parasol(x.x, x.y, x.z, x.r, c); continue; }  // terrasse du R2
       if (x.r >= 10) {  // feuillage : une boule bosselée et ses voisines
         Sph(x.x, x.y, x.z, x.r, c, 1, 0.14, 0.92, 0.28);
         for (let k = 0; k < 4; k++) { const a = hasard() * 6.28; Sph(x.x + Math.cos(a) * x.r * 0.7, x.y + Math.sin(a) * x.r * 0.7, x.z - x.r * 0.2 + hasard() * x.r * 0.5, x.r * (0.45 + hasard() * 0.2), c, 1, 0.16, 0.92, 0.3); }
@@ -140,7 +142,7 @@ function construire(prims, groupe, garage = false) {
       for (let k = 1; k < x.p.length - 1; k++) for (const q of [x.p[0], x.p[k], x.p[k + 1]]) v.push(q[0], q[2] + 0.15, q[1]);
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
       if (c.verre === 'rgb(255,255,255)') { ajoute(g, '#f4f7fa', { amp: 0.01, par: v.length / 3 }); continue; }  // stores
-      if (c.verre) { groupe.add(new THREE.Mesh(g, VERRE)); continue; }
+      if (c.verre) { g.computeVertexNormals(); groupe.add(new THREE.Mesh(g, VERRE)); continue; }  // sans normales, l'occlusion ambiante le noircit
       ajoute(g, c, { amp: 0.01, par: v.length / 3 });
     } else if (x.t === 'perso') {
       figurineFixe(x.x, x.y, x.z, x);
@@ -332,7 +334,7 @@ function detailsGarage(saison) {
   piquets(40, 120, 820, 120); piquets(40, 120, 40, 800); piquets(820, 120, 820, 800);
   for (let k = 0; k < 4; k++) for (let j = 0; j < 4; j++) { const x = 128 + k * 34, y = 186 + j * 16; Sph(x, y, 5, 5.2, pioche(['#4fa043', '#5cb84c', '#3e8f33']), 1, 0.16, 0.8, 0.3); if ((k + j) % 3 === 0) Sph(x + 2, y, 8.4, 1.6, pioche(['#d9352c', '#ff7a4a', '#ffc94d']), 0); }
   Cyl(90, 180, 0, 8, 17, '#7a5236', 10, 9); for (const z of [3, 13]) Tor(90, 180, z, 8.6, 0.5, '#3d3d3d', 'z'); Cyl(90, 180, 16.6, 7.6, 0.4, '#4a90c8', 10);
-  Rod([160, 717, 0], [160, 717, 42], 0.8, '#e8e8e0'); ajoute(new THREE.ConeGeometry(30, 11, 8), '#d9534f', { amp: 0, m: T(160, 717, 44), faces: Array.from({ length: 32 }, (_, k) => (k % 2 ? '#d9534f' : '#f7f3ea')) });
+  Rod([160, 717, 0], [160, 717, 42], 0.8, '#e8e8e0'); parasol(160, 717, 44, 30, '#d9534f');
   Cyl(258, 736, 0, 8, 12, '#3d3d3d', 10, 9); B(249, 727, 12, 18, 18, 1.5, '#8d96a1', 0.02);
   for (const [x, y] of [[118, 690], [282, 690], [118, 744]]) { Cyl(x, y, 0, 5, 8, '#b5543c', 8, 6); Sph(x, y, 13, 6.5, '#4fa043', 1, 0.16, 1, 0.3); }
   const fl = ['#ef6f9a', '#ffd34d', '#ffffff', '#b08af0', '#ff7a4a', '#e8467a'];
@@ -373,12 +375,12 @@ function decor(e, cat, etage) {
   // le sol : les rectangles et ronds du plan à plat
   const plat = /translate\(0 -?\d+\)">([\s\S]*)<\/g><\/g>/.exec(fond)[1];
   const doc = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg">${plat}</svg>`, 'image/svg+xml');
-  let couche = 0;
+  const couches = [];  // 0,1 par couche : en dessous, les sols se mélangent à l'écran ; au plus 0,5 (R2), sous les tapis
   const herbe = SOLS[saison] || 0xffffff;
   for (const el of doc.querySelectorAll('rect, circle')) {
     const f = el.getAttribute('fill'), n = (k) => parseFloat(el.getAttribute(k)) || 0, c = teinte(f);
     if (!c || c.verre || f === '#c6dbea' || f === '#c99a63') continue;  // le ciel des étages ; la clôture dessinée à plat
-    const z = 0.004 * ++couche, u = /i-([a-z]+)/.exec(f), nom = u && TEX[u[1]] ? u[1] : f === '#565b60' ? 'asphalte' : null;
+    const rond = el.nodeName === 'circle', z = 0.1 * PLAN.coucheSol(couches, rond ? n('cx') - n('r') : n('x'), rond ? n('cy') - n('r') : n('y'), rond ? 2 * n('r') : n('width'), rond ? 2 * n('r') : n('height')), u = /i-([a-z]+)/.exec(f), nom = u && TEX[u[1]] ? u[1] : f === '#565b60' ? 'asphalte' : null;
     if (el.nodeName === 'circle') { const m = new THREE.Mesh(new THREE.CircleGeometry(n('r'), 12), new THREE.MeshStandardMaterial({ color: c })); m.rotation.x = -Math.PI / 2; m.position.set(n('cx'), z, n('cy')); m.receiveShadow = true; DECOR.add(m); continue; }
     plan(DECOR, n('x'), n('y'), n('width'), n('height'), z, nom ? matTexture(nom, n('width'), n('height'), herbe) : new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 }));
   }
@@ -415,10 +417,13 @@ function decor(e, cat, etage) {
     foret(saison, pris, 120, SOL);
     // affiches entre les fenêtres, plinthes
     const cadres = ['#e0474c', '#3a7bc8', '#2f8a3a', '#e0923a', '#7a5fc4', '#f4f1e8'];
+    // seulement sur les vrais murs extérieurs : le R2 est fait de plusieurs blocs, sans mur entre eux
+    const dedansBati = (px, py) => cat.coques[etage].some(([x, y, w, h]) => px > x && px < x + w && py > y && py < y + h);
     for (const [x, y, w, h] of cat.coques[etage]) {
-      for (let k = 0; (k + 1) * 64 < w; k += 2) { const a = x + 18 + 36 + 14 + k * 64 - 9; B(a, y, 24, 18, 0.6, 26, '#2b1d14', 0); B(a + 1, y + 0.4, 25, 16, 0.4, 24, pioche(cadres), 0.02); }
-      for (let k = 1; (k + 1) * 64 < h; k += 2) { const b = y + 18 + 36 + 14 + k * 64 - 9; B(x, b, 24, 0.6, 18, 26, '#2b1d14', 0); B(x + 0.4, b + 1, 25, 0.4, 16, 24, pioche(cadres), 0.02); }
-      B(x, y, 0.2, w, 1, 4, '#8d7a62', 0.02); B(x, y, 0.2, 1, h, 4, '#7d6a52', 0.02);
+      for (let k = 0; (k + 1) * 64 < w; k += 2) { const a = x + 18 + 36 + 14 + k * 64 - 9; if (!dedansBati(a + 9, y - 4)) { B(a, y, 24, 18, 0.6, 26, '#2b1d14', 0); B(a + 1, y + 0.4, 25, 16, 0.4, 24, pioche(cadres), 0.02); } }
+      for (let k = 1; (k + 1) * 64 < h; k += 2) { const b = y + 18 + 36 + 14 + k * 64 - 9; if (!dedansBati(x - 4, b + 9)) { B(x, b, 24, 0.6, 18, 26, '#2b1d14', 0); B(x + 0.4, b + 1, 25, 0.4, 16, 24, pioche(cadres), 0.02); } }
+      for (let u = 0; u < w; u += 32) if (!dedansBati(x + u + 16, y - 4)) B(x + u, y, 0.2, Math.min(32, w - u), 1, 4, '#8d7a62', 0.02);
+      for (let u = 0; u < h; u += 32) if (!dedansBati(x - 4, y + u + 16)) B(x, y + u, 0.2, 1, Math.min(32, h - u), 4, '#7d6a52', 0.02);
     }
     VOIES = null;
   }

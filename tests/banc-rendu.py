@@ -59,6 +59,7 @@ window.addEventListener('unhandledrejection', (e) => console.log('BANC-ERREUR ' 
 const Q = new URLSearchParams(location.search), PLAN_BANC = Q.get('plan'), BANC = %s, CAT_BANC = %s, ETAT_BANC = BANC[PLAN_BANC === 'garage' ? 'garage' : 'batiment'];
 // témoin : canvas posé, partie affichée (un observateur, pas un minuteur : Chromium logiciel les affame)
 new MutationObserver(() => { if (!window.BANC_OK && window.RENDU && document.querySelector('canvas.rendu') && document.querySelector('#date').textContent.length > 3) { window.BANC_OK = 1; console.log('BANC-TEMOIN ok');
+  const cs = []; console.log('BANC-SOLS ' + [[0, 0, 100, 100], [10, 10, 10, 10], [200, 0, 10, 10], [100, 0, 10, 10], [12, 12, 2, 2]].map((r) => PLAN.coucheSol(cs, ...r)));
   if (PLAN_BANC !== 'garage') { etage = PLAN_BANC; rendre(); }
   const z = +Q.get('zoom'); appliquerZoom(z || 0.62); recentrer(); } })
   .observe(document.documentElement, { subtree: true, childList: true, characterData: true });
@@ -81,9 +82,9 @@ for nom in plans:
     journal = subprocess.run(base + ["--user-data-dir=" + str(tmp / ("profil-" + nom)), "--window-size=1280,860", "--timeout=70000", "--screenshot=" + image,
                                      "file://%s/banc.html?demo&plan=%s&zoom=%s" % (web, nom, os.environ.get("ZOOM", ""))], capture_output=True, text=True, timeout=200).stderr
     erreurs = fautes(journal)
-    if erreurs or "BANC-TEMOIN ok" not in journal or not Path(image).is_file():
+    if erreurs or "BANC-TEMOIN ok" not in journal or "BANC-SOLS 1,2,1,1,3" not in journal or not Path(image).is_file():
         echecs += 1
-        print("ECHEC %s : %d erreur(s)%s" % (nom, len(erreurs), "" if "BANC-TEMOIN ok" in journal else ", plan non affiché"))
+        print("ECHEC %s : %d erreur(s)%s" % (nom, len(erreurs), ("" if "BANC-TEMOIN ok" in journal else ", plan non affiché") + ("" if "BANC-SOLS 1,2,1,1,3" in journal else ", couches de sol fausses")))
         for l in erreurs[:4]:
             print("  " + l.split("] ", 1)[-1][:240])
 

@@ -497,8 +497,15 @@ const PLAN = (() => {
         const horiz = t === 'rayonnage', n = Math.floor((horiz ? w : h) / 90);
         for (let j = 0; j < n; j++) {
           const rx = horiz ? x + j * 90 : x, ry = horiz ? y : y + j * 90, rw = horiz ? 84 : w, rh = horiz ? h : 84;
-          let r = boite(rx, ry, rw, rh, 40, '#c48a52');
-          for (let q = 0; q < 3; q++) r += boite(rx + 4, ry + 4, rw - 8, rh - 8, 10, ['#d8b07a', '#c9a26a', '#e2c08a'][q], 6 + q * 12);
+          let r = '';
+          for (const [ux, uy] of [[0, 0], [rw - 3, 0], [0, rh - 3], [rw - 3, rh - 3]]) r += boite(rx + ux, ry + uy, 3, 3, 40, '#7a5a3a');
+          for (let q = 0; q < 4; q++) {
+            r += boite(rx, ry, rw, rh, 1.2, '#c48a52', 4 + q * 11.6);
+            if (q < 3) for (let c = 0; c < 3; c++) {  // trois cartons par tablette, de hauteurs variées
+              const ht = 6 + (j + q + c) % 3, cz = 5.2 + q * 11.6, teinteC = ['#d8b07a', '#c9a26a', '#e2c08a'][(j + q * 2 + c) % 3];
+              r += horiz ? boite(rx + 4 + c * 26, ry + 3, 24, rh - 6, ht, teinteC, cz) : boite(rx + 3, ry + 4 + c * 26, rw - 6, 24, ht, teinteC, cz);
+            }
+          }
           out.push([rx + ry + rw / 2 + rh / 2, r]);
         }
         continue;
@@ -661,8 +668,15 @@ const PLAN = (() => {
     return DEFS.replace('fill="#7cc46a"/><circle cx="5" cy="6" r="1.6" fill="#68b357"/><circle cx="16" cy="15" r="1.6" fill="#68b357"/>',
       `fill="${h1}"/><circle cx="5" cy="6" r="1.6" fill="${h2}"/><circle cx="16" cy="15" r="1.6" fill="${h2}"/>`);
   };
+  // hauteur d'un rectangle de sol : juste au-dessus de ce qu'il recouvre, en couches distinctes pour la carte graphique
+  const coucheSol = (couches, x, y, w, h) => {
+    const k = 1 + Math.max(0, ...couches.filter(([a, b, c, d]) => x < a + c && a < x + w && y < b + d && b < y + h).map((q) => q[4]));
+    couches.push([x, y, w, h, k]);
+    return k;
+  };
   return {
-    W, H, PEAUX, iso, versMonde, empreinte, figure, objet, profondeur,
+    W, H,
+    coucheSol, PEAUX, iso, versMonde, empreinte, figure, objet, profondeur,
     // Les volumes (pavés, boules, polygones, personnages…) dessinés pendant f, pour le rendu 3D
     capture: (f) => { CAPT.liste = []; CAPT.dedans = 0; try { f(); return CAPT.liste; } finally { CAPT.liste = null; } },
     // Étage du bâtiment à dessiner (le garage n'a qu'un niveau)

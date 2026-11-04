@@ -336,7 +336,7 @@ const PLAN = (() => {
   const rueVolumes = () => {
     const v = [];
     for (const lx of [120, 470, 790]) v.push([lx + 812, lampadaire(lx, 810)]);
-    v.push([420 + 822, personne(420, 822, 0, '#6aa8f0', T, PEAUX[1], false, 0, 'telephone')]);
+    v.push([420 + 815, personne(420, 815, 0, '#6aa8f0', T, PEAUX[1], false, 0, 'telephone')]);
     v.push([760 + 810, boite(760, 812, 60, 12, 26, 'rgba(191,230,255,.55)', 0, null, 'rgba(191,230,255,.4)') + boite(764, 816, 52, 4, 6, '#8a5a36')]);  // abribus
     v.push([60 + 816, boite(58, 814, 6, 6, 12, '#d9534f') + bouton(61, 817, 13, 2.5, '#d9534f')]);  // borne incendie
     return v;
@@ -367,15 +367,40 @@ const PLAN = (() => {
   // cloisons intérieures relevées sur le plan (un trou = une porte) : segments [x1, y1, x2, y2]
   const cloisonsEtage = (cat) => ({ restants: cat.cloisons[ETAGE].map((m) => m.slice()), el: [] });
 
-  // ---------------------------------------------------------------- trajets : les personnages contournent les murs et passent par les portes
-  const PAS = 8;  // côté d'une case de la grille de marche
-  let GRILLE = { cle: null };
-  const grilleMurs = (e, cat) => {
-    const cle = (batiment(e) ? ETAGE : 'garage');
-    if (GRILLE.cle === cle) return GRILLE;
-    const g = { cle, x0: -40, y0: DY - 40, nx: Math.ceil(1400 / PAS), ny: Math.ceil(940 / PAS) };
-    g.mur = new Uint8Array(g.nx * g.ny);
+  // ---------------------------------------------------------------- trajets : les personnages contournent les murs et les objets, et passent par les portes
+  // Côté d'une case de la grille de marche ; distance gardée aux murs et aux objets : le corps passe au large, sinon au plus juste (un intervalle de 15 garde une file de cases)
+  const PAS = 6, LARGE = 10, ETROIT = 4.5;
+  // Où s'assoit l'occupant d'un bureau, selon le mur auquel ce bureau est adossé, et de quel côté il arrive
+  const SIEGE = { n: [38, 46, 0, 1], s: [38, 18, 0, -1], o: [46, 38, 1, 0], e: [18, 38, -1, 0] };
+  const siege = (o) => { const [a, b] = SIEGE[o.cote || 'n']; return [o.x + a, o.y + b]; };
+  const ficheObjet = (cat, type) => (type === 'poste' ? cat.poste : cat.materiel[type] || cat.deco[type]);
+  // Tables et jardinières de la terrasse du R2 : [x, y]
+  const terrasseR2 = (cat) => {
+    const [tx, ty, tw, th] = cat.dehors.r2[0];
+    return { tables: [[tx + 40, ty + 60], [tx + 130, ty + 150]], pots: [[tx + 6, ty + 6], [tx + tw - 26, ty + 6], [tx + tw - 26, ty + th - 26]] };
+  };
+  // Autour du garage : maison et perron, voiture, salon de jardin, pots, barbecue, potager, tonneau, carton, vélo, pneus, boîte aux lettres, massif
+  const DECOR_GARAGE = [[70, 300, 320, 380], [208, 680, 44, 10], [540, 700, 28, 56], [146, 703, 28, 28], [122, 709, 12, 12], [186, 709, 12, 12], [112, 684, 12, 12], [276, 684, 12, 12], [112, 738, 12, 12],
+    [249, 727, 18, 18], [116, 176, 126, 78], [80, 170, 20, 20], [626, 598, 30, 26], [452, 650, 8, 36], [457, 623, 18, 18], [658, 624, 12, 12], [720, 700, 22, 14], [693, 771, 94, 14]];
+  const GRILLES = {};
+  const grilleMurs = (e, cat, marge = ETROIT) => {
+    const G = GRILLES[marge] || {};
+    if (G.objets === e.objets && G.etage === ETAGE && G.cle) return G;  // appelé pour chaque personnage : sans recalculer la clé
+    const objets = (e.objets || []).filter((o) => { const f = ficheObjet(cat, o.type); return f && !f.libre; });
+    const cle = (batiment(e) ? ETAGE : 'garage') + objets.map((o) => `|${o.type},${o.x},${o.y},${o.cote}`).join('');
+    if (G.cle === cle) { G.objets = e.objets; G.etage = ETAGE; return G; }
+    const g = { cle, objets: e.objets, etage: ETAGE, x0: -40, y0: DY - 40, nx: Math.ceil(1400 / PAS), ny: Math.ceil(940 / PAS) };
+    g.mur = new Uint8Array(g.nx * g.ny);  // infranchissable, marge comprise
+    g.cloison = new Uint8Array(g.nx * g.ny);  // le trait des murs seuls
+    g.siege = new Uint8Array(g.nx * g.ny);  // l'accès à un siège : on y va s'asseoir, on n'y reste pas debout
     g.c = (x, y) => { const i = Math.floor((x - g.x0) / PAS), j = Math.floor((y - g.y0) / PAS); return i >= 0 && j >= 0 && i < g.nx && j < g.ny ? j * g.nx + i : -1; };
+    const bloque = (x, y, w, h) => {
+      const j1 = Math.min(g.ny - 1, Math.floor((y + h + marge - g.y0) / PAS)), i1 = Math.min(g.nx - 1, Math.floor((x + w + marge - g.x0) / PAS));
+      for (let j = Math.max(0, Math.floor((y - marge - g.y0) / PAS)); j <= j1; j++) for (let i = Math.max(0, Math.floor((x - marge - g.x0) / PAS)); i <= i1; i++) {
+        const cx = g.x0 + (i + 0.5) * PAS, cy = g.y0 + (j + 0.5) * PAS;
+        if (cx > x - marge && cx < x + w + marge && cy > y - marge && cy < y + h + marge) g.mur[j * g.nx + i] = 1;
+      }
+    };
     const segs = [];
     if (batiment(e)) {
       const b = bords(cat);
@@ -385,47 +410,81 @@ const PLAN = (() => {
         const x = g.x0 + (k % g.nx + 0.5) * PAS, y = g.y0 + (Math.floor(k / g.nx) + 0.5) * PAS;
         if (!dans(x, y, cat.coques[ETAGE]) && !dans(x, y, cat.dehors[ETAGE])) g.mur[k] = 1;
       }
+      for (const r of [...(cat.obstacles ? cat.obstacles.batiment : []), ...(cat.etablis ? cat.etablis.batiment : [])]) bloque(...r);
+      for (const [, x, y, w, h] of cat.communs[ETAGE]) bloque(x, y, w, h);  // sanitaires, escalier, locaux : personne n'y passe
+      if (ETAGE === 'r2') { const t = terrasseR2(cat); for (const [x, y] of t.tables) bloque(x, y, 32, 32); for (const [x, y] of t.pots) bloque(x, y, 20, 20); }
     } else {  // garage : murs du fond, mur est, mur sud ouvert sur la porte basculante
       const gx = 430, gy = 400, gw = 250;
       segs.push([gx, gy, gx + gw, gy], [gx, gy, gx, gy + gw], [gx + gw, gy, gx + gw, gy + gw], [gx, gy + gw, gx + 50, gy + gw], [gx + 200, gy + gw, gx + gw, gy + gw]);
+      for (const r of [...DECOR_GARAGE, ...(cat.obstacles ? cat.obstacles.garage : []), ...(cat.etablis ? cat.etablis.garage : [])]) bloque(...r);
+    }
+    for (const o of objets) { const f = ficheObjet(cat, o.type), t = o.cote === 'o' || o.cote === 'e'; bloque(o.x, o.y, t ? f.h : f.w, t ? f.w : f.h); }
+    for (const o of objets) if (o.type === 'poste') {  // le siège reste accessible, par le côté ouvert du bureau
+      const [sx, sy] = siege(o), [, , dx, dy] = SIEGE[o.cote || 'n'];
+      for (let u = 0; u <= ficheObjet(cat, 'poste').h + marge + PAS; u += PAS / 2) { const k = g.c(sx + dx * u, sy + dy * u); if (k >= 0) { g.mur[k] = 0; g.siege[k] = 1; } }
     }
     for (const [x1, y1, x2, y2] of segs) {
-      const n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 4));
-      for (let k = 0; k <= n; k++) {
-        const i = g.c(x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n);
-        if (i >= 0) g.mur[i] = 1;
-      }
+      bloque(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
+      const n = Math.max(1, Math.ceil(Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 3));
+      for (let k = 0; k <= n; k++) { const i = g.c(x1 + (x2 - x1) * k / n, y1 + (y2 - y1) * k / n); if (i >= 0) g.cloison[i] = 1; }
     }
-    return (GRILLE = g);
+    return (GRILLES[marge] = g);
   };
-  // Points de passage de (ax, ay) à (bx, by), sans le départ, coordonnées du monde ; plus court chemin sur la grille puis lissé
-  const trajet = (e, cat, ax, ay, bx, by) => {
-    const g = grilleMurs(e, cat), N = g.nx * g.ny;
-    const proche = (x, y) => {  // case libre la plus proche d'un point collé au mur
-      for (let r = 0; r <= 2 * PAS; r += PAS) for (const [dx, dy] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]]) { const k = g.c(x + dx, y + dy); if (k >= 0 && !g.mur[k]) return k; }
-      return -1;
-    };
-    const s = proche(ax, ay), t = proche(bx, by);
-    if (s < 0 || t < 0) return [[bx, by]];
-    const de = new Int32Array(N).fill(-1), file = [s];
+  const centreCase = (g, k) => [g.x0 + (k % g.nx + 0.5) * PAS, g.y0 + (Math.floor(k / g.nx) + 0.5) * PAS];
+  const voie = (g, t, [x1, y1], [x2, y2]) => {  // aucune case de t entre deux points
+    const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / (PAS / 4));
+    for (let m = 1; m < n; m++) { const k = g.c(x1 + (x2 - x1) * m / n, y1 + (y2 - y1) * m / n); if (k >= 0 && t[k]) return false; }
+    return true;
+  };
+  // Case libre la plus proche d'un point, du même côté des murs ; -1 s'il n'y en a pas à portée
+  const caseLibre = (g, x, y) => {
+    const k0 = g.c(x, y);
+    if (k0 >= 0 && !g.mur[k0]) return k0;
+    const i0 = Math.floor((x - g.x0) / PAS), j0 = Math.floor((y - g.y0) / PAS);
+    for (let r = 1; r <= 30; r++) {
+      let mieux = -1, d = Infinity;
+      for (let j = Math.max(0, j0 - r); j <= Math.min(g.ny - 1, j0 + r); j++) for (let i = Math.max(0, i0 - r); i <= Math.min(g.nx - 1, i0 + r); i++) {
+        const k = j * g.nx + i;
+        if (Math.max(Math.abs(i - i0), Math.abs(j - j0)) !== r || g.mur[k] || g.siege[k]) continue;
+        const c = centreCase(g, k), dk = Math.hypot(c[0] - x, c[1] - y);
+        if (dk < d && voie(g, g.cloison, [x, y], c)) { mieux = k; d = dk; }
+      }
+      if (mieux >= 0) return mieux;
+    }
+    return -1;
+  };
+  // Là où un personnage peut se tenir au plus près de (x, y)
+  const pointLibre = (e, cat, x, y) => {
+    const g = grilleMurs(e, cat), k0 = g.c(x, y);
+    if (k0 < 0 || !g.mur[k0]) return [x, y];
+    const k = caseLibre(g, x, y);
+    return k < 0 ? [x, y] : centreCase(g, k);
+  };
+  const ligneLibre = (e, cat, a, b) => { const g = grilleMurs(e, cat); return voie(g, g.mur, a, b); };
+  // Plus court chemin sur une grille, entre deux cases, puis lissé : liste vide s'il n'y en a pas
+  const chemin = (g, s, t, a, b) => {
+    const N = g.nx * g.ny, de = new Int32Array(N).fill(-1), file = [s];
     de[s] = s;
     for (let q = 0; q < file.length && de[t] < 0; q++) {
       const k = file[q], i = k % g.nx;
       for (const n of [i > 0 ? k - 1 : -1, i < g.nx - 1 ? k + 1 : -1, k - g.nx, k + g.nx]) if (n >= 0 && n < N && de[n] < 0 && !g.mur[n]) { de[n] = k; file.push(n); }
     }
-    if (de[t] < 0) return [[bx, by]];  // pas de chemin (point dans un mur ou hors du bâtiment) : tout droit
+    if (de[t] < 0) return [];
     const cases = [];
     for (let k = t; k !== s; k = de[k]) cases.push(k);
-    const centre = (k) => [g.x0 + (k % g.nx + 0.5) * PAS, g.y0 + (Math.floor(k / g.nx) + 0.5) * PAS];
-    const p = [[ax, ay], ...cases.reverse().slice(0, -1).map(centre), [bx, by]];
-    const vue = ([x1, y1], [x2, y2]) => {
-      const n = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / (PAS / 4));
-      for (let m = 1; m < n; m++) { const k = g.c(x1 + (x2 - x1) * m / n, y1 + (y2 - y1) * m / n); if (k >= 0 && g.mur[k]) return false; }
-      return true;
-    };
+    // seulement les tournants : le lissage reste rapide, même avec des dizaines de marcheurs
+    const milieu = cases.reverse().slice(0, -1).map((k) => centreCase(g, k)).filter((c, i, l) => i === 0 || i === l.length - 1 || (l[i - 1][0] !== l[i + 1][0] && l[i - 1][1] !== l[i + 1][1]));
+    const p = [a, ...milieu, g.c(b[0], b[1]) === t ? b : centreCase(g, t)];
     const out = [];
-    for (let i = 0; i < p.length - 1;) { let j = i + 1; while (j + 1 < p.length && vue(p[i], p[j + 1])) j++; out.push(p[j]); i = j; }
+    for (let i = 0; i < p.length - 1;) { let j = i + 1; while (j + 1 < p.length && voie(g, g.mur, p[i], p[j + 1])) j++; out.push(p[j]); i = j; }
     return out;
+  };
+  // Points de passage de (ax, ay) à (bx, by), sans le départ, coordonnées du monde. Sans chemin : liste vide, le personnage sera posé à l'arrivée plutôt que de traverser.
+  const trajet = (e, cat, ax, ay, bx, by) => {
+    const a = [ax, ay], b = [bx, by], L = grilleMurs(e, cat, LARGE), s0 = L.c(ax, ay), t0 = L.c(bx, by);
+    if (s0 >= 0 && t0 >= 0 && !L.mur[s0] && !L.mur[t0]) { const p = chemin(L, s0, t0, a, b); if (p.length) return p; }
+    const g = grilleMurs(e, cat), s = caseLibre(g, ax, ay), t = caseLibre(g, bx, by);
+    return s < 0 || t < 0 ? [] : chemin(g, s, t, a, b);
   };
 
   const fondEtage = (e, cat) => {
@@ -472,9 +531,9 @@ const PLAN = (() => {
     }
     // R2 : toit-terrasse (parasols, tables, jardinières)
     if (ETAGE === 'r2') {
-      const [tx, ty, tw, th] = cat.dehors.r2[0];
-      for (const [px, py] of [[tx + 40, 60], [tx + 130, 150]]) el.push([px + ty + py, boite(px, ty + py, 32, 32, 16, '#f4f1e8') + boite(px + 14, ty + py + 14, 4, 4, 30, '#9aa1a8', 16) + boule(px + 16, ty + py + 16, 50, 26, '#ff8f7a')]);
-      for (const [px, py] of [[tx + 6, 6], [tx + tw - 26, 6], [tx + tw - 26, th - 26]]) el.push([px + ty + py, plantePot(px, ty + py, 20, 20, 'plantes')]);
+      const t = terrasseR2(cat);
+      for (const [px, py] of t.tables) el.push([px + py, boite(px, py, 32, 32, 16, '#f4f1e8') + boite(px + 14, py + 14, 4, 4, 30, '#9aa1a8', 16) + boule(px + 16, py + 16, 50, 26, '#ff8f7a')]);
+      for (const [px, py] of t.pots) el.push([px + py, plantePot(px, py, 20, 20, 'plantes')]);
     }
     return { plat, fond, el };
   };
@@ -676,7 +735,7 @@ const PLAN = (() => {
   };
   return {
     W, H,
-    coucheSol, PEAUX, iso, versMonde, empreinte, figure, objet, profondeur,
+    coucheSol, siege, pointLibre, ligneLibre, PEAUX, iso, versMonde, empreinte, figure, objet, profondeur,
     // Les volumes (pavés, boules, polygones, personnages…) dessinés pendant f, pour le rendu 3D
     capture: (f) => { CAPT.liste = []; CAPT.dedans = 0; try { f(); return CAPT.liste; } finally { CAPT.liste = null; } },
     // Étage du bâtiment à dessiner (le garage n'a qu'un niveau)

@@ -55,9 +55,7 @@ const SPOTS = {
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
 
-// Où s'assoit l'occupant d'un bureau, selon le mur auquel ce bureau est adossé
-const SIEGE = { n: [38, 46], s: [38, 18], o: [46, 38], e: [18, 38] };
-const siege = (o) => { const [a, b] = SIEGE[o.cote || 'n']; return [o.x + a, o.y + b]; };
+const siege = PLAN.siege;
 // Largeur et profondeur d'un meuble sur le plan : son long côté suit le mur
 const emprise = (type, cote) => { const f = fiche(type); return cote === 'o' || cote === 'e' ? [f.h, f.w] : [f.w, f.h]; };
 const figureDe = (x, assis = false, pose = 'debout') => PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis, pose);
@@ -77,7 +75,7 @@ function rendrePersos() {
   for (const o of e.objets) {
     const m = CAT.materiel[o.type], k = m && pieceDe(o);
     const lieu = k && bat && (k === pieceMateriel('e') ? 'labo' : k === pieceMateriel('m') ? 'atelier' : null);
-    if (lieu) { const [x, , w] = CAT.pieces[k].rect; spots[lieu].push([Math.min(o.x + m.w + 12, x + w - 14), o.y + m.h / 2]); }
+    if (lieu) { const [x, , w] = CAT.pieces[k].rect, [mw, mh] = emprise(o.type, o.cote); spots[lieu].push([Math.min(o.x + mw + 12, x + w - 14), o.y + mh / 2]); }
   }
   const baby = salle && e.objets.find((o) => o.type === 'babyfoot');
   if (baby) { const f = fiche('babyfoot'); spots.babyfoot = [[baby.x - 10, baby.y + f.h / 2], [baby.x + f.w + 10, baby.y + f.h / 2]]; }
@@ -121,9 +119,10 @@ function rendrePersos() {
   for (const f of fantomes) pos[f.emp.id] = f;
   for (const emp of [...presents, ...fantomes.map((f) => f.emp)]) {
     if (!pos[emp.id] || pos[emp.id].cache) continue;
-    const { lieu, x: cx, y: cy, texte } = pos[emp.id];
-    NB[etageDe(cy)] = (NB[etageDe(cy)] || 0) + 1;
-    if (!surEtage(cy)) continue;  // à un autre étage : retiré du plan affiché
+    const { lieu, x: vx, y: vy, texte } = pos[emp.id];
+    NB[etageDe(vy)] = (NB[etageDe(vy)] || 0) + 1;
+    if (!surEtage(vy)) continue;  // à un autre étage : retiré du plan affiché
+    const [cx, cy] = PLAN.pointLibre(e, CAT, vx, vy);  // jamais debout dans un meuble
     let t = '', c = '';
     const choc = REACTION && REACTION.ids.includes(emp.id);
     if (vue === 'moral' && emp.moral !== undefined) { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
@@ -144,7 +143,7 @@ function rendrePersos() {
     let chemin = null, dt = 0;
     if (CIBLES[id] !== cle) {
       const ici = CIBLES[id] && CIBLES[id].endsWith('|' + etage) && RENDU.position(id);  // arrivé par l'escalier ou d'un autre étage : pas de marche
-      if (ici) {  // il marche depuis là où il en est, en contournant les murs par les portes
+      if (ici) {  // il marche depuis là où il en est, en contournant murs et objets, par les portes
         const pts = [ici, ...PLAN.trajet(e, CAT, ici[0], ici[1], cx, cy)];
         let L = 0;
         for (let k = 1; k < pts.length; k++) L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
@@ -233,8 +232,8 @@ const journee = () => {  // [début (part du jour), moment, heure affichée] ; l
     [0.52, 'dejeuner', 12], [0.75, 'travail', 13.6], [0.83, 'cafe', 15.75], [0.89, 'travail', 16.1], [0.92, 'depart', fin - 0.5], [1, 'fin', fin]];
 };
 const ESCALIERS = { rdc: [628, 402], r1: [659, 1380], r2: [656, 2381] };  // palier devant l'escalier de chaque étage
-const ENTREES = { garage: [555, 700], rdc: [633, 768], r1: ESCALIERS.r1, r2: ESCALIERS.r2 };  // par où l'on arrive et l'on repart
-const COULOIRS = { garage: [[455, 600], [660, 600]], rdc: [[700, 514], [1100, 514]], r1: [[360, 1246], [1240, 1246]], r2: [[660, 2248], [1080, 2248]] };
+const ENTREES = { garage: [510, 700], rdc: [633, 768], r1: ESCALIERS.r1, r2: ESCALIERS.r2 };  // par où l'on arrive et l'on repart
+const COULOIRS = { garage: [[455, 600], [660, 600]], rdc: [[700, 502], [1100, 502]], r1: [[360, 1246], [1110, 1246]], r2: [[660, 2236], [1080, 2236]] };
 const SALLES = { rdc: 'atlas', r1: 'orion', r2: 'vega' };
 const MOTS = {
   reunion: { e: ['Point HW', 'Les schémas ?', 'Et le routage ?'], m: ['Revue méca', 'Les plans 3D ?', 'Le boîtier ?'], f: ['Daily soft', 'Le sprint ?', 'Ça compile ?'] },
@@ -386,8 +385,9 @@ function lancerCourse(e, objs, etg) {
   const ici = e.employes.filter((x) => !x.absent && objs[x.bureau] && etg(x) === (carte() === 'batiment' ? etage : 'garage'));
   if (ici.length < 2 || COURSE) return;
   const pilotes = ici.slice().sort((a, b) => (a.id * 7 + e.jours_total) % 5 - (b.id * 7 + e.jours_total) % 5).slice(0, 3);
-  COURSE = { ids: pilotes.map((x) => x.id), fin: Date.now() + 8000 };
   const [[x1, y1], [x2, y2]] = COULOIRS[carte() === 'batiment' ? etage : 'garage'];
+  if (!pilotes.every((_, k) => PLAN.ligneLibre(e, CAT, [x1, y1 + k * 12], [x2, y2 + k * 12]))) return;  // un meuble barre le couloir : pas de course
+  COURSE = { ids: pilotes.map((x) => x.id), fin: Date.now() + 8000 };
   RENDU.course(pilotes.map((x, k) => ({ figure: { couleur: x.couleur, cheveux: x.cheveux, peau: x.peau || PLAN.PEAUX[0], i: x.id, assis: true, pose: 'debout' }, x1, y1: y1 + k * 12, x2, y2: y2 + k * 12, t: 2.1 + k * 0.45 })));
   setTimeout(() => { RENDU.course([]); COURSE = null; rendrePersos(); }, 8000);
 }
@@ -472,7 +472,7 @@ setInterval(() => {
 
 // Emplacements debout dans le bâtiment (centre du personnage) : grille libre de chaque pièce et de la terrasse du R2
 function spotsBatiment(e) {
-  const boites = e.objets.map((o) => { const f = fiche(o.type); return f && !f.libre ? [o.x, o.y, f.w, f.h] : null; }).filter(Boolean).concat(CAT.obstacles.batiment);
+  const boites = e.objets.map((o) => { const f = fiche(o.type); return f && !f.libre ? [o.x, o.y, ...emprise(o.type, o.cote)] : null; }).filter(Boolean).concat(CAT.obstacles.batiment);
   const libre = (x, y) => !boites.some(([bx, by, bw, bh]) => x > bx - 10 && x < bx + bw + 10 && y > by - 10 && y < by + bh + 10);
   const grille = (k) => {
     const [x, y, w, h] = typeof k === 'string' ? CAT.pieces[k].rect : k, pts = [];
@@ -1223,7 +1223,7 @@ function modaleParties() {
     (pa.mode ? retour : bouton('par-fermer', '', 'Fermer', true, 'secondaire'));
 }
 async function ouvrirMenu(etape, mode) {
-  joue = false;
+  suspendre();
   try {
     const r = await api('/api/parties');
     parties = { liste: r.parties, actuelle: r.actuelle, records: r.records, etape, mode, scenario: 'garage', difficulte: 'normal', entreprise: '', directeur: '' };
@@ -1231,9 +1231,25 @@ async function ouvrirMenu(etape, mode) {
   rendre();
 }
 let signature = null, parties = null;
-const COM = { qui: null, secteur: '', devis: {} };  // choix en cours dans Commerce : qui prospecte, secteur démarché, prix et délai de chaque devis
+let rejouer = true;  // le temps repart à la fermeture de l'écran ouvert : à l'ouverture du jeu, ou s'il tournait quand cet écran l'a arrêté
+const bloquante = () => ETAT.evenement || ETAT.faillite || ETAT.dernier_livre || ETAT.bilan || (ETAT.fin && !ETAT.fin.vue) || (ETAT.victoire && !ETAT.victoire.vue) || signature || parties;
+function suspendre() {
+  rejouer = rejouer || joue;
+  if (joue) figee = fractionJour();
+  joue = false;
+  clearTimeout(minuteur);
+}
+function lancer() {
+  if (!bloquante()) {  // sinon, il repartira quand cet écran sera traité
+    rejouer = false;
+    debutJour = performance.now() - figee * VITESSES[vitesse][1];
+    joue = true;
+    boucle();
+  }
+  rendre();
+}
+const apresEcran = () => (rejouer ? lancer() : rendre());
 
-// ---------------------------------------------------------------- échanges serveur
 async function api(chemin, corps) {
   const r = await fetch(chemin, corps ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WEB_OFFICE': '1' }, body: JSON.stringify(corps) } : {});
   if (!r.ok) throw new Error('Serveur injoignable');
@@ -1261,7 +1277,7 @@ async function agir(genre, params = {}) {
   } catch (err) {
     toast(err.message);
   }
-  rendre();
+  apresEcran();
 }
 
 function boucle() {
@@ -1282,7 +1298,7 @@ function boucle() {
         toast(err.message);
       }
       envoi = false;
-      if (ETAT.evenement || ETAT.faillite || ETAT.dernier_livre || ETAT.bilan || (ETAT.fin && !ETAT.fin.vue) || (ETAT.victoire && !ETAT.victoire.vue) || signature || parties) joue = false;
+      if (bloquante()) suspendre();
       rendre();
     }
     boucle();
@@ -1333,13 +1349,14 @@ document.addEventListener('click', async (ev) => {
     case 'demo': pilotage = false; figee = fractionJour(); joue = false; toast('Démo arrêtée : à vous de jouer !', true); return rendre();
     case 'temps':
       pilotage = false;
+      rejouer = false;
       if (id === 'pause') { figee = fractionJour(); joue = false; }
       else { if (!joue) debutJour = performance.now() - figee * VITESSES[id][1]; joue = true; vitesse = id; }
       rendre(); return boucle();
     case 'menu': return ouvrirMenu('menu');
     case 'nouvelle-directe': return ouvrirMenu('liste', 'nouvelle');
     case 'parties': return ouvrirMenu('liste');
-    case 'par-fermer': parties = null; return rendre();
+    case 'par-fermer': parties = null; return apresEcran();
     case 'par-menu': parties.etape = 'menu'; parties.mode = undefined; return rendre();
     case 'par-liste': parties.etape = 'liste'; parties.mode = id; return rendre();
     case 'par-etape': parties.etape = id; return rendre();
@@ -1356,10 +1373,11 @@ document.addEventListener('click', async (ev) => {
       if (!r.ok) return toast(r.erreur);
       parties = null; amenage = false; placement = null; selection = null;
       onglet = tablette() ? 'projets' : 'accueil';
-      return rendre();
+      figee = 0; rejouer = true;
+      return lancer();
     }
     case 'sig-ouvrir': {
-      joue = false;
+      suspendre();
       const tech = Object.fromEntries(Object.entries(CAT.choix_tech).map(([k, c]) => [k, c.defaut]));
       const o = b.dataset.genre === 'signer' && ETAT.offres.find((x) => x.id === id);
       if (o && CAT.exigeants.includes(o.secteur)) tech.qualif = 'carte';
@@ -1374,7 +1392,7 @@ document.addEventListener('click', async (ev) => {
       else signature.tech[cle] = brut;
       return rendre();
     }
-    case 'sig-annuler': signature = null; return rendre();
+    case 'sig-annuler': signature = null; return apresEcran();
     case 'prospecter': return agir('prospecter', { canal: id, qui: Number(COM.qui), secteur: COM.secteur || null });
     case 'devis': { const d = COM.devis[id] || { prix: '1.0', delai: '1.0' }; delete COM.devis[id]; return agir('devis', { id: Number(id), ...d }); }
     case 'sig-ok': {

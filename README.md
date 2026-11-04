@@ -98,7 +98,7 @@ API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/acti
 ```bash
 python3 -m unittest -q          # moteur
 python3 tests/banc-serveur.py   # serveur : fichiers servis, Host, en-tête, tailles
-node tests/test_trajets.js      # trajets : les personnages passent par les portes
+node tests/test_trajets.js      # trajets : portes, ni mur ni objet traversé
 python3 tests/banc-rendu.py     # rendu 3D : les 4 plans, la marche et les effets, sans erreur (Chromium sans écran, long ; CAPTURE=dossier ZOOM=1 PLANS=r1,r2)
 python3 appairage.py            # code, jeton, cookie
 ```

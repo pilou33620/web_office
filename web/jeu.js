@@ -1176,7 +1176,7 @@ const AIDE = [
   ['Équipe', "Chaque employé a des compétences (Élec, Méca 3D, Firmware) et des compétences métier, une séniorité, plusieurs traits, une motivation, un moral et une fatigue. Le CV ne dit pas tout : l'entretien et le spécialiste en révèlent plus, le reste se découvre avec le temps. Gare au burn-out, et soignez les entretiens annuels."],
   ['Conditions de travail', "Décoration, café, climatisation, isolation et horaires changent la production (vue Productivité)."],
   ['Matériel et locaux', "Le matériel accélère le travail et réduit les défauts. Quittez le garage pour le bâtiment de bureaux (onglets RDC, R1, R2 à gauche du plan) : tout le bâtiment est ouvert d'un coup, vous grandissez ensuite en embauchant. Nommez des responsables de service, un directeur R&D et un chargé d'innovation dans Équipe."],
-  ['Plan', "Sur téléphone, faites glisser le plan au doigt et pincez pour zoomer. Les boutons + / − / ⌖ zooment et recentrent. En vitesse Lent ou Normal, suivez la journée de bureau : réunion du matin, cafés, déjeuner à midi."],
+  ['Plan', "Sur ordinateur, la molette zoome et ZQSD déplace le plan. Sur téléphone, faites glisser le plan au doigt et pincez pour zoomer. Les boutons + / − / ⌖ zooment et recentrent. En vitesse Lent ou Normal, suivez la journée de bureau : réunion du matin, cafés, déjeuner à midi."],
   ['Aménagement', "Le bouton en haut à gauche permet de placer, déplacer ou revendre bureaux, appareils et décoration."],
   ['Société', "Recherche, certifications, fournisseurs, prêts et levée de fonds débloquent de meilleurs contrats. En fin de partie, investissez : campagne nationale, centre de formation, filiale, rachat d'un concurrent."],
   ['Argent', "Loyer, salaires et frais tombent chaque mois, l'impôt chaque année. Sous −5 000 €, c'est la faillite."],
@@ -1457,7 +1457,7 @@ document.addEventListener('change', (ev) => {
   }
 });
 
-// Pincer pour zoomer (téléphone), Ctrl + molette (ordinateur)
+// Pincer pour zoomer (téléphone), molette (ordinateur)
 let pince = null;
 const ecart = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 $('#cadre').addEventListener('touchstart', (ev) => { if (ev.touches.length === 2) pince = { d: ecart(ev.touches), s: zoom }; }, { passive: true });
@@ -1469,11 +1469,35 @@ $('#cadre').addEventListener('touchmove', (ev) => {
 }, { passive: false });
 $('#cadre').addEventListener('touchend', (ev) => { if (ev.touches.length < 2) pince = null; });
 $('#cadre').addEventListener('wheel', (ev) => {
-  if (!ev.ctrlKey) return;
   ev.preventDefault();
-  const r = $('#cadre').getBoundingClientRect();
-  appliquerZoom(zoom * (ev.deltaY < 0 ? 1.12 : 0.89), ev.clientX - r.left, ev.clientY - r.top);
+  const r = $('#cadre').getBoundingClientRect(), d = ev.deltaY * (ev.deltaMode === 1 ? 33 : 1);  // Firefox compte en lignes ; proportionnel pour rester doux au pavé tactile
+  appliquerZoom(zoom * Math.exp(-d * 0.0012), ev.clientX - r.left, ev.clientY - r.top);
 }, { passive: false });
+
+// Déplacer le plan au clavier : ZQSD, par la position des touches (WASD sur un clavier QWERTY)
+const TOUCHES_PLAN = { KeyW: [0, -1], KeyS: [0, 1], KeyA: [-1, 0], KeyD: [1, 0] }, tenues = new Set();
+let dernierPas = 0;
+function deplacerPlan(dt) {
+  let dx = 0, dy = 0;
+  for (const k of tenues) { dx += TOUCHES_PLAN[k][0]; dy += TOUCHES_PLAN[k][1]; }
+  const v = 800 * dt / (Math.hypot(dx, dy) || 1), cadre = $('#cadre');  // même vitesse à l'écran quel que soit le zoom, et en diagonale
+  cadre.scrollLeft += dx * v;
+  cadre.scrollTop += dy * v;
+}
+function pasClavier(t) {
+  if (!tenues.size) return;
+  deplacerPlan(Math.min(0.05, (t - dernierPas) / 1000));
+  dernierPas = t;
+  requestAnimationFrame(pasClavier);
+}
+document.addEventListener('keydown', (ev) => {
+  if (!TOUCHES_PLAN[ev.code] || ev.ctrlKey || ev.altKey || ev.metaKey || parties || signature || ev.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  ev.preventDefault();
+  if (!tenues.size) { dernierPas = performance.now(); requestAnimationFrame(pasClavier); }
+  tenues.add(ev.code);
+});
+document.addEventListener('keyup', (ev) => tenues.delete(ev.code));
+window.addEventListener('blur', () => tenues.clear());  // la touche relâchée dans une autre fenêtre ne resterait pas enfoncée
 
 // Météo, saison au jardin et lumière du jour : lues sur #monde (rendre et l'horloge les y posent)
 const majAmbiance = () => { const d = $('#monde').dataset; RENDU.ambiance({ meteo: d.meteo, saison: d.saison, dehors: d.dehors === '1', soir: d.soir || '' }); };

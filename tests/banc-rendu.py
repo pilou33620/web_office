@@ -62,6 +62,15 @@ new MutationObserver(() => { if (!window.BANC_OK && window.RENDU && document.que
   const cs = []; console.log('BANC-SOLS ' + [[0, 0, 100, 100], [10, 10, 10, 10], [200, 0, 10, 10], [100, 0, 10, 10], [12, 12, 2, 2]].map((r) => PLAN.coucheSol(cs, ...r)));
   const quitte = (act, avant) => { joue = false; rejouer = avant; const q = document.createElement('button'); q.dataset.act = act; document.body.append(q); q.click(); q.remove(); return joue; };
   console.log('BANC-LECTURE ' + [quitte('par-fermer', true), quitte('sig-annuler', true), quitte('par-fermer', false)]); joue = true; boucle();
+  const cad = $('#cadre'), bouge = () => { const a = [cad.scrollLeft, cad.scrollTop]; deplacerPlan(0.1); return [cad.scrollLeft - a[0], cad.scrollTop - a[1]]; };
+  const touche = (type, code, o = {}, cible = document.body) => cible.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true, cancelable: true, ...o }));
+  appliquerZoom(1.5); cad.scrollLeft = cad.scrollTop = 300;
+  const z0 = zoom; cad.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true })); const zoomPlus = zoom > z0;
+  touche('keydown', 'KeyD'); touche('keydown', 'KeyW'); const [dx, dy] = bouge(); touche('keyup', 'KeyD'); touche('keyup', 'KeyW');
+  const lache = bouge().every((v) => v === 0);
+  touche('keydown', 'KeyD', { ctrlKey: true }); const ctrl = bouge().every((v) => v === 0);
+  const saisie = document.createElement('input'); document.body.append(saisie); touche('keydown', 'KeyD', {}, saisie); saisie.remove(); const champ = bouge().every((v) => v === 0);
+  console.log('BANC-COMMANDES ' + [zoomPlus, dx > 0, dy < 0, lache, ctrl, champ]);
   if (PLAN_BANC !== 'garage') { etage = PLAN_BANC; rendre(); }
   const z = +Q.get('zoom'); appliquerZoom(z || 0.62); recentrer(); } })
   .observe(document.documentElement, { subtree: true, childList: true, characterData: true });
@@ -73,6 +82,7 @@ page = (web / "index.html").read_text(encoding="utf-8").replace('<script src="pl
 page = re.sub(r'<link[^>]+fonts\.(googleapis|gstatic)\.com[^>]*>', '', page)  # hors ligne, la feuille de polices bloquerait les scripts
 (web / "banc.html").write_text(page, encoding="utf-8")
 
+COMMANDES = "BANC-COMMANDES true,true,true,true,true,true"
 capture = os.environ.get("CAPTURE")
 ignorer = ("WebGPU", "favicon", "fonts.googleapis", "fonts.gstatic")
 base = [navigateur, "--headless=new", "--no-sandbox", "--enable-unsafe-swiftshader", "--hide-scrollbars", "--allow-file-access-from-files", "--enable-logging=stderr", "--v=0"]
@@ -84,9 +94,9 @@ for nom in plans:
     journal = subprocess.run(base + ["--user-data-dir=" + str(tmp / ("profil-" + nom)), "--window-size=1280,860", "--timeout=70000", "--screenshot=" + image,
                                      "file://%s/banc.html?demo&plan=%s&zoom=%s" % (web, nom, os.environ.get("ZOOM", ""))], capture_output=True, text=True, timeout=200).stderr
     erreurs = fautes(journal)
-    if erreurs or "BANC-TEMOIN ok" not in journal or "BANC-SOLS 1,2,1,1,3" not in journal or "BANC-LECTURE true,true,false" not in journal or not Path(image).is_file():
+    if erreurs or "BANC-TEMOIN ok" not in journal or "BANC-SOLS 1,2,1,1,3" not in journal or "BANC-LECTURE true,true,false" not in journal or COMMANDES not in journal or not Path(image).is_file():
         echecs += 1
-        print("ECHEC %s : %d erreur(s)%s" % (nom, len(erreurs), ("" if "BANC-TEMOIN ok" in journal else ", plan non affiché") + ("" if "BANC-SOLS 1,2,1,1,3" in journal else ", couches de sol fausses") + ("" if "BANC-LECTURE true,true,false" in journal else ", ne démarre pas en lecture")))
+        print("ECHEC %s : %d erreur(s)%s" % (nom, len(erreurs), ("" if "BANC-TEMOIN ok" in journal else ", plan non affiché") + ("" if "BANC-SOLS 1,2,1,1,3" in journal else ", couches de sol fausses") + ("" if "BANC-LECTURE true,true,false" in journal else ", ne démarre pas en lecture") + ("" if COMMANDES in journal else ", molette ou ZQSD en panne")))
         for l in erreurs[:4]:
             print("  " + l.split("] ", 1)[-1][:240])
 

@@ -8,11 +8,15 @@ const PLAN = (() => {
   // Étage affiché du bâtiment : chaque étage occupe sa bande du monde (y0), ramenée au même endroit de l'écran
   let ETAGE = 'rdc', DY = 0;
   const T = '#2b1d14';
+  // Capture : pendant PLAN.capture, chaque volume dessiné est aussi noté en 3D pour le rendu (rendu.js)
+  const CAPT = { liste: null, dedans: 0, dern: null };
+  const note = (x) => { if (CAPT.liste && !CAPT.dedans) CAPT.liste.push(x); };
+  const sans = (f) => { CAPT.dedans++; try { return f(); } finally { CAPT.dedans--; } };
   const n1 = (v) => Math.round(v * 10) / 10;
   const iso = (x, y, z = 0) => [OX + (x - y + DY) * C, OY + (x + y - DY) * S - z];
   const versMonde = (X, Y) => { const a = (X - OX) / C, b = (Y - OY) / S; return [(b + a) / 2, (b - a) / 2 + DY]; };
-  const pts = (...p) => p.map((q) => iso(...q).map(n1).join(',')).join(' ');
-  const poly = (points, f, sw = 1.2) => `<polygon points="${points}" fill="${f}"${sw ? ` stroke="${T}" stroke-width="${sw}" stroke-linejoin="round"` : ''}/>`;
+  const pts = (...p) => { CAPT.dern = p; return p.map((q) => iso(...q).map(n1).join(',')).join(' '); };
+  const poly = (points, f, sw = 1.2) => { if (CAPT.liste && !CAPT.dedans && CAPT.dern) CAPT.liste.push({ t: 'poly', p: CAPT.dern, c: f }); CAPT.dern = null; return `<polygon points="${points}" fill="${f}"${sw ? ` stroke="${T}" stroke-width="${sw}" stroke-linejoin="round"` : ''}/>`; };
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const nuance = (c, k) => {
     if (!c.startsWith('#')) return c;
@@ -21,18 +25,18 @@ const PLAN = (() => {
     return '#' + [0, 2, 4].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(h.slice(i, i + 2), 16) * k))).toString(16).padStart(2, '0')).join('');
   };
   // Pavé : face avant (+y, à gauche à l'écran), face droite (+x), dessus
-  const boite = (x, y, w, dp, h, c, z = 0, haut = null, face = null, sw = 1.2) =>
+  const boite0 = (x, y, w, dp, h, c, z = 0, haut = null, face = null, sw = 1.2) =>
     poly(pts([x, y + dp, z], [x + w, y + dp, z], [x + w, y + dp, z + h], [x, y + dp, z + h]), face || nuance(c, 0.82), sw)
     + poly(pts([x + w, y, z], [x + w, y + dp, z], [x + w, y + dp, z + h], [x + w, y, z + h]), nuance(c, 0.64), sw)
     + poly(pts([x, y, z + h], [x + w, y, z + h], [x + w, y + dp, z + h], [x, y + dp, z + h]), haut || nuance(c, 1.08), sw);
   const faceAvant = (x, y, dp, z0, u0, u1, v0, v1, f, sw = 0.8) => poly(pts([x + u0, y + dp + 0.3, z0 + v0], [x + u1, y + dp + 0.3, z0 + v0], [x + u1, y + dp + 0.3, z0 + v1], [x + u0, y + dp + 0.3, z0 + v1]), f, sw);
   const faceDroite = (x, y, w, z0, u0, u1, v0, v1, f, sw = 0.8) => poly(pts([x + w + 0.3, y + u0, z0 + v0], [x + w + 0.3, y + u1, z0 + v0], [x + w + 0.3, y + u1, z0 + v1], [x + w + 0.3, y + u0, z0 + v1]), f, sw);
   const dessus = (x, y, z, u0, u1, v0, v1, f, sw = 0.8) => poly(pts([x + u0, y + v0, z], [x + u1, y + v0, z], [x + u1, y + v1, z], [x + u0, y + v1, z]), f, sw);
-  const bouton = (x, y, z, r, f) => { const [X, Y] = iso(x, y, z); return `<circle cx="${n1(X)}" cy="${n1(Y)}" r="${r}" fill="${f}" stroke="${T}" stroke-width=".7"/>`; };
-  const cable = (a, b, c = '#3d3d3d', w = 1.3, creux = 6) => { const [x1, y1] = iso(...a), [x2, y2] = iso(...b); return `<path d="M${n1(x1)} ${n1(y1)} Q${n1((x1 + x2) / 2)} ${n1(Math.max(y1, y2) + creux)} ${n1(x2)} ${n1(y2)}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`; };
+  const bouton0 = (x, y, z, r, f) => { const [X, Y] = iso(x, y, z); return `<circle cx="${n1(X)}" cy="${n1(Y)}" r="${r}" fill="${f}" stroke="${T}" stroke-width=".7"/>`; };
+  const cable0 = (a, b, c = '#3d3d3d', w = 1.3, creux = 6) => { const [x1, y1] = iso(...a), [x2, y2] = iso(...b); return `<path d="M${n1(x1)} ${n1(y1)} Q${n1((x1 + x2) / 2)} ${n1(Math.max(y1, y2) + creux)} ${n1(x2)} ${n1(y2)}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`; };
   const reflet = (x, y, w, dp, z) => poly(pts([x, y, z], [x + w, y, z], [x + w, y + dp, z], [x, y + dp, z]), 'url(#i-reflet)', 0);
   const ombre = (x, y, w, dp, d = 4) => poly(pts([x + d, y + d, 0], [x + w + d, y + d, 0], [x + w + d, y + dp + d, 0], [x + d, y + dp + d, 0]), 'rgba(20,14,8,.2)', 0);
-  const boule = (x, y, z, r, c) => { const [X, Y] = iso(x, y, z), [, Ys] = iso(x, y, 0); return `<ellipse cx="${n1(X + 3)}" cy="${n1(Ys + 2)}" rx="${n1(r * 1.1)}" ry="${n1(r * 0.55)}" fill="rgba(20,14,8,.18)"/><circle cx="${n1(X)}" cy="${n1(Y)}" r="${n1(r)}" fill="${c}" stroke="${T}" stroke-width="1.4"/><circle cx="${n1(X - r * 0.3)}" cy="${n1(Y - r * 0.3)}" r="${n1(r * 0.4)}" fill="rgba(255,255,255,.25)"/>`; };
+  const boule0 = (x, y, z, r, c) => { const [X, Y] = iso(x, y, z), [, Ys] = iso(x, y, 0); return `<ellipse cx="${n1(X + 3)}" cy="${n1(Ys + 2)}" rx="${n1(r * 1.1)}" ry="${n1(r * 0.55)}" fill="rgba(20,14,8,.18)"/><circle cx="${n1(X)}" cy="${n1(Y)}" r="${n1(r)}" fill="${c}" stroke="${T}" stroke-width="1.4"/><circle cx="${n1(X - r * 0.3)}" cy="${n1(Y - r * 0.3)}" r="${n1(r * 0.4)}" fill="rgba(255,255,255,.25)"/>`; };
   const txtIso = (x, y, z, texte, taille, f, police = 'monospace') => { const [X, Y] = iso(x, y, z); return `<text x="${n1(X)}" y="${n1(Y)}" text-anchor="middle" font-family="${police}" font-weight="800" font-size="${taille}" fill="${f}">${texte}</text>`; };
   const boiteBois = (x, y, w, dp, h, z = 0, c = '#c48a52') => {
     let s = boite(x, y, w, dp, h, c, z, 'url(#i-bois)');
@@ -42,6 +46,10 @@ const PLAN = (() => {
   const boiteMetal = (x, y, w, dp, h, c, z = 0, face = null) => boite(x, y, w, dp, h, c, z, null, face) + reflet(x, y, w, dp, z + h);
   const etiquette = (x, y, texte) => { const [X, Y] = iso(x, y, 0), l = 6.4 * texte.length + 16; return `<rect x="${n1(X - l / 2)}" y="${n1(Y - 9)}" width="${n1(l)}" height="17" rx="8.5" fill="rgba(27,33,26,.82)"/><text x="${n1(X)}" y="${n1(Y + 3)}" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="10.5" fill="#f6f4ea">${esc(texte)}</text>`; };
   const bulle = (x, y, z, texte, c = '#fff7e6') => { const [X, Y] = iso(x, y, z), l = 6.2 * texte.length + 12; return `<rect x="${n1(X - l / 2)}" y="${n1(Y - 14)}" width="${n1(l)}" height="16" rx="8" fill="${c}" stroke="${T}" stroke-width="1.5"/><text x="${n1(X)}" y="${n1(Y - 2.5)}" text-anchor="middle" font-family="Fredoka, sans-serif" font-weight="600" font-size="10" fill="${T}">${esc(texte)}</text>`; };
+  const boite = (x, y, w, dp, h, c, z = 0, haut = null, face = null, sw) => { note({ t: 'boite', x, y, w, dp, h, c, z, haut, face }); return sans(() => boite0(x, y, w, dp, h, c, z, haut, face, sw)); };
+  const boule = (x, y, z, r, c) => { note({ t: 'boule', x, y, z, r, c }); return sans(() => boule0(x, y, z, r, c)); };
+  const bouton = (x, y, z, r, f) => { note({ t: 'bouton', x, y, z, r, c: f }); return sans(() => bouton0(x, y, z, r, f)); };
+  const cable = (a, b, c = '#3d3d3d', w = 1.3, creux = 6) => { note({ t: 'cable', a, b, c, w, creux }); return sans(() => cable0(a, b, c, w, creux)); };
   const empreinte = (x, y, w, dp, z = 0) => pts([x, y, z], [x + w, y, z], [x + w, y + dp, z], [x, y + dp, z]);
 
   const DEFS = `<defs>
@@ -75,7 +83,7 @@ const PLAN = (() => {
   // ---------------------------------------------------------------- personnages
   const PEAUX = ['#f6cfa6', '#eab994', '#c98e5e', '#a86b45', '#f8d8b8', '#7a4a2e'];
   // Personnage en volume posé en (x, y, z) ; pose : debout, marche, telephone, portable ; assis : sur une chaise
-  const personne = (x, y, z, haut, cheveux, peau, assis = false, i = 0, pose = 'debout') => {
+  const personne0 = (x, y, z, haut, cheveux, peau, assis = false, i = 0, pose = 'debout') => {
     let s = '';
     if (!assis) {
       s += ombre(x - 5, y - 4, 10, 8, 1);
@@ -96,6 +104,7 @@ const PLAN = (() => {
     else s += `<path d="M${n1(X - 6.3)} ${n1(Y - 0.5)} a6.3 6.3 0 0 1 12.6 0z" fill="${haut}" stroke="${T}" stroke-width=".8"/><rect x="${n1(X - 1)}" y="${n1(Y - 1.5)}" width="8" height="2" rx="1" fill="${haut}"/>`;
     return s + `<circle cx="${n1(X + 2)}" cy="${n1(Y + 1)}" r=".9" fill="${T}"/><circle cx="${n1(X - 2)}" cy="${n1(Y + 1)}" r=".9" fill="${T}"/>`;
   };
+  const personne = (x, y, z, haut, cheveux, peau, assis = false, i = 0, pose = 'debout') => { note({ t: 'perso', x, y, z, haut, cheveux, peau, assis, i, pose }); return sans(() => personne0(x, y, z, haut, cheveux, peau, assis, i, pose)); };
   // Figure seule (calque des personnages) : SVG de 36x56, les pieds en (18, 50)
   const figure = (haut, cheveux, peau, i, assis = false, pose = 'debout') => {
     const [X0, Y0] = iso(0, 0, 0);
@@ -646,28 +655,41 @@ const PLAN = (() => {
   const triees = (liste) => liste.sort((a, b) => a[0] - b[0]).map((x) => x[1]).join('');
   const svgEnveloppe = (contenu) => `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${contenu}</svg>`;
   const batiment = (e) => e.locaux.includes('bureau');
+  const defs = (e) => {
+    SAISON = e.saison || 'printemps';
+    const [h1, h2] = HERBE[SAISON] || HERBE.printemps;
+    return DEFS.replace('fill="#7cc46a"/><circle cx="5" cy="6" r="1.6" fill="#68b357"/><circle cx="16" cy="15" r="1.6" fill="#68b357"/>',
+      `fill="${h1}"/><circle cx="5" cy="6" r="1.6" fill="${h2}"/><circle cx="16" cy="15" r="1.6" fill="${h2}"/>`);
+  };
   return {
     W, H, PEAUX, iso, versMonde, empreinte, figure, objet, profondeur,
+    // Les volumes (pavés, boules, polygones, personnages…) dessinés pendant f, pour le rendu 3D
+    capture: (f) => { CAPT.liste = []; CAPT.dedans = 0; try { f(); return CAPT.liste; } finally { CAPT.liste = null; } },
     // Étage du bâtiment à dessiner (le garage n'a qu'un niveau)
     etage: (k, cat) => { ETAGE = k; DY = k === 'garage' ? 0 : cat.etages[k].y0; },
     // Calque du fond : sol, murs du fond, mobilier fixe
     fond: (e, cat) => {
-      SAISON = e.saison || 'printemps';
-      const [h1, h2] = HERBE[SAISON] || HERBE.printemps, defs = DEFS.replace('fill="#7cc46a"/><circle cx="5" cy="6" r="1.6" fill="#68b357"/><circle cx="16" cy="15" r="1.6" fill="#68b357"/>',
-        `fill="${h1}"/><circle cx="5" cy="6" r="1.6" fill="${h2}"/><circle cx="16" cy="15" r="1.6" fill="${h2}"/>`);
       const f = batiment(e) ? fondEtage(e, cat) : fondGarage(e, cat);
-      return svgEnveloppe(defs + sol(f.plat) + f.fond + triees(f.el));
+      return svgEnveloppe(defs(e) + sol(f.plat) + f.fond + triees(f.el));
     },
-    // Calque de devant : façade basse, extérieur (au-dessus des objets, sous les personnages)
-    devant: (e, cat) => (SAISON = e.saison || 'printemps') && svgEnveloppe(triees(batiment(e) ? devantEtage(e, cat) : devantGarage()) + etiquettes(e, cat)),
+    // Motifs et dégradés de la saison : chaque dessin rendu à part (rendu.js) les embarque
+    defs,
+    // Calque de devant : façade basse, extérieur (au-dessus des objets)
+    devant: (e, cat) => (SAISON = e.saison || 'printemps') && svgEnveloppe(triees(batiment(e) ? devantEtage(e, cat) : devantGarage())),
+    // Noms des pièces et des lieux, écrits en texte net par-dessus le plan
+    etiquettes: (e, cat) => svgEnveloppe(etiquettes(e, cat)),
     // Calque animé : voitures, bus et passants dans la rue, nuages aux étages
     rue: (e) => rue(e),
-    passage, pointEffet,
+    pointEffet3: (o, f, etablis) => {  // comme pointEffet, en coordonnées du monde [x, y, hauteur], selon le mur du meuble
+      const [w, dp] = o.cote === 'o' || o.cote === 'e' ? [f.h, f.w] : [f.w, f.h], rh = (REEL[o.type] || [f.w, f.h, 20])[2];
+      const z = etablis.some(([ex, ey, ew, eh]) => ex <= o.x && ey <= o.y && o.x + w <= ex + ew + 1 && o.y + dp <= ey + eh + 1) ? 20 : 0;
+      return [o.x + w / 2, o.y + dp / 2, z + Math.min(rh, 30) + (o.type === 'station' || o.type === 'micro' ? -2 : 2)];
+    },
     // Chemin d'un personnage sur l'étage affiché : points de passage sans le départ
     trajet,
     // Mobilier fixe à trier avec les objets placés : [profondeur, svg]
     fixes: (e, cat) => (batiment(e) ? fixesEtage(e, cat) : fixesGarage(e, cat)),
     centre: (e) => iso(...(batiment(e) ? (ETAGE === 'r2' ? [880, DY + 360] : [650, DY + 380]) : [556, 524])),
-    cadreMoral: (e) => (batiment(e) ? (ETAGE === 'r2' ? empreinte(440, DY + 10, 850, 740) : empreinte(10, DY + 10, 1280, 740)) : empreinte(430, 400, 250, 250)),
+    cadreMoral: (e) => (batiment(e) ? (ETAGE === 'r2' ? [440, DY + 10, 850, 740] : [10, DY + 10, 1280, 740]) : [430, 400, 250, 250]),
   };
 })();

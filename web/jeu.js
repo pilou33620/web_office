@@ -55,15 +55,19 @@ const SPOTS = {
 const PAROLES = ['Pause !', 'Bla bla', 'Ha ha !', 'Un café ?', 'Et ton week-end ?', 'T\'as vu le match ?', 'Trop drôle'];
 const DEMANDES = ['Tu peux m\'aider ?', 'Regarde ce schéma', 'Une idée ?', 'Ça plante ici…'];
 
-function corps(x, assis = false, pose = 'debout') {
-  return `<div class="anim">${PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis, pose)}</div>`;
-}
+// Où s'assoit l'occupant d'un bureau, selon le mur auquel ce bureau est adossé
+const SIEGE = { n: [38, 46], s: [38, 18], o: [46, 38], e: [18, 38] };
+const siege = (o) => { const [a, b] = SIEGE[o.cote || 'n']; return [o.x + a, o.y + b]; };
+// Largeur et profondeur d'un meuble sur le plan : son long côté suit le mur
+const emprise = (type, cote) => { const f = fiche(type); return cote === 'o' || cote === 'e' ? [f.h, f.w] : [f.w, f.h]; };
+const figureDe = (x, assis = false, pose = 'debout') => PLAN.figure(esc(x.couleur), esc(x.cheveux), esc(x.peau || PLAN.PEAUX[0]), x.id || 0, assis, pose);
+const corps = (x, assis = false, pose = 'debout') => `<div class="anim">${figureDe(x, assis, pose)}</div>`;
 
 const sprite = (x) => `<div class="perso">${corps(x)}</div>`;  // portrait des listes (équipe, candidats)
 
-const PERSOS = {};
+const CIBLES = {};  // dernière destination de chaque personnage affiché (x|y|étage) : il y marche quand elle change
 function rendrePersos() {
-  const e = ETAT, p = e.projets.length > 0, cont = $('#persos'), vus = new Set(), groupes = {};
+  const e = ETAT, p = e.projets.length > 0, groupes = {}, liste = [];
   const duree = Math.min(1.2, VITESSES[vitesse][1] / 2000);
   const bat = carte() === 'batiment', salle = bat, S = bat ? spotsBatiment(e) : SPOTS.garage;
   const pos = {};
@@ -90,7 +94,7 @@ function rendrePersos() {
     let x, y;
     const esc_ = lieu === 'bureau' && ESCAPADES[emp.id];
     if (esc_) return { lieu: 'escapade', x: esc_.x, y: esc_.y, texte: esc_.texte };
-    if (lieu === 'bureau') { const o = objs[emp.bureau] || { x: 452, y: 468 }; x = o.x + 38; y = o.y + 46; }
+    if (lieu === 'bureau') [x, y] = siege(objs[emp.bureau] || { x: 452, y: 468 });
     else { const liste = SP(lieu), g = groupes[lieu] = (groupes[lieu] || 0) + 1; [x, y] = liste[(g - 1) % liste.length]; }
     return { lieu, x, y };
   };
@@ -120,7 +124,6 @@ function rendrePersos() {
     const { lieu, x: cx, y: cy, texte } = pos[emp.id];
     NB[etageDe(cy)] = (NB[etageDe(cy)] || 0) + 1;
     if (!surEtage(cy)) continue;  // à un autre étage : retiré du plan affiché
-    const [X, Y] = PLAN.iso(cx, cy, 0), x = Math.round(X - 18), y = Math.round(Y - 50);  // pieds de la figure au point du sol
     let t = '', c = '';
     const choc = REACTION && REACTION.ids.includes(emp.id);
     if (vue === 'moral' && emp.moral !== undefined) { t = emp.moral + ' %'; c = emp.moral >= 70 ? '#7be08a' : emp.moral >= 50 ? '#ffc94d' : '#ff8a7a'; }
@@ -137,68 +140,35 @@ function rendrePersos() {
     else if (joue && p && emp.tache === 'cem') { t = 'Attente CEM'; c = DC.c; }
     else if (joue && ['salle', 'terrasse', 'accueil'].includes(lieu)) { t = PAROLES[(emp.id + e.jours_total) % PAROLES.length]; c = '#fff7e6'; }
     else if (joue && !p) { t = 'zzz'; c = '#e8e8e8'; }
-    const html = corps(emp, lieu === 'bureau', emp.prospecte ? 'telephone' : 'debout') + (pos[emp.id].carton || (ARRIVEES[emp.id] && maintenant < ARRIVEES[emp.id].fin) ? CARTON : '') + (t ? `<div class="bulle${lieu === 'babyfoot' || lieu === 'visite' || lieu === 'escapade' || lieu === 'vie' ? ' parle' : ''}" style="background:${c}">${esc(t)}</div>` : '');
-    let el = PERSOS[emp.id];
-    if (!el) {
-      el = PERSOS[emp.id] = document.createElement('div');
-      el.className = 'perso';
-      el.style.left = x + 'px'; el.style.top = y + 'px';
-      el._x = x; el._y = y;
-      cont.appendChild(el);
-    }
-    if (el._html !== html) { el.innerHTML = html; el._html = html; }
-    if (el._x !== x || el._y !== y) {
-      // il marche depuis là où il en est, en contournant les murs par les portes ; arrivé par l'escalier : pas de marche
-      const cs = getComputedStyle(el), depart = PLAN.versMonde(parseFloat(cs.left) + 18, parseFloat(cs.top) + 50);
-      if (el._anim) el._anim.cancel();
-      el._x = x; el._y = y;
-      el.style.left = x + 'px'; el.style.top = y + 'px';
-      const pts = [depart, ...PLAN.trajet(e, CAT, depart[0], depart[1], cx, cy)], long = [0];
-      for (let k = 1; k < pts.length; k++) long.push(long[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
-      const L = long[long.length - 1], dt = Math.min(4 * duree, Math.max(duree, L / 200));
-      if (el._etage === etage && L > 0 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        el._anim = el.animate(pts.map(([a, b], k) => { const [X, Y] = PLAN.iso(a, b, 0); return { left: X - 18 + 'px', top: Y - 50 + 'px', offset: long[k] / L }; }), { duration: dt * 1000 });
-        el.classList.add('marche');
-        clearTimeout(el._t);
-        el._t = setTimeout(() => el.classList.remove('marche'), dt * 1000);
+    const id = String(emp.id), cle = `${cx}|${cy}|${etage}`;
+    let chemin = null, dt = 0;
+    if (CIBLES[id] !== cle) {
+      const ici = CIBLES[id] && CIBLES[id].endsWith('|' + etage) && RENDU.position(id);  // arrivé par l'escalier ou d'un autre étage : pas de marche
+      if (ici) {  // il marche depuis là où il en est, en contournant les murs par les portes
+        const pts = [ici, ...PLAN.trajet(e, CAT, ici[0], ici[1], cx, cy)];
+        let L = 0;
+        for (let k = 1; k < pts.length; k++) L += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+        dt = Math.min(4 * duree, Math.max(duree, L / 200));
+        if (L > 0) chemin = pts.slice(1);
       }
+      CIBLES[id] = cle;
     }
-    el._etage = etage;
-    const assis = lieu === 'bureau', d = Math.round(cx + cy);
-    el.style.zIndex = 2 * d;  // les plus proches devant
-    // par-dessus le personnage : copie, découpée à sa taille, de ce qui est devant lui (armoire, plante, bureau de la rangée suivante…)
-    const devant = cache.elements.filter(([prof, , k]) => {
-      const b = BOITES.get(k);
-      return prof > cx + cy && b && b.x < x + 36 && x < b.x + b.width && b.y < y + 56 && y < b.y + b.height;
-    });
-    const masque = devant.length ? `<svg width="36" height="56" viewBox="${x} ${y} 36 56" xmlns="http://www.w3.org/2000/svg">${devant.map((v) => v[1]).join('')}</svg>` : '';
-    if (el._masque !== masque) {
-      el._masque = masque;
-      if (!el._m) { el._m = document.createElement('div'); el._m.className = 'masque'; cont.appendChild(el._m); }
-      el._m.innerHTML = masque;
-    }
-    Object.assign(el._m ? el._m.style : {}, { left: x + 'px', top: y + 'px', zIndex: 2 * d + 1 });
+    const assis = lieu === 'bureau', bureau = objs[emp.bureau];
     const travaille = joue && (lieu === 'babyfoot' || (p && (assis || lieu === 'labo' || lieu === 'atelier' || lieu === 'cem' || lieu === 'visite') && emp.tache));
-    el.classList.toggle('bob', !!travaille && emp.id % 2 === 0);
-    el.classList.toggle('bob2', !!travaille && emp.id % 2 === 1);
-    el.classList.toggle('secoue', !!choc);
-    el.classList.toggle('affale', !!pos[emp.id].affale);
-    vus.add(String(emp.id));
+    liste.push({ id, figure: { couleur: emp.couleur, cheveux: emp.cheveux, peau: emp.peau || PLAN.PEAUX[0], i: emp.id || 0, assis, pose: emp.prospecte ? 'telephone' : 'debout' }, x: cx, y: cy,
+      cote: assis && bureau ? bureau.cote || 'n' : pos[emp.id].cote || null, chemin, duree: dt,
+      bulle: t ? { texte: t, couleur: c, parle: ['babyfoot', 'visite', 'escapade', 'vie'].includes(lieu) } : null,
+      carton: !!(pos[emp.id].carton || (ARRIVEES[emp.id] && maintenant < ARRIVEES[emp.id].fin)), anim: travaille ? (emp.id % 2 ? 'bob2' : 'bob') : '',
+      secoue: !!choc, affale: !!pos[emp.id].affale, arrive: !!ARRIVEES[emp.id] });
   }
+  RENDU.persos(liste);
+  const affiches = new Set(liste.map((x) => x.id));
+  for (const id in CIBLES) if (!affiches.has(id)) delete CIBLES[id];
   effetsMateriel(pos);
-  for (const id of Object.keys(PERSOS)) if (!vus.has(id)) { PERSOS[id].remove(); if (PERSOS[id]._m) PERSOS[id]._m.remove(); delete PERSOS[id]; }
 }
 
-const CARTON = '<svg class="carton" viewBox="0 0 16 12" width="16" height="12" aria-hidden="true"><path d="M1 4 L8 1 L15 4 L15 10 L8 11.5 L1 10Z" fill="#c48a52" stroke="#2b1d14" stroke-width="1"/><path d="M1 4 L8 6 L15 4 M8 6 V11.5" fill="none" stroke="#2b1d14" stroke-width=".9"/></svg>';
-
 // Gestes de métier : soudure, oscillo, impression 3D, fraisage, four, code qui défile sur les écrans ; fumée après un échec CEM ; confettis au pot
-const EFFETS = new Map();
 const TYPE_EFFET = { station: 'etincelles', micro: 'etincelles', oscillo: 'onde', spectre: 'onde', logique: 'onde', fdm: 'tete', resine: 'tete', cnc: 'copeaux', four: 'four' };
-const DESSIN_EFFET = {
-  etincelles: '<i></i><i></i><i></i><i></i>', copeaux: '<i></i><i></i><i></i>', tete: '<i></i>', four: '', code: '',
-  onde: '<svg viewBox="0 0 16 8" width="16" height="8"><path d="M0 4 H3 L4 1 L6 7 L8 2 L10 6 L11 4 H16" fill="none" stroke="#7be08a" stroke-width="1.4"/></svg>',
-  fumee: '<i></i><i></i><i></i>', confettis: '<i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>',
-};
 function effetsMateriel(pos) {
   const e = ETAT, voulus = new Map(), actif = joue && e.projets.length > 0;
   const labo = Object.values(pos).some((p) => p.lieu === 'labo' || p.lieu === 'cem'), atelier = Object.values(pos).some((p) => p.lieu === 'atelier');
@@ -207,37 +177,24 @@ function effetsMateriel(pos) {
     for (const o of e.objets) {
       const t = TYPE_EFFET[o.type];
       if (!t || !surEtage(o.y) || !(CAT.materiel[o.type].dom === 'm' ? atelier : labo)) continue;
-      voulus.set('o' + o.id, [t, ...PLAN.pointEffet(o, fiche(o.type), etablis)]);
+      voulus.set('o' + o.id, [t, ...PLAN.pointEffet3(o, fiche(o.type), etablis)]);
     }
     for (const emp of e.employes) {
       const p = pos[emp.id], o = objs[emp.bureau];
-      if (p && p.lieu === 'bureau' && emp.tache && o && surEtage(o.y)) voulus.set('p' + o.id, ['code', ...PLAN.pointEffet(o, CAT.poste, etablis)]);
+      if (p && p.lieu === 'bureau' && emp.tache && o && surEtage(o.y)) voulus.set('p' + o.id, ['code', o.id]);
     }
   }
   const laboIci = carte() === 'garage' || CAT.pieces[pieceMateriel('e')].etage === etage;
   if (REACTION && REACTION.fumee && laboIci) {
     const [x, y, w, h] = CAT.pieces[pieceMateriel('e')].rect;
-    voulus.set('fumee', ['fumee', ...PLAN.iso(x + w / 2, y + h / 2, 40)]);
+    voulus.set('fumee', ['fumee', x + w / 2, y + h / 2, 0]);
   }
   const fete = e.employes.filter((x) => x.lieu === 'fete' && pos[x.id] && !pos[x.id].cache && surEtage(pos[x.id].y)).map((x) => pos[x.id]);
   if (joue && e.fete && fete.length) {
     const cx = fete.reduce((t, p) => t + p.x, 0) / fete.length, cy = fete.reduce((t, p) => t + p.y, 0) / fete.length;
-    voulus.set('confettis', ['confettis', ...PLAN.iso(cx, cy, 70)]);
+    voulus.set('confettis', ['confettis', cx, cy, 0]);
   }
-  for (const [k, el] of EFFETS) if (!voulus.has(k) || el._type !== voulus.get(k)[0]) { el.remove(); EFFETS.delete(k); }
-  for (const [k, [t, X, Y]] of voulus) {
-    let el = EFFETS.get(k);
-    if (!el) {
-      el = document.createElement('div');
-      el.className = 'fx ' + t;
-      el._type = t;
-      el.innerHTML = DESSIN_EFFET[t];
-      $('#effets').appendChild(el);
-      EFFETS.set(k, el);
-    }
-    el.style.left = Math.round(X) + 'px';
-    el.style.top = Math.round(Y) + 'px';
-  }
+  RENDU.effets(voulus);
 }
 
 // Petites escapades pendant que le temps tourne : un café, une question à un collègue, un passage au labo… puis retour au bureau
@@ -256,7 +213,7 @@ function escapades() {
     const S = carte() === 'batiment' ? spotsBatiment(e) : SPOTS.garage;
     const cibles = [['labo', S.labo], ['labo', S.atelier], ['cafe', S.salle], ['cafe', S.accueil], ['cafe', S.terrasse], ['reunion', S.reunion]]
       .flatMap(([genre, l]) => (l || []).filter(([, y]) => etageDe(y) === etageDe(bureau.y)).map(([x, y]) => [genre, x, y]))
-      .concat(assis.filter((x) => x !== emp).map((x) => ['visite', objs[x.bureau].x + 60, objs[x.bureau].y + 46]));
+      .concat(assis.filter((x) => x !== emp).map((x) => { const [a, b] = siege(objs[x.bureau]); return ['visite', a + 22, b]; }));
     if (cibles.length) {
       const [genre, x, y] = cibles[Math.floor(Math.random() * cibles.length)], l = genre === 'visite' ? DEMANDES : PROPOS[genre];
       ESCAPADES[emp.id] = { x, y, texte: l[Math.floor(Math.random() * l.length)], fin: maintenant + 3000 + Math.random() * 3000 };
@@ -362,7 +319,7 @@ function vieBureau(emp, objs) {
     if (pl.reste || m.avance < pl.seuil) return null;
     return m.avance < pl.seuil + 0.3 ? { lieu: 'vie', x: pl.x, y: pl.y, texte: null } : { cache: true };
   }
-  if (pl.reste) { const o = objs[emp.bureau]; return emp.lieu === 'bureau' ? { lieu: 'bureau', x: o.x + 38, y: o.y + 46, texte: pl.texte } : null; }
+  if (pl.reste) { const [x, y] = siege(objs[emp.bureau]); return emp.lieu === 'bureau' ? { lieu: 'bureau', x, y, texte: pl.texte } : null; }
   const m = momentJour(fractionJour());
   if (pl.ailleurs && (m.avance < 0.22 || m.avance > 0.88)) {  // il passe par l'escalier de son étage avant de changer d'étage
     const [x, y] = ESCALIERS[etageDe(objs[emp.bureau].y)];
@@ -388,14 +345,14 @@ function observer(a, n) {
   for (const x of a.employes) {
     if (ids.has(x.id)) continue;  // il est parti (démission, licenciement, débauchage, fin de stage) : avec son carton
     const o = a.objets.find((y) => y.id === x.bureau);
-    if (o) FANTOMES.push({ emp: x, x: o.x + 38, y: o.y + 46, debut: maintenant, carton: true, texte: 'Au revoir…' });
+    if (o) { const [a, b] = siege(o); FANTOMES.push({ emp: x, x: a, y: b, debut: maintenant, carton: true, texte: 'Au revoir…' }); }
   }
   const anciens = new Set(a.employes.map((x) => x.id));
   for (const x of n.employes) if (!anciens.has(x.id)) ARRIVEES[x.id] = { debut: maintenant, fin: maintenant + 7000 };
   for (const t of textes) {
     if (t.startsWith('Burn-out : ')) {
       const x = n.employes.find((y) => t.startsWith(`Burn-out : ${y.nom} `)), o = x && objs[x.bureau];
-      if (o) FANTOMES.push({ emp: x, x: o.x + 38, y: o.y + 46, debut: maintenant, affale: true, texte: "Je n'en peux plus…" });
+      if (o) { const [a, b] = siege(o); FANTOMES.push({ emp: x, x: a, y: b, debut: maintenant, affale: true, cote: o.cote, texte: "Je n'en peux plus…" }); }
     }
     const cem = t.match(/^Échec aux tests CEM pour « (.+) »/);
     if (cem) { const p = n.projets.find((y) => y.nom === cem[1]); REACTION = { ids: p ? p.equipe : [], fin: maintenant + 5000, fumee: true }; }
@@ -405,11 +362,7 @@ function observer(a, n) {
   }
 }
 function passage(genre) {
-  const html = PLAN.passage(ETAT, genre);
-  if (!html || document.hidden) return;
-  $('#rue').insertAdjacentHTML('beforeend', html);
-  const el = $('#rue').lastElementChild;
-  setTimeout(() => el.remove(), 15000);
+  if (!document.hidden) RENDU.passage(genre);
 }
 function visite(n, objs) {  // le client arrive par la rue, puis s'installe en salle de réunion avec le commercial (ou un chef, ou vous)
   passage('client');
@@ -434,11 +387,9 @@ function lancerCourse(e, objs, etg) {
   if (ici.length < 2 || COURSE) return;
   const pilotes = ici.slice().sort((a, b) => (a.id * 7 + e.jours_total) % 5 - (b.id * 7 + e.jours_total) % 5).slice(0, 3);
   COURSE = { ids: pilotes.map((x) => x.id), fin: Date.now() + 8000 };
-  const [[x1, y1], [x2, y2]] = COULOIRS[carte() === 'batiment' ? etage : 'garage'], [X1, Y1] = PLAN.iso(x1, y1, 0), [X2, Y2] = PLAN.iso(x2, y2, 0);
-  $('#effets').insertAdjacentHTML('beforeend', pilotes.map((x, k) => `<div class="pilote" style="left:${Math.round(X1 - 18)}px;top:${Math.round(Y1 - 46 + k * 10)}px;--dx:${Math.round(X2 - X1)}px;--dy:${Math.round(Y2 - Y1)}px;--t:${(2.1 + k * 0.45).toFixed(2)}s;z-index:${1000 + k}">
-    <svg class="fauteuil" viewBox="0 0 24 16" width="24" height="16" aria-hidden="true"><rect x="3" y="2" width="18" height="7" rx="2" fill="#3d3d3d" stroke="#2b1d14"/><path d="M12 9v4M6 14h12" stroke="#2b1d14" stroke-width="2"/></svg>
-    ${corps(x, true)}<div class="bulle parle" style="background:#ffc94d">${k ? 'J\'arrive !' : 'Vroum !'}</div></div>`).join(''));
-  setTimeout(() => { document.querySelectorAll('#effets .pilote').forEach((el) => el.remove()); COURSE = null; rendrePersos(); }, 8000);
+  const [[x1, y1], [x2, y2]] = COULOIRS[carte() === 'batiment' ? etage : 'garage'];
+  RENDU.course(pilotes.map((x, k) => ({ figure: { couleur: x.couleur, cheveux: x.cheveux, peau: x.peau || PLAN.PEAUX[0], i: x.id, assis: true, pose: 'debout' }, x1, y1: y1 + k * 12, x2, y2: y2 + k * 12, t: 2.1 + k * 0.45 })));
+  setTimeout(() => { RENDU.course([]); COURSE = null; rendrePersos(); }, 8000);
 }
 
 // ---------------------------------------------------------------- mode démo : un pilote automatique joue, en accéléré avec des journées lentes
@@ -515,7 +466,7 @@ setInterval(() => {
   const h = $('#heure');
   if (h) h.textContent = texteHeure();
   const lum = eclairage();
-  if ($('#monde').dataset.soir !== lum) $('#monde').dataset.soir = lum;
+  if ($('#monde').dataset.soir !== lum) { $('#monde').dataset.soir = lum; majAmbiance(); }
   if (planifier(m) || etape !== etapeVue || anime) { etapeVue = etape; rendrePersos(); }
 }, 400);
 
@@ -538,10 +489,8 @@ function spotsBatiment(e) {
 // Pastilles de la vue Productivité au garage : [domaine, x, y] (coordonnées du sol) ; dans le bâtiment, sur la pièce du matériel
 const PUCES = [['f', 560, 376], ['e', 446, 376]];
 
-const DESSINS = new Map();  // dessin SVG de chaque objet placé, recalculé seulement s'il bouge
-const BOITES = new Map();  // contour à l'écran de chaque élément du plan
 function rendreMonde() {
-  const e = ETAT, h = [], svg = [];
+  const e = ETAT, h = [], zones = [];
   if (carte() === 'garage') etage = 'garage';
   else if (etage === 'garage') etage = etageDe((e.objets.find((o) => o.id === e.employes[0]?.bureau) || { y: CAT.etages.r1.y0 }).y);  // on vient d'emménager
   PLAN.etage(etage, CAT);
@@ -549,46 +498,28 @@ function rendreMonde() {
   if (cache.decor !== cle) {
     const demenage = cache.decor && cache.decor.split('|').slice(0, 2).join('|') !== carte() + '|' + etage;
     cache.decor = cle;
-    $('#statique').innerHTML = PLAN.fond(e, CAT);
-    $('#devant').innerHTML = PLAN.devant(e, CAT);
-    $('#rue').innerHTML = PLAN.rue(e);
-    cache.fixes = PLAN.fixes(e, CAT);
+    RENDU.decor(e, CAT, etage);
+    $('#etiq').innerHTML = PLAN.etiquettes(e, CAT);
     if (demenage) requestAnimationFrame(recentrer);
   }
   const occupes = {};
   for (const x of e.employes) occupes[x.bureau] = x;
   const etablis = CAT.etablis[carte()];
   const objets = e.objets.map((o) => [o, fiche(o.type)]).filter(([o, f]) => f && surEtage(o.y));
-  const elements = cache.fixes.map(([prof, s], i) => [prof, s, `F${i}|${cle}`]);
-  for (const [o, f] of objets) {
-    const k = `${o.id}|${o.type}|${o.x}|${o.y}`;
-    if (!DESSINS.has(k)) DESSINS.set(k, PLAN.objet(o, f, etablis));
-    let titre = f.nom;
-    if (o.type === 'poste') {
-      const emp = occupes[o.id];
-      titre = !emp ? 'Bureau libre' : emp.absent ? `${emp.nom} · ${ABSENCE[emp.absence] || 'absent'}` : `Bureau de ${emp.nom}`;
-    }
-    let extra = '';
-    if (o.type in e.pannes) { const [X, Y] = PLAN.iso(o.x + f.w / 2, o.y + f.h / 2, 46); extra += `<circle cx="${X}" cy="${Y}" r="9" fill="#ff8a7a" stroke="#2b1d14" stroke-width="2"/><text x="${X}" y="${Y + 4}" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="800" font-size="12" fill="#2b1d14">!</text>`; }
-    if (amenage && selection === o.id) extra += `<polygon points="${PLAN.empreinte(o.x - 3, o.y - 3, f.w + 6, f.h + 6)}" fill="rgba(255,201,77,.25)" stroke="#ffc94d" stroke-width="3" stroke-dasharray="6 4"/>`;
-    elements.push([PLAN.profondeur(o, f), `<g${amenage ? ` data-obj="${o.id}" class="cliquable"` : ''}><title>${esc(titre)}</title>${DESSINS.get(k)}${extra}</g>`, k + extra]);
-  }
-  if (DESSINS.size > 400) DESSINS.clear();  // anciens emplacements oubliés de temps en temps
-  cache.elements = elements.sort((a, b) => a[0] - b[0]);
-  svg.push(`<g class="elements">${elements.map((x) => `<g>${x[1]}</g>`).join('')}</g>`);
+  // meubles de l'étage affiché : la clé ne change que s'il bouge, tombe en panne ou est sélectionné
+  RENDU.elements(objets.map(([o, f]) => { const panne = o.type in e.pannes, sel = amenage && selection === o.id; return { cle: `${o.id}|${o.type}|${o.x}|${o.y}|${o.cote || 'n'}|${panne}|${sel}`, o, f, panne, sel, etablis }; }));
   if (placement) {
     // zones autorisées pour l'objet en cours de placement
     for (const k of fiche(placement.type).pieces) {
       if (!pieceDispo(k) || !surEtage(CAT.pieces[k].rect[1])) continue;
       const [x, y, w, hh] = CAT.pieces[k].rect;
-      svg.push(`<polygon points="${PLAN.empreinte(x, y, w, hh)}" fill="rgba(123,224,138,.16)" stroke="rgba(47,138,58,.9)" stroke-width="2.5" stroke-dasharray="8 5"/>`);
+      zones.push({ x, y, w, h: hh, couleur: 0x7be08a, alpha: 0.28 });
     }
   }
   if (vue === 'moral') {
-    const t = e.moral >= 70 ? '123,224,138' : e.moral >= 55 ? '255,201,77' : '255,138,122';
-    svg.push(`<polygon points="${PLAN.cadreMoral(e)}" fill="rgba(${t},.25)"/>`);
+    const [x, y, w, hh] = PLAN.cadreMoral(e);
+    zones.push({ x, y, w, h: hh, couleur: e.moral >= 70 ? 0x7be08a : e.moral >= 55 ? 0xffc94d : 0xff8a7a, alpha: 0.25 });
   }
-  h.push(`<svg class="couche" viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}" xmlns="http://www.w3.org/2000/svg">${svg.join('')}</svg>`);
   // carte d'emménagement posée sur le sol du garage (vue isométrique)
   const verrou = (lid, cx, cy) => {
     const l = CAT.locaux[lid], bloque = e.renommee < l.rep, [X, Y] = PLAN.iso(cx, cy, 0);
@@ -613,10 +544,7 @@ function rendreMonde() {
     }
   }
   majHtml('#dyn', h.join(''));
-  // contour à l'écran de chaque élément, mesuré une fois : sert à cacher les personnages qui passent derrière
-  const gs = $('#dyn g.elements').children;
-  cache.elements.forEach((x, i) => { if (!BOITES.has(x[2])) { const r = gs[i].getBBox(); if (r.width) BOITES.set(x[2], r); } });  // plan caché : rien mesuré
-  if (BOITES.size > 600) BOITES.clear();
+  RENDU.zones(zones);
   rendrePersos();
 }
 
@@ -1029,6 +957,7 @@ function rendre() {
   monde.dataset.meteo = e.meteo;
   monde.dataset.soir = eclairage();
   monde.dataset.dehors = carte() === 'garage' || etage === 'rdc' ? '1' : '';  // feuilles et pétales seulement quand on voit le jardin
+  majAmbiance();
   $('#rep').textContent = e.renommee;
   $('#argent').textContent = eur(e.argent);
   $('#argent').classList.toggle('negatif', e.argent < 0);
@@ -1090,29 +1019,56 @@ function rendreAmenagement() {
 }
 
 // Validation locale (le serveur revalide) : même règles que le moteur
-function validePlace(type, x, y, ignorer) {
+// Comme le moteur (_cote_pres) : le meuble se tourne vers le mur le plus proche et s'y colle s'il est tout près
+function placeVisee(type, x, y) {
   const f = fiche(type);
-  const piece = f.pieces.find((k) => { const [px, py, pw, ph] = CAT.pieces[k].rect; return pieceDispo(k) && px <= x && py <= y && x + f.w <= px + pw && y + f.h <= py + ph; });
+  if (f.libre && type !== 'tableau') return [x, y, 'n'];
+  const cx = x + f.w / 2, cy = y + f.h / 2, piece = Object.values(CAT.pieces).find((p) => { const [a, b, c, d] = p.rect; return p.carte === carte() && cx >= a && cx < a + c && cy >= b && cy < b + d; });
+  if (!piece) return [x, y, 'n'];
+  const [px, py, pw, ph] = piece.rect, dist = { n: cy - py, s: py + ph - cy, o: cx - px, e: px + pw - cx };
+  const c = Object.keys(dist).reduce((m, k) => (dist[k] < dist[m] ? k : m), 'n'), [w, h] = emprise(type, c);
+  let nx = Math.trunc(cx - w / 2), ny = Math.trunc(cy - h / 2);
+  if (c === 'n' && ny - py <= 24) ny = py + 1;
+  else if (c === 's' && py + ph - ny - h <= 24) ny = py + ph - h - 1;
+  else if (c === 'o' && nx - px <= 24) nx = px + 1;
+  else if (c === 'e' && px + pw - nx - w <= 24) nx = px + pw - w - 1;
+  return [nx, ny, c];
+}
+function validePlace(type, x, y, ignorer, cote = 'n') {
+  const f = fiche(type), [w, h] = emprise(type, cote);
+  const piece = f.pieces.find((k) => { const [px, py, pw, ph] = CAT.pieces[k].rect; return pieceDispo(k) && px <= x && py <= y && x + w <= px + pw && y + h <= py + ph; });
   if (!piece) return false;
   if (f.libre) return true;
-  const chevauche = (ax, ay, aw, ah) => x < ax + aw && ax < x + f.w && y < ay + ah && ay < y + f.h;
+  const chevauche = (ax, ay, aw, ah) => x < ax + aw && ax < x + w && y < ay + ah && ay < y + h;
   if (!CAT.materiel[type] && CAT.etablis[carte()].some(([ex, ey, ew, eh]) => chevauche(ex, ey, ew, eh))) return false;
   if (CAT.obstacles[carte()].some(([ex, ey, ew, eh]) => chevauche(ex, ey, ew, eh))) return false;
-  return !ETAT.objets.some((o) => { const g = fiche(o.type); return o.id !== ignorer && !g.libre && chevauche(o.x, o.y, g.w, g.h); });
+  return !ETAT.objets.some((o) => { const g = fiche(o.type); if (o.id === ignorer || g.libre) return false; const [gw, gh] = emprise(o.type, o.cote); return chevauche(o.x, o.y, gw, gh); });
 }
 
-// Point du sol (coordonnées du moteur) sous le doigt, coin de l'objet calé sur la grille
+// Point du sol (coordonnées du moteur) sous le doigt, à une hauteur donnée
+function solSous(ev, z = 0) {
+  const r = $('#monde').getBoundingClientRect(), s = r.width / PLAN.W;
+  return PLAN.versMonde((ev.clientX - r.left) / s, (ev.clientY - r.top) / s + z);
+}
+// Coin de l'objet en cours de placement, calé sur la grille
 function pointMonde(ev) {
-  const r = $('#monde').getBoundingClientRect(), s = r.width / PLAN.W, f = fiche(placement.type), g = CAT.grille;
-  const [x, y] = PLAN.versMonde((ev.clientX - r.left) / s, (ev.clientY - r.top) / s);
+  const f = fiche(placement.type), g = CAT.grille, [x, y] = solSous(ev);
   return [Math.round((x - f.w / 2) / g) * g, Math.round((y - f.h / 2) / g) * g];
+}
+// Le meuble sous le doigt : on cherche du sol jusqu'à hauteur de meuble, le plus proche de nous d'abord
+function objetSous(ev) {
+  for (const z of [36, 24, 12, 0]) {
+    const [x, y] = solSous(ev, z), o = ETAT.objets.filter((q) => { const [w, h] = emprise(q.type, q.cote); return fiche(q.type) && surEtage(q.y) && x >= q.x && x <= q.x + w && y >= q.y && y <= q.y + h; }).sort((a, b) => b.x + b.y - a.x - a.y)[0];
+    if (o) return o;
+  }
+  return null;
 }
 
 function majFantome(ev) {
   if (!placement) return;
-  const [x, y] = pointMonde(ev), f = fiche(placement.type), el = $('#fantome');
-  el.querySelector('polygon').setAttribute('points', PLAN.empreinte(x, y, f.w, f.h));
-  el.classList.toggle('invalide', !validePlace(placement.type, x, y, placement.id));
+  const [x0, y0] = pointMonde(ev), [x, y, c] = placeVisee(placement.type, x0, y0), [w, h] = emprise(placement.type, c), el = $('#fantome');
+  el.querySelector('polygon').setAttribute('points', PLAN.empreinte(x, y, w, h));
+  el.classList.toggle('invalide', !validePlace(placement.type, x, y, placement.id, c));
 }
 
 function rendreModale() {
@@ -1460,8 +1416,8 @@ $('#cadre').addEventListener('click', async (ev) => {
     return rendre();
   }
   if (amenage) {
-    const cible = ev.target.closest('[data-obj]');
-    selection = cible ? Number(cible.dataset.obj) : null;
+    const cible = objetSous(ev);
+    selection = cible ? cible.id : null;
     rendre();
   }
 });
@@ -1501,9 +1457,13 @@ $('#cadre').addEventListener('wheel', (ev) => {
   appliquerZoom(zoom * (ev.deltaY < 0 ? 1.12 : 0.89), ev.clientX - r.left, ev.clientY - r.top);
 }, { passive: false });
 
+// Météo, saison au jardin et lumière du jour : lues sur #monde (rendre et l'horloge les y posent)
+const majAmbiance = () => { const d = $('#monde').dataset; RENDU.ambiance({ meteo: d.meteo, saison: d.saison, dehors: d.dehors === '1', soir: d.soir || '' }); };
+
 async function demarrer() {
-  $('#dyn').insertAdjacentHTML('afterend', '<div id="devant"></div><div id="rue"></div><div id="effets"></div>');
-  $('#ambiance').insertAdjacentHTML('beforebegin', '<div id="saison"></div>');  // feuilles d'automne, pétales de printemps  // façade basse et extérieur, puis la rue animée : devant les objets, sous les personnages
+  if (!window.RENDU) await Promise.race([new Promise((ok) => window.addEventListener('rendu-pret', ok, { once: true })), new Promise((ok) => setTimeout(ok, 8000))]);
+  const sansPlan = !window.RENDU;
+  if (sansPlan) window.RENDU = new Proxy({}, { get: () => () => {} });  // rendu.js absent : chaque appel ne fait rien
   $('#monde').insertAdjacentHTML('beforeend', `<div id="fantome" class="fantome" hidden><svg viewBox="0 0 ${PLAN.W} ${PLAN.H}" width="${PLAN.W}" height="${PLAN.H}"><polygon points=""/></svg></div>`);
   $('#monde').style.width = PLAN.W + 'px';
   $('#monde').style.height = PLAN.H + 'px';
@@ -1515,6 +1475,12 @@ async function demarrer() {
   } catch (err) {
     toast('Impossible de joindre le serveur du jeu.');
     return;
+  }
+  try {
+    if (sansPlan) throw new Error('rendu.js absent');
+    await RENDU.init($('#zone'), $('#cadre'), $('#echelle'), $('#bulles'));
+  } catch (err) {
+    toast("Le plan ne peut pas s'afficher : ce navigateur n'a pas WebGL ou est trop ancien.");
   }
   rendre();
   recentrer();

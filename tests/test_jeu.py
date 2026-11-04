@@ -266,14 +266,14 @@ class TestJeu(unittest.TestCase):
         json.dumps(nouveau.vue())
 
     def test_amenagement_libre(self):
-        from moteur.donnees import PIECES
+        from moteur.donnees import PIECES, POSTE
         def bien_places(j):
             dispo = j.pieces_dispo()
             for o in j.etat["objets"]:
-                f = j.fiche(o["type"])
+                w, h = j._emprise(o["type"], o.get("cote", "n"))
                 self.assertTrue(any(PIECES[k]["rect"][0] <= o["x"] and PIECES[k]["rect"][1] <= o["y"]
-                                    and o["x"] + f["w"] <= PIECES[k]["rect"][0] + PIECES[k]["rect"][2]
-                                    and o["y"] + f["h"] <= PIECES[k]["rect"][1] + PIECES[k]["rect"][3] for k in dispo), o)
+                                    and o["x"] + w <= PIECES[k]["rect"][0] + PIECES[k]["rect"][2]
+                                    and o["y"] + h <= PIECES[k]["rect"][1] + PIECES[k]["rect"][3] for k in dispo), o)
             postes = {o["id"] for o in j.etat["objets"] if o["type"] == "poste"}
             self.assertTrue(all(x["bureau"] in postes for x in j.etat["employes"]))
         j = Jeu(graine=23)
@@ -297,7 +297,8 @@ class TestJeu(unittest.TestCase):
         bien_places(j)
         j.action("poser", id="poste", x=hx - 1, y=hy - 1)
         poste = j.etat["objets"][-1]
-        self.assertEqual((poste["x"], poste["y"]), (hx, hy))  # calé sur la grille
+        bas = PIECES["hw"]["rect"][1] + PIECES["hw"]["rect"][3] - POSTE["h"] - 1
+        self.assertEqual((poste["x"], poste["y"], poste["cote"]), (hx, bas, "s"))  # calé sur la grille, puis collé au mur tout proche
         self.assertEqual(j.piece_de(poste), "hw")
         j.action("deplacer", id=poste["id"], x=hx + 80, y=hy)
         self.assertEqual(poste["x"], hx + 80)

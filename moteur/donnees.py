@@ -98,20 +98,83 @@ MEUBLES = {
 }
 OBSTACLES = {c: [m[1:] for m in liste] for c, liste in MEUBLES.items()}
 # Établis fixes : ni bureau ni déco dessus (le petit matériel, lui, peut y être posé)
-ETABLIS = {"garage": [(440, 408, 232, 44)], "batiment": [(520, 1546, 228, 44)]}
+ETABLIS = {"garage": [(440, 408, 232, 44)], "batiment": [(520, 1546, 228, 44), (532, 1678, 220, 58)]}
 GRILLE = 4
 
 
-def _grille_postes(k):
-    x, y, w, h = PIECES[k]["rect"]
-    x0, y0 = x + 4 - x % 4, y + 4 - y % 4
-    return [(x0 + i * 80, y0 + j * 68) for j in range((h - 28) // 68) for i in range((w - 8) // 80)]
+# Portes de chaque pièce : les trous des cloisons autour d'elle (rien ne se pose sur 44 devant) ; le garage s'ouvre sur l'allée
+PROFONDEUR_PORTE, ECART_MEUBLES = 44, 18
 
+
+def _portes(k):
+    pc = PIECES[k]
+    if pc["carte"] == "garage":
+        return [(476, 596, 158, PROFONDEUR_PORTE)]
+    x, y, w, h = pc["rect"]
+    murs, coques, zones = CLOISONS[pc["etage"]], COQUES[pc["etage"]], []
+
+    def trous(lo, hi, occ):
+        res, c = [], lo
+        for a, b in sorted(occ):
+            if a - c > 16:
+                res.append((c, a))
+            c = max(c, b)
+        if hi - c > 16:
+            res.append((c, hi))
+        return res
+    horiz = lambda yy: [(min(a, c), max(a, c)) for a, b, c, d in murs if b == d and abs(b - yy) <= 14]
+    vert = lambda xx: [(min(b, d), max(b, d)) for a, b, c, d in murs if a == c and abs(a - xx) <= 14]
+    bord_h = lambda yy: any(abs(cy - yy) <= 14 or abs(cy + ch - yy) <= 14 for _, cy, _, ch in coques)
+    bord_v = lambda xx: any(abs(cx - xx) <= 14 or abs(cx + cw - xx) <= 14 for cx, _, cw, _ in coques)
+    if not bord_h(y):
+        zones += [(a - 4, y, b - a + 8, PROFONDEUR_PORTE) for a, b in trous(x, x + w, horiz(y))]
+    if not bord_h(y + h):
+        zones += [(a - 4, y + h - PROFONDEUR_PORTE, b - a + 8, PROFONDEUR_PORTE) for a, b in trous(x, x + w, horiz(y + h))]
+    if not bord_v(x):
+        zones += [(x, a - 4, PROFONDEUR_PORTE, b - a + 8) for a, b in trous(y, y + h, vert(x))]
+    if not bord_v(x + w):
+        zones += [(x + w - PROFONDEUR_PORTE, a - 4, PROFONDEUR_PORTE, b - a + 8) for a, b in trous(y, y + h, vert(x + w))]
+    return zones
+
+
+PORTES = {k: _portes(k) for k in PIECES}
+# Murs où s'alignent les bureaux de chaque pièce de travail (n : mur du haut, s : du bas, o : gauche, e : droite) ; par défaut haut et bas
+MURS_POSTES = {"cdp": "ne", "opensp": "oe", "meca": "s"}
+COTE_POSTES = {}  # (x, y) d'un emplacement de bureau -> mur auquel il est adossé
+
+
+def _grille_postes(k):
+    """Bureaux adossés aux murs de la pièce, écartés, sans gêner les portes ni le mobilier fixe."""
+    x, y, w, h = PIECES[k]["rect"]
+    carte = PIECES[k]["carte"]
+    fixes = [r for r in OBSTACLES[carte] + ETABLIS[carte] if x < r[0] + r[2] and r[0] < x + w and y < r[1] + r[3] and r[1] < y + h]
+    croise = lambda a, b, m=0: a[0] < b[0] + b[2] + m and b[0] < a[0] + a[2] + m and a[1] < b[1] + b[3] + m and b[1] < a[1] + a[3] + m
+    pris, slots = [], []
+    for c in MURS_POSTES.get(k, "ns"):
+        hor = c in "ns"
+        u, fin = (x + 1, x + w) if hor else (y + 1, y + h)
+        while u + 76 <= fin:
+            px = u if hor else (x + 1 if c == "o" else x + w - 65)
+            py = u if not hor else (y + 1 if c == "n" else y + h - 65)
+            r = (px + 7, py, 62, 58) if c == "n" else (px + 7, py + 6, 62, 58) if c == "s" else (px, py + 7, 58, 62) if c == "o" else (px + 6, py + 7, 58, 62)
+            if any(croise(r, q) for q in PORTES[k]) or any(croise(r, q, ECART_MEUBLES) for q in fixes + pris):
+                u += 1
+                continue
+            pris.append(r)
+            slots.append((px, py))
+            COTE_POSTES[(px, py)] = c
+            u += 76
+    return slots
+
+
+# Garage : deux bureaux au mur de gauche, un au mur du bas à côté de la porte, un dos à l'étagère ; aucun face à l'établi
+_POSTES_GARAGE = [(441, 456, "o"), (441, 540, "o"), (596, 575, "s"), (572, 470, "e")]
+COTE_POSTES.update({(x, y): c for x, y, c in _POSTES_GARAGE})
 
 # Emplacements prévus du rangement automatique, essayés avant la règle générale : type -> [(x, y), ...]
 # Postes : une grille par pièce de travail (pas les bureaux individuels ni la direction) ; la déco ne s'y pose pas d'elle-même.
 EMPLACEMENTS = {
-    "poste": [(444, 480), (548, 480), (444, 548), (548, 548)] + [p for k in TRAVAIL if PIECES[k]["genre"] == "bureau" for p in _grille_postes(k)],
+    "poste": [(x, y) for x, y, _ in _POSTES_GARAGE] + [p for k in TRAVAIL if PIECES[k]["genre"] == "bureau" for p in _grille_postes(k)],
     # salle de pause du R2 : cuisine contre le mur du haut, canapé en bas, baby-foot au centre, jeux et boissons contre les murs
     "canape": [(960, 2668)], "babyfoot": [(946, 2518)], "cafe": [(1040, 2400)], "arcade": [(878, 2400)],
     "distrib": [(878, 2438)], "fontaine": [(878, 2472)], "aquarium": [(880, 2674)],

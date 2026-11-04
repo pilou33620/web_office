@@ -6,7 +6,7 @@ from .extensions import ErreurJeu, Extensions, borne, requis_liste
 from .personnel import Personnel
 from .commerce import Commerce
 
-from .donnees import (CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
+from .donnees import (COTE_POSTES, ECART_MEUBLES, PORTES, CHEVEUX, COMBOS, CONTRATS, COULEURS, DECO, DOMAINES, DUREE_PARTIE_ANS,
                       EMPLACEMENTS, ETABLIS, GRILLE, HORAIRES, OBSTACLES, LOCAUX, LOYER_BASE, MATERIEL, MATERIEL_DEPART, MOIS, NOM_DOMAINE, PEAUX,
                       PHASES, PIECES, POSTE, POSTES, PRENOMS, PRODUITS, TITRES_FIN, TRAITS, TROPHEES, FIDELITE_MAX, MISSIONS,
                       DIFFICULTES, FOURNISSEURS, PRIX_PROPOSES, DELAIS_PROPOSES, SECTEURS, TECHNOS,
@@ -26,9 +26,10 @@ DUREE_CEM = 3
 DUREE_FORMATION = 10
 DUREE_CONGES = 5
 BANDE_ETIQUETTE = 24  # px en bas de chaque pièce, laissés libres pour son nom (rangement automatique)
-VERSION_PLAN = 9      # à augmenter quand le plan ou le rangement change : les parties sont rangées à nouveau
+VERSION_PLAN = 10      # à augmenter quand le plan ou le rangement change : les parties sont rangées à nouveau
 PLAN_MINIMUM = 7      # plan avec cloisons et portes : les parties plus anciennes ne sont pas reprises
 POSTE_W, POSTE_H = 76, 64
+DECOR_SANS_ACCES = ("plantes", "ficus", "lampe", "tableau", "tapis", "poster", "clim")  # on n'a pas besoin de marcher jusque-là
 VENTES = 0.25  # ventes du 1er mois d'un produit = VENTES × potentiel × (note/10)² × (1 + renommée/25), puis −10 % par mois
 NOM_MAX = 30
 
@@ -205,7 +206,7 @@ class Jeu(Personnel, Extensions, Commerce):
         if not o or self.carte() != "batiment" or self.piece_de(o) in pieces:
             return
         try:
-            o["x"], o["y"] = self._place_auto("poste", pieces, ignorer=o["id"])
+            o["x"], o["y"], o["cote"] = self._place_auto("poste", pieces, ignorer=o["id"])
             self._roles = None
         except ErreurJeu:
             pass
@@ -228,12 +229,114 @@ class Jeu(Personnel, Extensions, Commerce):
         c = self.carte()
         return [k for k, p in PIECES.items() if p["carte"] == c and (p["local"] is None or p["local"] in self.etat["locaux"])]
 
-    def _verifier_place(self, genre, x, y, ignorer=None):
+    def _emprise(self, genre, cote="n"):
+        """Largeur et profondeur sur le plan : le long côté d'un meuble suit le mur auquel il est adossé."""
+        f = self.fiche(genre)
+        return (f["h"], f["w"]) if cote in ("o", "e") else (f["w"], f["h"])
+
+    def _rect(self, o):
+        """Place réelle d'un objet ; un bureau occupe un peu moins que son emplacement."""
+        c = o.get("cote", "n")
+        w, h = self._emprise(o["type"], c)
+        x, y = o["x"], o["y"]
+        if o["type"] != "poste":
+            return x, y, w, h
+        return {"n": (x + 7, y, 62, 58), "s": (x + 7, y + 6, 62, 58), "o": (x, y + 7, 58, 62), "e": (x + 6, y + 7, 58, 62)}[c]
+
+    def _cote_pres(self, genre, x, y):
+        """Mur le plus proche de l'endroit visé, et place collée à ce mur s'il est tout près : (x, y, cote)."""
+        f = self.fiche(genre)
+        if genre == "poste" and (x, y) in COTE_POSTES:
+            return x, y, COTE_POSTES[(x, y)]
+        if f.get("libre") and genre != "tableau":
+            return x, y, "n"
+        cx, cy = x + f["w"] / 2, y + f["h"] / 2
+        carte = self.carte()
+        piece = next((p["rect"] for p in PIECES.values() if p["carte"] == carte and p["rect"][0] <= cx < p["rect"][0] + p["rect"][2] and p["rect"][1] <= cy < p["rect"][1] + p["rect"][3]), None)
+        if piece is None:
+            return x, y, "n"
+        px, py, pw, ph = piece
+        dist = {"n": cy - py, "s": py + ph - cy, "o": cx - px, "e": px + pw - cx}
+        c = min(dist, key=dist.get)
+        w, h = self._emprise(genre, c)
+        x, y = int(cx - w / 2), int(cy - h / 2)  # il pivote autour de son milieu
+        if c == "n" and y - py <= 24:
+            y = py + 1
+        elif c == "s" and py + ph - y - h <= 24:
+            y = py + ph - h - 1
+        elif c == "o" and x - px <= 24:
+            x = px + 1
+        elif c == "e" and px + pw - x - w <= 24:
+            x = px + pw - w - 1
+        return x, y, c
+
+    def _accessible(self, k, autres, nouveau=None):
+        """Depuis les portes de la pièce, peut-on encore atteindre chaque meuble à pied ? (grille de 6, meubles gonflés de 9)"""
+        portes = PORTES[k]
+        if not portes:
+            return True
+        px, py, pw, ph = PIECES[k]["rect"]
+        c, nx, ny = 6, pw // 6 + 1, ph // 6 + 1
+        libre = [True] * (nx * ny)
+        objets = autres + ([nouveau] if nouveau else [])
+        rects = [self._rect(o) for o in objets] + [r for r in OBSTACLES[self.carte()] + ETABLIS[self.carte()] if px < r[0] + r[2] and r[0] < px + pw and py < r[1] + r[3] and r[1] < py + ph]
+        for x, y, w, h in rects:
+            for j in range(max(0, (y - 9 - py) // c), min(ny, (y + h + 9 - py) // c + 1)):
+                for i in range(max(0, (x - 9 - px) // c), min(nx, (x + w + 9 - px) // c + 1)):
+                    libre[j * nx + i] = False
+        vu, pile = set(), []
+        for x, y, w, h in portes:
+            for j in range(max(0, (y - py) // c), min(ny, (y + h - py) // c + 1)):
+                for i in range(max(0, (x - px) // c), min(nx, (x + w - px) // c + 1)):
+                    if libre[j * nx + i] and j * nx + i not in vu:
+                        vu.add(j * nx + i)
+                        pile.append(j * nx + i)
+        while pile:
+            p = pile.pop()
+            i = p % nx
+            for q in (p - nx, p + nx, p - 1 if i else -1, p + 1 if i < nx - 1 else -1):
+                if 0 <= q < nx * ny and libre[q] and q not in vu:
+                    vu.add(q)
+                    pile.append(q)
+        etablis = ETABLIS[self.carte()]
+        for o in objets:
+            x, y, w, h = self._rect(o)
+            if o["type"] in DECOR_SANS_ACCES or any(ex <= x and ey <= y and x + w <= ex + ew and y + h <= ey + eh for ex, ey, ew, eh in etablis):
+                continue  # posé sur un établi : on l'atteint depuis l'établi
+            cote = o.get("cote", "n")
+            ax, ay = (x + w / 2, y + h + 15) if cote == "n" else (x + w / 2, y - 15) if cote == "s" else (x + w + 15, y + h / 2) if cote == "o" else (x - 15, y + h / 2)
+            j, i = int((ay - py) // c), int((ax - px) // c)
+            if 0 <= j < ny and 0 <= i < nx and j * nx + i not in vu:
+                return False
+        return True
+
+    def _place_stricte(self, genre, x, y, cote, k, ignorer, ecart=True):
+        """Pour le rangement automatique : écarté des autres meubles (ecart), portes dégagées, tout reste accessible ;
+        les emplacements de bureau encore vides de la pièce comptent comme occupés : un meuble ne vient pas les coincer."""
+        o = {"type": genre, "x": x, "y": y, "cote": cote}
+        r = self._rect(o)
+        croise = lambda q, m=0: r[0] < q[0] + q[2] + m and q[0] < r[0] + r[2] + m and r[1] < q[1] + q[3] + m and q[1] < r[1] + r[3] + m
+        if any(croise(q) for q in PORTES[k]):
+            return False
+        px, py, pw, ph = PIECES[k]["rect"]
+        dedans = lambda q: px < q[0] + q[2] and q[0] < px + pw and py < q[1] + q[3] and q[1] < py + ph
+        m = ECART_MEUBLES if ecart else 0
+        if any(croise(q, m) for q in OBSTACLES[self.carte()] + ETABLIS[self.carte()] if dedans(q)):
+            return False
+        autres = [a for a in self.etat["objets"] if a.get("id") != ignorer and not (self.fiche(a["type"]).get("libre") and a["type"] != "tableau") and dedans(self._rect(a))]
+        if genre != "poste":
+            pris = {(a["x"], a["y"]) for a in autres if a["type"] == "poste"}
+            autres += [{"type": "poste", "x": x2, "y": y2, "cote": COTE_POSTES[(x2, y2)]} for x2, y2 in EMPLACEMENTS["poste"] if (x2, y2) not in pris and px <= x2 < px + pw and py <= y2 < py + ph]
+        if any(croise(self._rect(a), m) for a in autres):
+            return False
+        return self._accessible(k, autres, o)
+
+    def _verifier_place(self, genre, x, y, ignorer=None, cote="n"):
         """Renvoie la pièce où l'objet tient entièrement ; refuse les chevauchements."""
         if not (entier(x) and entier(y)):
             raise ErreurJeu("Paramètres invalides.")
         f = self.fiche(genre)
-        w, h = f["w"], f["h"]
+        w, h = self._emprise(genre, cote)
         dispo, carte = self.pieces_dispo(), self.carte()
         dedans = [k for k in f["pieces"] if PIECES[k]["rect"][0] <= x and PIECES[k]["rect"][1] <= y
                   and x + w <= PIECES[k]["rect"][0] + PIECES[k]["rect"][2] and y + h <= PIECES[k]["rect"][1] + PIECES[k]["rect"][3]]
@@ -253,10 +356,10 @@ class Jeu(Personnel, Extensions, Commerce):
         for o in self.etat["objets"]:
             if o["id"] == ignorer:
                 continue
-            g = self.fiche(o["type"])
-            if g.get("libre"):
+            if self.fiche(o["type"]).get("libre"):
                 continue
-            if x < o["x"] + g["w"] and o["x"] < x + w and y < o["y"] + g["h"] and o["y"] < y + h:
+            gw, gh = self._emprise(o["type"], o.get("cote", "n"))
+            if x < o["x"] + gw and o["x"] < x + w and y < o["y"] + gh and o["y"] < y + h:
                 raise ErreurJeu("La place est déjà prise.")
         return piece
 
@@ -272,41 +375,60 @@ class Jeu(Personnel, Extensions, Commerce):
             dispo = [k for k in dispo if k in pieces]
         # emplacements prévus d'abord (grille des postes, disposition de la cantine…)
         for x, y in EMPLACEMENTS.get(genre, []):
+            cote = COTE_POSTES.get((x, y), "n") if genre == "poste" else self._cote_pres(genre, x, y)[2]
             if not any(PIECES[k]["rect"][0] <= x < PIECES[k]["rect"][0] + PIECES[k]["rect"][2] and PIECES[k]["rect"][1] <= y < PIECES[k]["rect"][1] + PIECES[k]["rect"][3] for k in pieces):
                 continue
             try:
-                self._verifier_place(genre, x, y, ignorer)
-                return x, y
+                self._verifier_place(genre, x, y, ignorer, cote)
+                return x, y, cote
             except ErreurJeu:
                 pass
         if grille:
             raise ErreurJeu("Plus de place libre pour un bureau : louez une autre pièce, ou posez-le vous-même.")
         dans = lambda x, y: any(r[0] <= x and r[1] <= y and x + POSTE_W <= r[0] + r[2] and y + POSTE_H <= r[1] + r[3] for r in (PIECES[k]["rect"] for k in dispo))
         postes = [] if genre == "poste" else [p for p in EMPLACEMENTS["poste"] if dans(*p)]  # seulement ceux de la carte courante
-        gene = lambda x, y: any(x < px + POSTE_W and px < x + w and y < py + POSTE_H and py < y + h for px, py in postes)
-        candidats = []  # (établi d'abord, gêne un poste prévu, rang de la pièce préférée, bande du nom, distance au mur, y, x)
+        gene = lambda x, y, w, h: any(x < px + POSTE_W and px < x + w and y < py + POSTE_H and py < y + h for px, py in postes)
+        candidats = []  # (établi d'abord, gêne un poste prévu, rang de la pièce préférée, 0 si contre un mur, distance au mur, y, x, côté, pièce)
         if genre in MATERIEL and set(pieces) & {"garage", "labo"}:
             for bx, by, bw, bh in ETABLIS[carte]:
                 if bh >= bw and w <= bw:  # établi vertical : appareils les uns sous les autres
-                    candidats += [(0, 0, 0, 0, y - by, y, bx + (bw - w) // 2) for y in range(by, by + bh - h + 1, 4)]
+                    candidats += [(0, 0, 0, 0, y - by, y, bx + (bw - w) // 2, "n", None) for y in range(by, by + bh - h + 1, 4)]
                 elif bh < bw and h <= bh:  # établi horizontal : côte à côte
-                    candidats += [(0, 0, 0, 0, x - bx, by + (bh - h) // 2, x) for x in range(bx, bx + bw - w + 1, 4)]
+                    # contre un mur du bas : appareils tournés vers la pièce
+                    bas = any(by + bh >= PIECES[k]["rect"][1] + PIECES[k]["rect"][3] - 3 and PIECES[k]["rect"][0] <= bx < PIECES[k]["rect"][0] + PIECES[k]["rect"][2] and PIECES[k]["rect"][1] <= by < PIECES[k]["rect"][1] + PIECES[k]["rect"][3] for k in pieces)
+                    candidats += [(0, 0, 0, 0, x - bx, by + bh - h if bas else by + (bh - h) // 2, x, "s" if bas else "n", None) for x in range(bx, bx + bw - w + 1, 4)]
         for rang, k in enumerate(pieces):
             if k not in dispo:
                 continue
             px, py, pw, ph = PIECES[k]["rect"]
-            xs = sorted(set(range(px, px + pw - w + 1, 8)) | {px + pw - w})  # + collé au mur de droite / du bas
+            au_sol = f.get("libre") and genre != "tableau"  # tapis, affiche, clim : sans mur attitré
+            for c in "n" if au_sol else "nsoe":  # le long de chaque mur, le long côté contre lui
+                cw, ch = self._emprise(genre, c)
+                if c in "ns":
+                    y = py + 1 if c == "n" else py + ph - ch - 1
+                    candidats += [(1, gene(x, y, cw, ch), rang, 0, 1, y, x, c, k) for x in range(px + 1, px + pw - cw, 6)]
+                else:
+                    x = px + 1 if c == "o" else px + pw - cw - 1
+                    candidats += [(1, gene(x, y, cw, ch), rang, 0, 1, y, x, c, k) for y in range(py + 1, py + ph - ch, 6)]
+            xs = sorted(set(range(px, px + pw - w + 1, 8)) | {px + pw - w})  # en dernier recours, ailleurs dans la pièce
             ys = sorted(set(range(py, py + ph - h + 1, 8)) | {py + ph - h})
             for y in ys:
                 for x in xs:
-                    mur = min(x - px, px + pw - x - w, y - py, py + ph - y - h)
-                    candidats.append((1, gene(x, y), rang, y + h > py + ph - BANDE_ETIQUETTE, mur, y, x))
-        for *_, y, x in sorted(candidats):
-            try:
-                self._verifier_place(genre, x, y, ignorer)
-                return x, y
-            except ErreurJeu:
-                pass
+                    candidats.append((1, gene(x, y, w, h), rang, 1, min(x - px, px + pw - x - w, y - py, py + ph - y - h), y, x, "n", k))
+        candidats.sort(key=lambda q: q[:7])
+        # d'abord une vraie place contre un mur, écartée ; puis une place qui garde au moins le passage ; le matériel doit pouvoir s'acheter, il prend ce qui reste en dernier
+        for regle in ("ecart", "passage", "reste"):
+            if regle == "reste" and genre not in MATERIEL and genre != "poste":
+                break
+            for _, _, _, ailleurs, _, y, x, c, k in candidats:
+                if regle == "ecart" and ailleurs:
+                    continue
+                try:
+                    self._verifier_place(genre, x, y, ignorer, c)
+                except ErreurJeu:
+                    continue
+                if regle == "reste" or k is None or self._place_stricte(genre, x, y, c, k, ignorer, ecart=regle == "ecart"):
+                    return x, y, c
         raise ErreurJeu(f"Plus de place libre pour : {f['nom']}.")
 
     @staticmethod
@@ -396,7 +518,7 @@ class Jeu(Personnel, Extensions, Commerce):
         if self.carte() == "batiment" and self.piece_de(o) in libres:
             return
         try:
-            o["x"], o["y"] = self._place_auto("poste", libres, ignorer=o["id"])
+            o["x"], o["y"], o["cote"] = self._place_auto("poste", libres, ignorer=o["id"])
         except ErreurJeu:
             raise ErreurJeu("Louez d'abord " + ("un bureau de responsable libre" if genre == "res" else "la direction R&D, avec une place libre") + " (Locaux).") from None
         self._roles = None
@@ -411,16 +533,16 @@ class Jeu(Personnel, Extensions, Commerce):
         perdus = []
         for o in sorted(connus, key=lambda o: (o["type"] != "poste", o["type"] not in MATERIEL, -self.fiche(o["type"])["w"] * self.fiche(o["type"])["h"])):
             try:
-                x, y = self._place_auto(o["type"])
+                x, y, cote = self._place_auto(o["type"])
             except ErreurJeu:
                 try:  # grille pleine : un poste se pose ailleurs dans les bureaux
                     if o["type"] != "poste":
                         raise
-                    x, y = self._place_auto("poste", hors_grille)
+                    x, y, cote = self._place_auto("poste", hors_grille)
                 except ErreurJeu:
                     perdus.append(o)
                     continue
-            e["objets"].append({**o, "x": x, "y": y})
+            e["objets"].append({**o, "x": x, "y": y, "cote": cote})
         # ce qui ne tient nulle part est revendu à moitié prix (sinon : invisible, ni revendable ni reposable)
         for o in perdus:
             if o["type"] == "poste" or any(x["type"] == o["type"] for x in e["objets"]):
@@ -437,8 +559,8 @@ class Jeu(Personnel, Extensions, Commerce):
                 libres = self.bureaux_libres()
                 emp["bureau"] = libres[0] if libres else None
 
-    def _ajouter_objet(self, genre, x, y):
-        o = {"id": self._id(), "type": genre, "x": x, "y": y}
+    def _ajouter_objet(self, genre, x, y, cote="n"):
+        o = {"id": self._id(), "type": genre, "x": x, "y": y, "cote": cote}
         self.etat["objets"].append(o)
         return o
 
@@ -450,12 +572,14 @@ class Jeu(Personnel, Extensions, Commerce):
         if genre in DECO and genre in e["deco"] and not f.get("multiple"):
             raise ErreurJeu(f"{f['nom']} : vous en avez déjà un.")
         if x is None or y is None:
-            x, y = self._place_auto(genre)
+            x, y, cote = self._place_auto(genre)
+        elif entier(x) and entier(y):
+            x, y, cote = self._cote_pres(genre, round(x / GRILLE) * GRILLE, round(y / GRILLE) * GRILLE)
         else:
-            x, y = round(x / GRILLE) * GRILLE if entier(x) else x, round(y / GRILLE) * GRILLE if entier(y) else y
-        self._verifier_place(genre, x, y)
+            cote = "n"
+        self._verifier_place(genre, x, y, cote=cote)
         self._payer(f["prix"])
-        o = self._ajouter_objet(genre, x, y)
+        o = self._ajouter_objet(genre, x, y, cote)
         sans = next((x for x in e["employes"] if genre == "poste" and x.get("bureau") is None), None)
         if sans:
             sans["bureau"] = o["id"]  # un employé sans bureau (déménagement serré) s'y installe
@@ -1425,10 +1549,11 @@ class Jeu(Personnel, Extensions, Commerce):
         elif genre == "deplacer":
             o = self.objet(p.get("id"))
             x, y = p.get("x"), p.get("y")
+            cote = "n"
             if entier(x) and entier(y):
-                x, y = round(x / GRILLE) * GRILLE, round(y / GRILLE) * GRILLE
-            self._verifier_place(o["type"], x, y, ignorer=o["id"])
-            o["x"], o["y"] = x, y
+                x, y, cote = self._cote_pres(o["type"], round(x / GRILLE) * GRILLE, round(y / GRILLE) * GRILLE)
+            self._verifier_place(o["type"], x, y, ignorer=o["id"], cote=cote)
+            o["x"], o["y"], o["cote"] = x, y, cote
         elif genre == "vendre":
             o = self.objet(p.get("id"))
             if o["type"] == "poste":

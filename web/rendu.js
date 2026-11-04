@@ -394,7 +394,7 @@ function decor(e, cat, etage) {
     foret(saison, pris);
     const pelouse = (x, y) => (y > 806 && y < 890) || (x > 58 && x < 412 && y > 288 && y < 700) || (x > 416 && x < 690 && y > 386 && y < 660) || (x > 476 && x < 634 && y > 646 && y < 815) || (x > 106 && x < 296 && y > 678 && y < 756) || (x > 96 && x < 344 && y > 156 && y < 274) || voisinDe(cours, x, y, 50);
     herbes(DECOR, pelouse);
-    VOIES = { x0: -300, x1: 1300, voie1: 846, voie2: 870, trottoir: 822, porte: 555, seuil: 660, arret: 500, v: 1.6 };
+    VOIES = { x0: -300, x1: 1300, voie1: 846, voie2: 870, trottoir: 829, porte: 515, seuil: 660, arret: 500, v: 1.6 };
   } else if (etage === 'rdc') {
     plan(DECOR, -4000, -3000, 9000, 9000, -0.5, matTexture('herbe', 9000, 9000, herbe));
     route(DECOR, 776, 800, 64, 0.05);
@@ -610,7 +610,7 @@ function creerRue() {
       const g = creerFigurine({ couleur: c, cheveux: '#2b1d14', peau: PLAN.PEAUX[i], i, assis: false, pose: 'debout' });
       ajouterRue(g, { genre: 'pieton', de: sens > 0 ? [V.x0, V.trottoir] : [V.x1, V.trottoir], a: sens > 0 ? [V.x1, V.trottoir] : [V.x0, V.trottoir], T: T0 * v, d });
     }
-    ajouterRue(modeleChat(), { genre: 'chat', de: ETAGE === 'garage' ? [120, 560] : [-120, DY + 420], a: ETAGE === 'garage' ? [360, 560] : [10, DY + 420], T: 26, d: 4 });
+    ajouterRue(modeleChat(), { genre: 'chat', de: ETAGE === 'garage' ? [120, 780] : [-120, DY + 420], a: ETAGE === 'garage' ? [360, 780] : [10, DY + 420], T: 26, d: 4 });
   }
   for (const [x, y, T0, d] of [[-200, DY + 200, 34, 6], [-260, DY + 230, 34, 7.5], [-150, DY + 520, 47, 30]]) ajouterRue(modeleOiseau(), { genre: 'oiseau', de: [x, y], a: [x + 1500, y], T: T0, d, z: 160 });
 }

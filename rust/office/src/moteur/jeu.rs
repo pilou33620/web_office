@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashSet};
 
-use super::{arrondi, arrondi_entier, borne, bornef, champ, d, entier, erreur, mil, r4, requis_liste, tronquer, vmax, vmin, ErreurJeu, R};
+use super::{arrondi, arrondi_entier, borne, bornef, champ, d, entier, erreur, mil, r4, requis_liste, tronquer, vmax, vmin, R};
 use crate::py::{self, Random, Val};
 use crate::{dict, list};
 

@@ -2,28 +2,30 @@
 
 Jeu de gestion façon *Game Dev Story* : vous dirigez un bureau d'études qui conçoit des cartes électroniques, des pièces 3D et des firmwares. On commence seul dans un garage, puis on embauche, on s'équipe et on agrandit les locaux.
 
-Moteur en Python (bibliothèque standard uniquement), plan isométrique en 3D low-poly (three.js), jouable sur téléphone et sur tablette.
+Moteur et serveur en Rust (un seul exécutable, sans dépendance à installer), plan isométrique en 3D low-poly (three.js), jouable sur téléphone et sur tablette.
 
 ## Lancer le jeu
 
 ```bash
-python3 serveur.py            # http://127.0.0.1:8793 et réseau local avec code d'appairage
-python3 serveur.py --local    # ce poste seulement, sans code
+./lancer.sh            # http://127.0.0.1:8793 et réseau local avec code d'appairage
+./lancer.sh --local    # ce poste seulement, sans code
 ```
 
-Options : `--port N` (8793 par défaut ; le premier port libre au-delà si pris), `--local`, `--sans-navigateur`, `--sans-pause`, `--sans-maj` (pas de vérification GitHub au démarrage). Sans `--sans-maj`, le jeu fait un `git pull --ff-only` au démarrage s'il y a du nouveau, puis redémarre.
+Sous Windows : `lancer.bat`. `lancer.sh` obtient d'abord l'exécutable (`binaires.sh`) : avec Rust (`cargo`) sur le poste, il est compilé ici ; sinon (Raspberry Pi, PC sans Rust) il est téléchargé depuis la publication GitHub « binaires », compilée par la CI à chaque envoi sur `main`, et vérifié par son empreinte SHA-256. Rust est donc facultatif.
 
-Le jeu figure aussi dans **web_launcher** (port 8793) ; c'est alors le launcher qui le met à jour.
+Options : `--port N` (ou `--port=N`, 8793 par défaut ; le premier port libre au-delà si pris), `--local`, `--sans-navigateur`, `--sans-pause` (acceptée pour le launcher, sans effet), `--sans-maj` (pas de vérification GitHub au démarrage), `--demo` (voir plus bas). Une option inconnue : message d'usage et code 2. Sans `--sans-maj`, le jeu vérifie GitHub au démarrage (`git fetch`, puis avance rapide seulement, délais de 10 et 120 s) ; s'il y a du nouveau, il sort avec le code 75 et `lancer.sh` reprend l'exécutable de la nouvelle version puis le relance.
+
+Le jeu figure aussi dans **web_launcher** (port 8793) ; c'est alors le launcher qui le met à jour. L'arrêt par le launcher (SIGTERM) ou Ctrl+C sauvegarde la partie avant de sortir.
 
 ### Utiliser depuis un autre appareil
 
-Ouvrir l'adresse « réseau » affichée dans le terminal (IP du poste, en HTTPS). La première fois, l'appareil demande le **code d'appairage** à 6 chiffres affiché dans le terminal (ou sur la carte du launcher) ; il est ensuite reconnu par tous les web tools du poste. Pour éviter l'alerte de certificat, installer la CA du poste depuis `/appairage/ca.pem` (instructions dans le terminal). Une IP publique est toujours refusée : à distance, passer par Tailscale.
+Ouvrir l'adresse « réseau » affichée dans le terminal (IP du poste, en HTTPS). La première fois, l'appareil demande le **code d'appairage** à 6 chiffres affiché dans le terminal (ou sur la carte du launcher) ; il est ensuite reconnu par tous les web tools du poste. Pour éviter l'alerte de certificat, installer la CA du poste depuis `/appairage/ca.pem` (instructions dans le terminal). Une IP publique est toujours refusée : à distance, passer par Tailscale. La sécurité réseau (jeton, code, HTTPS) vient de la caisse commune `web_tools_commun` (dépôt web_suite).
 
-Aucune dépendance à installer : fonctionne sur Raspberry Pi et dans Termux. three.js est copié dans `web/vendor` (licence MIT, voir `web/vendor/SOURCES.txt`) : le jeu s'affiche sans Internet. Il faut un navigateur avec WebGL et un appareil récent : le rendu tourne toujours à sa qualité maximale. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements).
+three.js est copié dans `web/vendor` (licence MIT, voir `web/vendor/SOURCES.txt`) : le jeu s'affiche sans Internet. Il faut un navigateur avec WebGL et un appareil récent : le rendu tourne toujours à sa qualité maximale. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements, dossier ignoré par git ; les sauvegardes de l'ancienne version Python se relisent telles quelles).
 
 ## Mode démo
 
-Double-cliquer sur `demo.py` (ou `python3 demo.py`) : le jeu s'ouvre dans le navigateur et une partie se joue toute seule, avec une société de 4 personnes déjà installée dans le bâtiment. Un pilote automatique signe les contrats, embauche, lance des produits, commande les lots, achète du matériel. Les jours défilent en 3 secondes, mais un jour sur cinq, chaque vendredi et chaque jour où il se passe quelque chose (livraison, embauche, échec CEM, lot livré, contrat signé, burn-out…) se jouent en vitesse Normal, avec toute la journée de bureau. Le bouton « Démo » de la barre du temps vous rend la main. La démo a ses propres sauvegardes (`sauvegardes/demo`) : vos parties ne sont pas touchées.
+`./lancer.sh --demo --local --sans-maj --port 8795` (ou la variable `CIRCUIT_STORY_DEMO=1`) : le jeu s'ouvre dans le navigateur et une partie se joue toute seule, avec une société de 4 personnes déjà installée dans le bâtiment. Un pilote automatique signe les contrats, embauche, lance des produits, commande les lots, achète du matériel. Les jours défilent en 3 secondes, mais un jour sur cinq, chaque vendredi et chaque jour où il se passe quelque chose (livraison, embauche, échec CEM, lot livré, contrat signé, burn-out…) se jouent en vitesse Normal, avec toute la journée de bureau. Le bouton « Démo » de la barre du temps vous rend la main. La démo a ses propres sauvegardes (`sauvegardes/demo`) : vos parties ne sont pas touchées.
 
 ## Comment on joue
 
@@ -81,14 +83,14 @@ Sous −5 000 € de trésorerie, c'est la faillite.
 ## Structure
 
 ```
-moteur/donnees.py   catalogues (matériel, déco, locaux, traits, métiers, séniorités, contrats, produits)
-moteur/personnel.py séniorité, traits, motivations, affinités, burn-out, entretiens, recrutement
-moteur/jeu.py       simulation jour par jour et actions du joueur
-moteur/extensions.py  R&D, certifications, SAV, séries, finances, carrières, météo, scénarios
-serveur.py          serveur HTTP + API JSON
-web/                interface (index.html, style.css, jeu.js ; plan.js dessine le plan isométrique, les objets et les personnages)
-tests/              tests unitaires du moteur, banc du serveur
-appairage.py        sécurité réseau, copie identique de web_suite/lanceur/appairage.py
+rust/office/src/moteur/   le moteur : jeu.rs (simulation jour par jour, plan, actions du joueur), personnel.rs,
+                          extensions.rs (R&D, certifications, SAV, séries, finances, carrières, météo, scénarios), commerce.rs
+rust/office/data/donnees.json  catalogues (matériel, déco, locaux, traits, métiers, séniorités, contrats, produits)
+rust/office/src/py/       valeurs, hasard et JSON comme en Python (même partie à la même graine, mêmes sauvegardes)
+rust/office/src/serveur.rs  serveur HTTP/HTTPS + API JSON (sécurité : web_tools_commun)
+web/                      interface (index.html, style.css, jeu.js ; plan.js dessine le plan isométrique, les objets et les personnages)
+rust/office/tests/        tests du moteur et parties de référence ; tests/test_trajets.js : trajets des personnages
+lancer.sh, lancer.bat     obtiennent l'exécutable (binaires.sh, binaires.cmd) puis le lancent
 ```
 
 API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle {emplacement, scenario, difficulte, entreprise, directeur}`, `POST /api/charger {emplacement}`. Les POST exigent l'en-tête `X-WEB_OFFICE: 1`.
@@ -96,9 +98,8 @@ API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/acti
 ## Tests
 
 ```bash
-python3 -m unittest -q          # moteur
-python3 tests/banc-serveur.py   # serveur : fichiers servis, Host, en-tête, tailles
-node tests/test_trajets.js      # trajets : portes, ni mur ni objet traversé
-python3 tests/banc-rendu.py     # rendu 3D : les 4 plans, la marche et les effets, sans erreur (Chromium sans écran, long ; CAPTURE=dossier ZOOM=1 PLANS=r1,r2)
-python3 appairage.py            # code, jeton, cookie
+cargo test --release -p office   # moteur (tests réécrits de la version Python, parties comparées au moteur Python), serveur (fichiers servis, Host, en-tête, tailles)
+node tests/test_trajets.js       # trajets : portes, ni mur ni objet traversé (plans remplis par le moteur, demande cargo)
 ```
+
+La CI (`.github/workflows/ci.yml`) les lance à chaque envoi ; `binaires.yml` compile les exécutables (Linux x86_64 et aarch64, macOS, Windows) et les publie. Le Raspberry Pi ne compile pas : il télécharge l'exécutable.

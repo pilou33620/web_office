@@ -1,8 +1,5 @@
 sauvegardes/
-__pycache__/
-*.pyc
 *.local.json
-.venv/
 journaux/
 graphify-out/
 

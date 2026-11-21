@@ -4,27 +4,8 @@
 const fs = require('fs'), path = require('path'), vm = require('vm'), { execFileSync } = require('child_process');
 
 const racine = path.join(__dirname, '..');
-const donnees = JSON.parse(execFileSync('python3', ['-c', `
-import json
-from moteur import donnees as d
-from moteur.jeu import ErreurJeu, Jeu
-g = Jeu(scenario="garage", graine=1, entreprise="T", directeur="T")
-b = Jeu(scenario="reprise", graine=1, difficulte="facile", entreprise="T", directeur="T")
-for j in (g, b):
-    j.etat["argent"], j.etat["renommee"] = 10 ** 7, 30
-    for m in d.MATERIEL:
-        try: j.action("acheter", id=m)
-        except ErreurJeu: pass
-    for x, f in d.DECO.items():
-        for _ in range(4 if f.get("multiple") else 1):
-            try: j.action("poser", id=x)
-            except ErreurJeu: pass
-    while True:
-        try: j.action("poser", id="poste")
-        except ErreurJeu: break
-print(json.dumps({"cat": {"pieces": d.PIECES, "coques": d.COQUES, "communs": d.COMMUNS, "etages": d.ETAGES, "cloisons": d.CLOISONS, "ouvertures": d.OUVERTURES, "dehors": d.DEHORS,
-  "poste": d.POSTE, "materiel": d.MATERIEL, "deco": d.DECO, "obstacles": d.OBSTACLES, "etablis": d.ETABLIS}, "garage": g.etat["objets"], "batiment": b.etat["objets"], "locaux": b.etat["locaux"]}))
-`], { cwd: racine, maxBuffer: 1 << 26 }));
+// les plans remplis viennent du moteur (rust/office/examples/trajets.rs)
+const donnees = JSON.parse(execFileSync('cargo', ['run', '-q', '--release', '-p', 'office', '--example', 'trajets'], { cwd: racine, maxBuffer: 1 << 26 }));
 const CAT = donnees.cat;
 // les murs intérieurs ne sont pas exportés : on les expose pour le test seulement
 const source = fs.readFileSync(path.join(racine, 'web/plan.js'), 'utf8').replace('return {\n    W, H,', 'return {\n    cloisonsEtage, W, H,');

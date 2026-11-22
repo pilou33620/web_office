@@ -4,16 +4,35 @@ Jeu de gestion façon *Game Dev Story* : vous dirigez un bureau d'études qui co
 
 Moteur et serveur en Rust (un seul exécutable, sans dépendance à installer), plan isométrique en 3D low-poly (three.js), jouable sur téléphone et sur tablette.
 
-## Lancer le jeu
+## Installation
+
+### Le plus simple : l'archive de production (sans git, sans rien installer)
+
+Dans la [publication « binaires »](https://github.com/pilou33620/web_office/releases/tag/binaires), prendre l'archive du système :
+
+| Système | Archive |
+|---|---|
+| Windows | `office-prod-windows-x86_64.zip` |
+| Linux x86_64 | `office-prod-linux-x86_64.tar.gz` |
+| Raspberry Pi (64 bits) | `office-prod-linux-aarch64.tar.gz` |
+| macOS (Apple) | `office-prod-macos-aarch64.tar.gz` |
+
+La décompresser où l'on veut (elle donne un dossier `office/` : l'exécutable dans `bin/`, la page dans `web/`, les scripts de démarrage), puis double-cliquer sur `demarrer_WEB_OFFICE.cmd` (Windows) ou lancer `./demarrer_WEB_OFFICE.sh`. À chaque démarrage, le jeu compare son archive à la dernière publiée ; si elle a changé, il la télécharge (empreinte SHA-256 vérifiée), recopie ses fichiers par-dessus et redémarre. Les parties (`sauvegardes/`) ne sont pas dans l'archive : une mise à jour ne les touche jamais.
+
+### Pour développer : le dépôt git
 
 ```bash
-./lancer.sh            # http://127.0.0.1:8793 et réseau local avec code d'appairage
-./lancer.sh --local    # ce poste seulement, sans code
+git clone https://github.com/pilou33620/web_office.git
+cd web_office
+./demarrer_WEB_OFFICE.sh            # http://127.0.0.1:8793 et réseau local avec code d'appairage
+./demarrer_WEB_OFFICE.sh --local    # ce poste seulement, sans code
 ```
 
-Sous Windows : `lancer.bat`. `lancer.sh` obtient d'abord l'exécutable (`binaires.sh`) : avec Rust (`cargo`) sur le poste, il est compilé ici ; sinon (Raspberry Pi, PC sans Rust) il est téléchargé depuis la publication GitHub « binaires », compilée par la CI à chaque envoi sur `main`, et vérifié par son empreinte SHA-256. Rust est donc facultatif.
+Sous Windows : `demarrer_WEB_OFFICE.cmd`. À la racine, seul le lanceur du système en cours reste visible : le premier lancement masque l'autre. `demarrer_WEB_OFFICE` obtient d'abord l'exécutable (`scripts/binaires.sh`, `scripts/binaires.cmd`) : avec Rust (`cargo`) sur le poste, il est compilé ici ; sinon (Raspberry Pi, PC sans Rust) il est téléchargé depuis la publication GitHub « binaires », compilée par la CI à chaque envoi sur `main`, et vérifié par son empreinte SHA-256. Rust est donc facultatif. Sur une erreur, la fenêtre reste ouverte avec la raison. `lancer.sh` et `lancer.bat` restent, pour web_launcher : ils relaient vers `demarrer_WEB_OFFICE` avec les mêmes options.
 
-Options : `--port N` (ou `--port=N`, 8793 par défaut ; le premier port libre au-delà si pris), `--local`, `--sans-navigateur`, `--sans-pause` (acceptée pour le launcher, sans effet), `--sans-maj` (pas de vérification GitHub au démarrage), `--demo` (voir plus bas). Une option inconnue : message d'usage et code 2. Sans `--sans-maj`, le jeu vérifie GitHub au démarrage (`git fetch`, puis avance rapide seulement, délais de 10 et 120 s) ; s'il y a du nouveau, il sort avec le code 75 et `lancer.sh` reprend l'exécutable de la nouvelle version puis le relance.
+## Lancer le jeu
+
+Options : `--port N` (ou `--port=N`, 8793 par défaut ; le premier port libre au-delà si pris), `--local`, `--sans-navigateur`, `--sans-pause` (acceptée pour le launcher, sans effet), `--sans-maj` (pas de vérification des mises à jour au démarrage), `--demo` (voir plus bas). Une option inconnue : message d'usage et code 2. Sans `--sans-maj`, le jeu vérifie GitHub au démarrage : un clone git par `git fetch` puis avance rapide seulement (délais de 10 et 120 s), une archive de production par la publication « binaires ». S'il y a du nouveau, il sort avec le code 75 et `demarrer_WEB_OFFICE` reprend l'exécutable de la nouvelle version puis le relance.
 
 Le jeu figure aussi dans **web_launcher** (port 8793) ; c'est alors le launcher qui le met à jour. L'arrêt par le launcher (SIGTERM) ou Ctrl+C sauvegarde la partie avant de sortir.
 
@@ -25,7 +44,7 @@ three.js (licence MIT) et les polices Fredoka et Nunito (`web/vendor/polices`, l
 
 ## Mode démo
 
-`./lancer.sh --demo --local --sans-maj --port 8795` (ou la variable `CIRCUIT_STORY_DEMO=1`) : le jeu s'ouvre dans le navigateur et une partie se joue toute seule, avec une société de 4 personnes déjà installée dans le bâtiment. Un pilote automatique signe les contrats, embauche, lance des produits, commande les lots, achète du matériel. Les jours défilent en 3 secondes, mais un jour sur cinq, chaque vendredi et chaque jour où il se passe quelque chose (livraison, embauche, échec CEM, lot livré, contrat signé, burn-out…) se jouent en vitesse Normal, avec toute la journée de bureau. Le bouton « Démo » de la barre du temps vous rend la main. La démo a ses propres sauvegardes (`sauvegardes/demo`) : vos parties ne sont pas touchées.
+`./demarrer_WEB_OFFICE.sh --demo --local --sans-maj --port 8795` (ou la variable `CIRCUIT_STORY_DEMO=1`) : le jeu s'ouvre dans le navigateur et une partie se joue toute seule, avec une société de 4 personnes déjà installée dans le bâtiment. Un pilote automatique signe les contrats, embauche, lance des produits, commande les lots, achète du matériel. Les jours défilent en 3 secondes, mais un jour sur cinq, chaque vendredi et chaque jour où il se passe quelque chose (livraison, embauche, échec CEM, lot livré, contrat signé, burn-out…) se jouent en vitesse Normal, avec toute la journée de bureau. Le bouton « Démo » de la barre du temps vous rend la main. La démo a ses propres sauvegardes (`sauvegardes/demo`) : vos parties ne sont pas touchées.
 
 ## Comment on joue
 
@@ -90,7 +109,8 @@ rust/office/src/py/       valeurs, hasard et JSON comme en Python (même partie 
 rust/office/src/serveur.rs  serveur HTTP/HTTPS + API JSON (sécurité : web_tools_commun)
 web/                      interface (index.html, style.css, jeu.js ; plan.js dessine le plan isométrique, les objets et les personnages)
 rust/office/tests/        tests du moteur et parties de référence ; tests/test_trajets.js : trajets des personnages
-lancer.sh, lancer.bat     obtiennent l'exécutable (binaires.sh, binaires.cmd) puis le lancent
+demarrer_WEB_OFFICE.sh, .cmd  obtiennent l'exécutable (scripts/binaires.sh, scripts/binaires.cmd) puis le lancent
+lancer.sh, lancer.bat     relais vers demarrer_WEB_OFFICE (pour web_launcher)
 ```
 
 API : `GET /api/etat`, `GET /api/catalogue`, `GET /api/parties`, `POST /api/action {"genre": "...", ...}`, `POST /api/nouvelle {emplacement, scenario, difficulte, entreprise, directeur}`, `POST /api/charger {emplacement}`. Les POST exigent l'en-tête `X-WEB_OFFICE: 1`.
@@ -102,4 +122,4 @@ cargo test --release -p office   # moteur (tests réécrits de la version Python
 node tests/test_trajets.js       # trajets : portes, ni mur ni objet traversé (plans remplis par le moteur, demande cargo)
 ```
 
-La CI (`.github/workflows/ci.yml`) les lance à chaque envoi ; `binaires.yml` compile les exécutables (Linux x86_64 et aarch64, macOS, Windows) et les publie. Le Raspberry Pi ne compile pas : il télécharge l'exécutable.
+La CI (`.github/workflows/ci.yml`) les lance à chaque envoi ; `binaires.yml` compile les exécutables (Linux x86_64 et aarch64, macOS, Windows) et les publie, avec l'archive de production de chaque système ; il vérifie que celle de Linux, décompressée dans un dossier vide, démarre et répond. Le Raspberry Pi ne compile pas : il télécharge l'exécutable.

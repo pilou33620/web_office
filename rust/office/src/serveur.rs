@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use web_tools_commun::appairage::{self, Garde};
+use web_tools_commun::production;
 use web_tools_commun::serveur::{decoder_chemin, ErreurCorps, Reponse, Requete, Serveur};
 
 use crate::moteur::{d, entier, Jeu};
@@ -533,6 +534,14 @@ fn git(args: &[&str], delai: u64) -> Result<(bool, String, String), String> {
 
 /// Recherche les mises à jour sur GitHub et les applique (avance rapide seulement). Rend vrai si le code a changé.
 fn verifier_et_appliquer_maj() -> bool {
+    // copie de production (archive sans git ni sources) : mise à jour depuis la publication « binaires »
+    if production::est_copie_prod(racine()) {
+        return production::mettre_a_jour("https://github.com/pilou33620/web_office", "office", racine(), &|t| println!("[*] {t}"))
+            .unwrap_or_else(|e| {
+                println!("[X] {e}");
+                false
+            });
+    }
     if git(&["--version"], 5).is_err() {
         return false;
     }
@@ -617,7 +626,7 @@ pub fn main() {
         return;
     }
     let _ = std::env::set_current_dir(racine());
-    // --sans-pause : accepté (le catalogue du launcher le passe) ; lancer.bat garde la fenêtre ouverte sous Windows
+    // --sans-pause : accepté (le catalogue du launcher le passe) ; demarrer_WEB_OFFICE.cmd garde la fenêtre ouverte sur une erreur sous Windows
     let demo = args.demo || std::env::var("CIRCUIT_STORY_DEMO").as_deref() == Ok("1");
     if !args.sans_maj && std::env::var("WEB_OFFICE_DEJA_MAJ").as_deref() != Ok("1") && verifier_et_appliquer_maj() {
         if std::env::var_os("WEB_OFFICE_RELANCEUR").is_some() {

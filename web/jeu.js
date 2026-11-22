@@ -1,4 +1,4 @@
-// Circuit Story — interface web (le moteur tourne côté serveur Python)
+// Circuit Story — interface web (le moteur tourne côté serveur Rust)
 'use strict';
 
 const $ = (s) => document.querySelector(s);
@@ -16,7 +16,7 @@ let onglet = 'accueil', vue = 'bureau', catMat = 'e';
 let joue = false, vitesse = 'normal', minuteur = null, envoi = false, nbTrophees = null;
 // Durée réelle d'une journée de jeu (ms) selon la vitesse choisie
 const VITESSES = { lent: ['Lent', 24000], normal: ['Normal', 18000], rapide: ['Rapide', 4500], tresrapide: ['Très rapide', 1500], demo: ['Démo', 3000] };
-const DEMO = new URLSearchParams(location.search).has('demo');  // ouvert par demo.py : le pilote automatique joue
+const DEMO = new URLSearchParams(location.search).has('demo');  // ouvert par --demo : le pilote automatique joue
 let pilotage = DEMO;
 let amenage = false, selection = null, placement = null;  // mode aménagement, objet choisi, objet en cours de placement
 let etage = 'garage', NB = {};  // étage affiché (le garage avant le déménagement), personnes par étage

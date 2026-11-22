@@ -81,6 +81,13 @@ fn fichiers_hote_et_ecritures() {
     let type_de = |c: &str| entete(&requete(port, "GET", c, None, &[], None).1, "Content-Type");
     assert_eq!(type_de("/jeu.js").as_deref(), Some("text/javascript; charset=utf-8"));
     assert_eq!(type_de("/vendor/three/build/three.module.min.js").as_deref(), Some("text/javascript; charset=utf-8"));
+    // polices locales (le jeu marche sans Internet)
+    assert_eq!(type_de("/vendor/polices/polices.css").as_deref(), Some("text/css; charset=utf-8"));
+    for p in ["fredoka-latin", "fredoka-latin-ext", "nunito-latin", "nunito-latin-ext"] {
+        let (code, tete, corps) = requete(port, "GET", &format!("/vendor/polices/{p}.woff2"), None, &[], None);
+        assert_eq!((code, entete(&tete, "Content-Type").as_deref()), (200, Some("font/woff2")), "{p}");
+        assert!(corps.starts_with(b"wOF2"), "{p} : un vrai fichier woff2");
+    }
 
     // POST : en-tête maison, taille, JSON
     assert_eq!(requete(port, "POST", "/api/action", None, &[], Some(b"{}")).0, 403);

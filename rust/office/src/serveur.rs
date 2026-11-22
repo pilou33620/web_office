@@ -343,6 +343,7 @@ fn type_mime(p: &Path) -> &'static str {
         "txt" => "text/plain",
         "png" => "image/png",
         "svg" => "image/svg+xml",
+        "woff2" => "font/woff2",
         _ => "application/octet-stream",
     }
 }

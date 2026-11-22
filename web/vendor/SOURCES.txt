@@ -1,1 +1,2 @@
 three.js 0.170.0 (MIT) : https://threejs.org
+Fredoka et Nunito (SIL OFL 1.1, Google Fonts) : https://fonts.google.com — polices/ (latin et latin-ext)

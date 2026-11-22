@@ -21,7 +21,7 @@ Le jeu figure aussi dans **web_launcher** (port 8793) ; c'est alors le launcher 
 
 Ouvrir l'adresse « réseau » affichée dans le terminal (IP du poste, en HTTPS). La première fois, l'appareil demande le **code d'appairage** à 6 chiffres affiché dans le terminal (ou sur la carte du launcher) ; il est ensuite reconnu par tous les web tools du poste. Pour éviter l'alerte de certificat, installer la CA du poste depuis `/appairage/ca.pem` (instructions dans le terminal). Une IP publique est toujours refusée : à distance, passer par Tailscale. La sécurité réseau (jeton, code, HTTPS) vient de la caisse commune `web_tools_commun` (dépôt web_suite).
 
-three.js est copié dans `web/vendor` (licence MIT, voir `web/vendor/SOURCES.txt`) : le jeu s'affiche sans Internet. Il faut un navigateur avec WebGL et un appareil récent : le rendu tourne toujours à sa qualité maximale. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements, dossier ignoré par git ; les sauvegardes de l'ancienne version Python se relisent telles quelles).
+three.js (licence MIT) et les polices Fredoka et Nunito (`web/vendor/polices`, licence OFL) sont copiés dans `web/vendor` (voir `web/vendor/SOURCES.txt`) : le jeu s'affiche sans Internet. Il faut un navigateur avec WebGL et un appareil récent : le rendu tourne toujours à sa qualité maximale. La partie est sauvegardée automatiquement dans `sauvegardes/partie_N.json` (3 emplacements, dossier ignoré par git ; les sauvegardes de l'ancienne version Python se relisent telles quelles).
 
 ## Mode démo
 

@@ -334,22 +334,20 @@ pub fn fil_du_jeu(dossier: PathBuf, demo: bool) -> mpsc::Sender<Message> {
 
 // ---------------------------------------------------------------------- HTTP (les fils du serveur)
 
-fn type_mime(p: &Path) -> &'static str {
-    match p.extension().and_then(|x| x.to_str()).unwrap_or("") {
+/// Les seules extensions servies (celles de web/) ; une autre, ou pas d'extension, est un 404.
+fn type_mime(p: &Path) -> Option<&'static str> {
+    Some(match p.extension()?.to_str()? {
         "html" => "text/html; charset=utf-8",
-        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "js" => "text/javascript; charset=utf-8",
         "css" => "text/css; charset=utf-8",
-        "json" => "application/json",
-        "txt" => "text/plain",
-        "png" => "image/png",
-        "svg" => "image/svg+xml",
+        "txt" => "text/plain; charset=utf-8",
         "woff2" => "font/woff2",
-        _ => "application/octet-stream",
-    }
+        _ => return None,
+    })
 }
 
 /// Le fichier de web/ que la page charge, ou rien : les pages de PAGES, et sous /vendor des chemins dont aucun
-/// segment ne commence par un point (`^/vendor(?:/[\w-][\w.-]*)+$` de serveur.py).
+/// segment ne commence par un point (`^/vendor(?:/[\w-][\w.+-]*)+$`).
 fn statique(chemin: &str) -> Option<PathBuf> {
     let c = decoder_chemin(chemin);
     let web = racine().join("web");
@@ -364,7 +362,7 @@ fn statique(chemin: &str) -> Option<PathBuf> {
     let mot = |ch: char| ch.is_alphanumeric() || ch == '_';
     let bon = |s: &str| {
         let mut it = s.chars();
-        it.next().is_some_and(|p| mot(p) || p == '-') && it.all(|ch| mot(ch) || ch == '.' || ch == '-')
+        it.next().is_some_and(|p| mot(p) || p == '-') && it.all(|ch| mot(ch) || "._+-".contains(ch))
     };
     if !reste.split('/').all(bon) {
         return None;
@@ -373,13 +371,15 @@ fn statique(chemin: &str) -> Option<PathBuf> {
 }
 
 fn fichier(chemin: &str) -> Reponse {
-    let Some(f) = statique(chemin) else { return Reponse::texte(404, "File not found") };
+    let Some((f, mime)) = statique(chemin).and_then(|f| type_mime(&f).map(|m| (f, m))) else {
+        return Reponse::texte(404, "File not found");
+    };
     // pas de lien symbolique ni de dossier : un fichier ordinaire de web/
     if !std::fs::symlink_metadata(&f).is_ok_and(|m| m.is_file()) {
         return Reponse::texte(404, "File not found");
     }
     match std::fs::read(&f) {
-        Ok(o) => Reponse::new(200, type_mime(&f), o),
+        Ok(o) => Reponse::new(200, mime, o),
         Err(_) => Reponse::texte(404, "File not found"),
     }
 }

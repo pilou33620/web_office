@@ -61,6 +61,7 @@ fn fichiers_hote_et_ecritures() {
     for (chemin, attendu) in [
         ("/", 200), ("/index.html", 200), ("/jeu.js", 200), ("/plan.js", 200), ("/rendu.js", 200), ("/style.css", 200),
         ("/vendor/three/build/three.module.min.js", 200), ("/vendor/three/addons/postprocessing/GTAOPass.js", 200),
+        ("/vendor/SOURCES.txt", 200), ("/vendor/three/LICENSE", 404), ("/vendor/polices/polices.json", 404),
         ("/vendor/../serveur.py", 404), ("/vendor/%2e%2e/serveur.py", 404), ("/vendor/.cache", 404), ("/vendor/", 404),
         ("/api/etat", 200), ("/api/catalogue", 200), ("/api/parties", 200),
         ("/.git/config", 404), ("/.gitignore", 404), ("/serveur.py", 404), ("/Cargo.toml", 404), ("/lancer.sh", 404),
@@ -79,6 +80,9 @@ fn fichiers_hote_et_ecritures() {
     assert_eq!(entete(&tete, "Cache-Control").as_deref(), Some("no-store, max-age=0"));
     assert!(entete(&tete, "Content-Security-Policy").unwrap().contains("frame-ancestors 'self'"));
     let type_de = |c: &str| entete(&requete(port, "GET", c, None, &[], None).1, "Content-Type");
+    assert_eq!(type_de("/").as_deref(), Some("text/html; charset=utf-8"));
+    assert_eq!(type_de("/style.css").as_deref(), Some("text/css; charset=utf-8"));
+    assert_eq!(type_de("/vendor/SOURCES.txt").as_deref(), Some("text/plain; charset=utf-8"));
     assert_eq!(type_de("/jeu.js").as_deref(), Some("text/javascript; charset=utf-8"));
     assert_eq!(type_de("/vendor/three/build/three.module.min.js").as_deref(), Some("text/javascript; charset=utf-8"));
     // polices locales (le jeu marche sans Internet)
@@ -185,4 +189,18 @@ fn ligne_de_commande() {
     assert!(lire_args(&a(&["--port", "abc"])).is_err());
     assert!(lire_args(&a(&["--inconnu"])).is_err());
     assert!(lire_args(&a(&["--local=1"])).is_err());
+}
+
+/// Le chemin se décode par decoder_chemin : « + » et « %2B » désignent le fichier au nom avec « + », jamais une espace.
+#[test]
+fn plus_dans_un_chemin() {
+    let attendu = Some(racine().join("web").join("vendor").join("a+b.js"));
+    assert_eq!(statique("/vendor/a+b.js"), attendu);
+    assert_eq!(statique("/vendor/a%2Bb.js"), attendu);
+    assert_eq!(statique("/vendor/a%2bb.js"), attendu);
+    assert_eq!(statique("/vendor/a%20b.js"), None, "espace refusée");
+    assert_eq!(type_mime(Path::new("a+b.js")), Some("text/javascript; charset=utf-8"));
+    for inconnu in ["LICENSE", "a.json", "a.png", "a.exe", "a.JS"] {
+        assert_eq!(type_mime(Path::new(inconnu)), None, "{inconnu}");
+    }
 }

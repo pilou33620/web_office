@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use web_tools_commun::appairage::{self, Garde};
-use web_tools_commun::serveur::{decoder_url, ErreurCorps, Reponse, Requete, Serveur};
+use web_tools_commun::serveur::{decoder_chemin, ErreurCorps, Reponse, Requete, Serveur};
 
 use crate::moteur::{d, entier, Jeu};
 use crate::py::{self, json as pyjson, Val};
@@ -351,7 +351,7 @@ fn type_mime(p: &Path) -> &'static str {
 /// Le fichier de web/ que la page charge, ou rien : les pages de PAGES, et sous /vendor des chemins dont aucun
 /// segment ne commence par un point (`^/vendor(?:/[\w-][\w.-]*)+$` de serveur.py).
 fn statique(chemin: &str) -> Option<PathBuf> {
-    let c = decoder_url(chemin);
+    let c = decoder_chemin(chemin);
     let web = racine().join("web");
     if c == "/" {
         return Some(web.join("index.html"));

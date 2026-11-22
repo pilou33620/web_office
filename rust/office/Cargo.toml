@@ -14,4 +14,4 @@ serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] } # la date d'un record (déjà tirée par la caisse commune)
 ctrlc = { version = "3", features = ["termination"] } # Ctrl+C et SIGTERM (arrêt par web_launcher) : la partie est sauvegardée avant de sortir
 # Serveur HTTP/HTTPS et appairage : communs aux web tools (dépôt web_suite)
-web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "d40186eebfe11773b92a497c69d25b641264cd0d" }
+web_tools_commun = { git = "https://github.com/pilou33620/web_suite", rev = "bc1f42ca77df7ccfc415a93018640058c82e2efe" }
